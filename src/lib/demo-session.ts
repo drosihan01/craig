@@ -97,3 +97,59 @@ export const SESSION: SessionTurn[] = [
     offersWorkflow: true,
   },
 ];
+
+/**
+ * Demo v2 — the same product, a solo founder.
+ *
+ * Ada is on her own here. No Jason, no Matty. That isn't a smaller version of
+ * the same story, it's a different and harder one: with a cofounder, a step
+ * nobody has written down is at least in *somebody's* head. On your own,
+ * everything Craig finds is a thing that exists only in yours, and the hire is
+ * the first person who has ever needed it out of there.
+ *
+ * It also removes a distraction. In v1 half the interesting tension is Jason
+ * being a single point of failure, which is a good story and a different one
+ * to the product's actual argument. Alone, there's nowhere for the argument to
+ * hide.
+ *
+ * Same voice rules as above.
+ */
+export const SESSION_V2: SessionTurn[] = [
+  {
+    ada: "ok so katalis — ai infra. model routing, fallback, cost and latency monitoring for teams running a few providers in prod. basically the boring plumbing so nobody has to hand-roll their own inference layer. it's just me right now. attached the handbook, fair warning i wrote it at 11pm before a fundraise call in feb and haven't opened it since. first hire starts in 2 weeks — nils, infra guy, coming from a much bigger place, like 400 people",
+    attachment: "Katalis_Handbook_OLD.pdf",
+    steps: [
+      "Reading the handbook",
+      "Comparing it to what you just said",
+      "Working out what's missing",
+    ],
+    craig:
+      "Right, got it. Read the handbook — it's four bullets long under “first week”, which honestly is four more than most people have.\n\nHere's the thing I'd flag, and it's not the handbook. You're on your own, so every single thing Nils needs to know is in your head and nowhere else. That's completely fine at one person. It stops being fine the day there are two, because he's coming from somewhere with four hundred people and a wiki — his instinct when he's stuck won't be to ask, it'll be to go and look. And there's nothing to look at.\n\nSo I'd rather write some of it down as we go than pretend the handbook covers it.",
+    question:
+      "What's the thing you'd be most annoyed to have to explain twice?",
+    replies: [
+      "How the routing and fallback layer actually works — it's all in my head.",
+      "Which parts are live and which are still stubbed. Nobody could guess it.",
+      "Honestly, all of it. That's the problem.",
+    ],
+  },
+  {
+    ada: "the routing layer. what's actually live vs what's a stub, and why. it's the only genuinely weird part of the codebase and i'd have to draw it on a whiteboard, which i can't do because he's in berlin",
+    steps: ["Noting that", "Checking the time difference"],
+    craig:
+      "Berlin — so you're nine hours apart. That's about a two-hour overlap on a good day, and you'll be at the end of yours when he's starting his.\n\nThat changes what I'd build. If it were the same timezone I'd just book you a call and be done. It isn't, so anything that only exists in your head has to get out of it before day one, or he'll spend his first week guessing and you'll spend yours answering the same question at 7pm.",
+    question: "Are you the only person who'd own any of this?",
+    replies: [
+      "Yes — there's nobody else to assign anything to.",
+      "Just me. That's the whole company at the moment.",
+      "Me, until Nils starts. Then hopefully some of it becomes his.",
+    ],
+  },
+  {
+    ada: "yep just me. everything's mine until he starts",
+    steps: ["Putting a workflow together"],
+    craig:
+      "Fine — that actually makes this simpler. One person to chase, and it's you.\n\nHere's what I'd put together. Everything before he starts is yours: contract, payroll, the laptop, and his accounts — one step each, because they're five different admin panels and they fail one at a time.\n\nThen day one is his. A short quiz instead of “read the handbook”, because reading a doc and having read a doc aren't the same thing. Whatever he gets wrong opens straight into a chat with me, so you're not the only place answers come from at 7pm.\n\nAnd then half an hour with you, first week. That's where the routing layer gets out of your head.\n\nA few bits I've left open rather than guessing: which right-to-work check applies in Germany, and which Slack channels he actually needs. I'd only be making those up.\n\nGive me a second and I'll write it.",
+    offersWorkflow: true,
+  },
+];

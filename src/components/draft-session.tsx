@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { Code, Groups } from "@/components/ui/icons";
 import { NEW_HIRE } from "@/lib/demo";
-import { SESSION } from "@/lib/demo-session";
+import { SESSION, type SessionTurn } from "@/lib/demo-session";
 import { WORKFLOW, stepCount, unconfiguredCount } from "@/lib/demo-workflow";
 
 /**
@@ -95,11 +95,32 @@ const FALLBACK =
 
 export function DraftSession({
   heading = "Tell me a little bit about your company",
+  placeholder = "we're 3 people doing AI infra…",
+  session = SESSION,
+  showTemplates = true,
   onStart,
+  onFinish,
 }: {
   heading?: string;
+  /** Should sound like the person, not like a form. */
+  placeholder?: string;
+  /** Which scripted conversation to walk. */
+  session?: SessionTurn[];
+  /**
+   * Template cards under the composer. On in the returning-user case, where
+   * they're a shortcut past a blank box. Off during first-run setup, where
+   * they're a second thing to decide about before you've done the first.
+   */
+  showTemplates?: boolean;
   /** Fired on the first message, so a page can drop its own chrome. */
   onStart?: () => void;
+  /**
+   * Fired when Craig finishes and would hand over the draft. When passed, the
+   * hand-off card is suppressed and the page takes over — first-run goes to a
+   * build screen instead, because "here's a card, click it" is a worse ending
+   * than watching the thing get made.
+   */
+  onFinish?: () => void;
 }) {
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [busy, setBusy] = React.useState(false);
@@ -122,7 +143,7 @@ export function DraftSession({
      chose those words and showing her different ones would be a lie about
      what she just said. Past the script, typed text is used as-is. */
   function send(text: string, verbatim = false) {
-    const turn = SESSION[turnIndex];
+    const turn = session[turnIndex];
     const replyId = crypto.randomUUID();
 
     onStart?.();
@@ -188,7 +209,10 @@ export function DraftSession({
           if (i === words.length - 1) {
             setBusy(false);
             setReplies(turn?.replies ?? []);
-            if (turn?.offersWorkflow) setOfferDraft(true);
+            if (turn?.offersWorkflow) {
+              if (onFinish) onFinish();
+              else setOfferDraft(true);
+            }
           }
         },
         startAt + i * 18,
@@ -250,12 +274,13 @@ export function DraftSession({
       <div className="pt-8">
         <PromptBar
           autoFocus
-          placeholder="we're 3 people doing AI infra…"
+          placeholder={placeholder}
           onSubmit={send}
           footnote="Attach a handbook if you have one — however out of date it is"
         />
       </div>
 
+      {showTemplates && (
       <div className="flex flex-col gap-3 pt-8">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Or start from a template
@@ -303,6 +328,7 @@ export function DraftSession({
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }
