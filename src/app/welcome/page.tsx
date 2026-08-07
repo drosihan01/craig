@@ -55,18 +55,27 @@ export default function WelcomePage() {
   const [phase, setPhase] = React.useState<Phase>("talk");
   const [started, setStarted] = React.useState(false);
 
+  /* Three phases, one current at a time. "Upload" is the blank composer —
+     she's giving Craig the handbook and the brain-dump. "Discovery" is the
+     conversation that follows it. `started` flips on her first message, which
+     is exactly the boundary between the two. */
   const steps: Step[] = [
     {
       id: "1",
-      title: "Discovery",
-      state: phase === "talk" ? "current" : "complete",
+      title: "Upload",
+      state: started ? "complete" : "current",
     },
     {
       id: "2",
+      title: "Discovery",
+      state:
+        phase === "build" ? "complete" : started ? "current" : "upcoming",
+    },
+    {
+      id: "3",
       title: "Build workflow",
       state: phase === "build" ? "current" : "upcoming",
     },
-    { id: "3", title: "Onboard person", state: "upcoming" },
   ];
 
   return (

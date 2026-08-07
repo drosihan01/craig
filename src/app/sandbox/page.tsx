@@ -29,15 +29,14 @@ import {
   type TaskStatus,
 } from "@/components/ui";
 import {
-  AltRoute,
   Database,
-  Description,
   Mail,
   MenuBook,
   OpenInNew,
   Palette,
   PersonAdd,
   PlayArrow,
+  TaskAlt,
 } from "@/components/ui/icons";
 import {
   AUDIENCE,
@@ -89,114 +88,116 @@ interface TodoGroup {
 
 const TODOS: TodoGroup[] = [
   {
-    id: "domain",
-    title: "Domain model",
+    id: "ada",
+    title: "Ada can fire off an onboarding",
     description:
-      "The workflow is currently described only by the components that draw it.",
-    icon: AltRoute,
-    items: [
-      {
-        id: "d1",
-        title: "Name the thing an admin publishes: WorkflowTemplate",
-        note: "The builder passes WorkflowBlock[] around and nothing in the codebase names the artefact itself.",
-        where: "src/lib/workflow/",
-      },
-      {
-        id: "d2",
-        title: "Split template from instance",
-        note: "Assigning a workflow has to snapshot it. Editing a template must never retroactively rewrite an onboarding someone is halfway through.",
-        status: "blocked",
-      },
-      {
-        id: "d3",
-        title: "Move TASK_STATUS out of badge.tsx",
-        note: "It is the state machine both seats read from, not a badge concern. The README already flags this.",
-        where: "src/components/ui/badge.tsx",
-      },
-      {
-        id: "d4",
-        title: "Move BLOCK_TYPES and INSERTABLE the same way",
-        note: "Kinds, labels and which ones can be inserted are domain. Only the icon mapping belongs to the component.",
-        where: "src/components/ui/workflow-builder.tsx",
-      },
-    ],
-  },
-  {
-    id: "backend",
-    title: "Backend",
-    description: "None of it exists. Every screen is front-end state.",
-    icon: Database,
-    items: [
-      {
-        id: "b1",
-        title: "Persist a workflow",
-        note: "/builder holds its blocks in React state — a refresh loses the whole thing.",
-        where: "src/app/builder/page.tsx",
-      },
-      {
-        id: "b2",
-        title: "Real auth, and guard the routes server-side",
-        note: "/sign-in validates the shape of an email and then routes to /. Nothing behind it is protected.",
-        where: "src/app/sign-in/page.tsx",
-        tag: { label: "Security", tone: "danger" },
-      },
-      {
-        id: "b3",
-        title: "Enforce the model data boundary in the API layer",
-        note: "internal: true on Craigopilot is a label. Nothing currently stops a request routed to a hosted model from carrying tenant data.",
-        where: "src/components/ui/model-picker.tsx",
-        tag: { label: "Security", tone: "danger" },
-      },
-      {
-        id: "b4",
-        title: "Publish endpoint, with the unconfigured check on the server",
-        note: "“A workflow can’t be published while any block is unconfigured” is a sentence in the nav, not a rule.",
-        status: "blocked",
-      },
-    ],
-  },
-  {
-    id: "product",
-    title: "Product surface",
-    description: "Screens the README promises that have no route yet.",
+      "The admin half. She describes the company once, gets a workflow, adds somebody, and it runs.",
     icon: PersonAdd,
     items: [
       {
-        id: "p1",
-        title: "Build the new-starter seat",
-        note: "Stepper and WorkflowProgress were designed for it and currently render nowhere but the showcase.",
+        id: "a1",
+        title: "Sign up creates a real workspace",
+        note: "Currently routes to /welcome and creates nothing. Needs tenancy before it means anything.",
+        where: "src/app/sign-up/",
       },
       {
-        id: "p2",
-        title: "Wire the home prompt to generation",
-        note: "/ collects the description and answers with hard-coded copy. The draft it promises is never produced.",
-        where: "src/app/page.tsx",
+        id: "a2",
+        title: "The conversation asks for the setup fields it needs",
+        note: "Craig proposes a workflow with holes and Ada fills them in the builder. He should ask for the required fields up front, grouped, so the gate at Add someone rarely fires.",
+        where: "src/components/draft-session.tsx",
       },
       {
-        id: "p3",
-        title: "Replace the placeholder nav in the builder",
-        note: "Build / People / Settings are bare anchors pointing at #.",
-        where: "src/app/builder/page.tsx",
+        id: "a3",
+        title: "Persist a workflow",
+        note: "Everything is React state. A refresh loses the draft, which is the single most obvious thing missing.",
+        status: "blocked",
+      },
+      {
+        id: "a4",
+        title: "Adding a seat actually sends the first email",
+        note: "The dialog says what would happen and then nothing does. Needs the API route and Resend.",
+        where: "src/lib/onboarding.ts",
+      },
+      {
+        id: "a5",
+        title: "Craig chases what nobody did",
+        note: "The nudge exists on Nils's side only. Ada needs the digest — the step that's holding up the rest, without her going to look.",
+        tag: { label: "The differentiator", tone: "warning" },
       },
     ],
   },
   {
-    id: "housekeeping",
-    title: "Housekeeping",
-    description: "Small, and cheap to do before they compound.",
-    icon: Description,
+    id: "nils",
+    title: "Nils can complete an onboarding",
+    description:
+      "The half that decides whether it's loved rather than merely bought. Built as screens; none of it is real yet.",
+    icon: TaskAlt,
     items: [
       {
-        id: "h1",
-        title: "README is behind the routes",
-        note: "It still says / redirects to /design-system, which stopped being true when the admin home landed. The layout tree is missing builder/ and lib/demo.ts.",
-        where: "README.md",
+        id: "n1",
+        title: "The invite goes to a personal address, not a work one",
+        note: "AddSeat asks for one email labelled Work, but at the moment Ada adds him the work address doesn't exist — Craig is about to create it. Two fields, not one.",
+        where: "src/components/add-seat.tsx",
       },
       {
-        id: "h2",
-        title: "Delete lib/demo.ts when persistence lands",
-        note: "Its own doc comment says to delete it rather than grow it. Easy to forget once real records exist.",
-        where: "src/lib/demo.ts",
+        id: "n2",
+        title: "Claiming a seat creates an account",
+        note: "/s/[token] is shape only. Signing the contract is meant to be what gives him a login.",
+        where: "src/app/s/[token]/",
+      },
+      {
+        id: "n3",
+        title: "Completing a step writes somewhere",
+        note: "Ticking a box is local state. Ada's side never finds out.",
+        status: "blocked",
+      },
+      {
+        id: "n4",
+        title: "Nudge actually sends",
+        note: "The button and the toast are real; the message isn't. It's the most important control on his page.",
+      },
+      {
+        id: "n5",
+        title: "An ending",
+        note: "He ticks the last box and nothing happens. Needs the handover — what he has now, one gap worth writing down, and Craig getting out of the way.",
+      },
+    ],
+  },
+  {
+    id: "under",
+    title: "What both halves sit on",
+    description:
+      "None of this shows on a screen, and all of it has to exist before either half is real.",
+    icon: Database,
+    items: [
+      {
+        id: "u1",
+        title: "A scheduler",
+        note: "\u201cA week before day one\u201d and \u201cnudge if it\u2019s been three days\u201d are timed jobs, not user actions. Queue, retries, idempotency, and timezone-correct for somebody in Berlin.",
+        tag: { label: "Least visible, most bugs", tone: "danger" },
+      },
+      {
+        id: "u2",
+        title: "Tenancy and auth",
+        note: "Every screen is single-company fixture data and no route is guarded. Isolation is foundational, not a feature.",
+        status: "blocked",
+      },
+      {
+        id: "u3",
+        title: "Split template from instance",
+        note: "Assigning a workflow has to snapshot it. Editing a template must never rewrite an onboarding somebody is halfway through.",
+        where: "src/lib/demo-run.ts",
+      },
+      {
+        id: "u4",
+        title: "Hold none of the sensitive data",
+        note: "Bank details, tax IDs and a residence permit make Craig an HR data processor. Link out to payroll and record only that it happened.",
+        tag: { label: "Decide before building", tone: "warning" },
+      },
+      {
+        id: "u5",
+        title: "GitHub provisioning, then Google Workspace",
+        note: "The first moment Craig does something rather than reminds. GitHub needs no review; Workspace needs delegation per customer.",
       },
     ],
   },
@@ -481,18 +482,27 @@ function HomeTab({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-col gap-0.5">
+          <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            MLP milestones
+          </p>
           <p className="text-base font-medium">
             {open} open{" "}
             <span className="text-text-subtle">
-              · {done.size} of {TODO_COUNT} ticked
+              · {done.size} of {TODO_COUNT} done
             </span>
           </p>
-          <p className="text-xs text-text-subtle">
-            Grouped by what has to be true first
+          <p className="text-xs leading-relaxed text-text-subtle">
+            Two things have to work: Ada can fire off an onboarding, and Nils
+            can complete one. Everything else is in service of those or it
+            isn&apos;t in the MLP.
           </p>
         </div>
-        <Progress value={done.size} max={TODO_COUNT} label="Todos ticked" />
+        <Progress
+          value={done.size}
+          max={TODO_COUNT}
+          label="Milestones complete"
+        />
       </div>
 
       {TODOS.map((group) => {
@@ -568,8 +578,8 @@ function HomeTab({
 
       <Callout tone="neutral">
         Ticking a box here is React state and nothing else — it resets on
-        refresh, exactly like the workflow in <Code>/builder</Code>. Which is
-        most of the list.
+        refresh, exactly like the workflow in <Code>/builder</Code>. Which is,
+        pointedly, most of this list.
       </Callout>
     </div>
   );

@@ -101,7 +101,7 @@ export const SESSION: SessionTurn[] = [
     ada: "...nobody lol. matty i guess but he's part time and remote and i don't think they'd overlap much. that's bad isn't it",
     steps: ["Putting a workflow together"],
     craig:
-      "Honestly? Completely normal at three people. I wouldn't lose sleep over it.\n\nHere's what I'd put together:\n- Contract first — signing it is what gets him an account here\n- Then payroll, right to work, and picking up the laptop\n- Accounts one at a time: Google Workspace, then Slack, GitHub, Linear\n- MFA right behind Workspace and behind GitHub, so he can't skip either\n- Vanta last: policies, training, device agent\n\nTwo bits I've left open rather than guessing — which right-to-work check applies in Germany, and which Slack channels he actually needs.\n\nGive me a second and I'll write it.",
+      "Honestly? Completely normal at three people. I wouldn't lose sleep over it.\n\nHere's what I'd put together:\n- Contract first — signing it is what gets him an account here\n- Then payroll, right to work, and picking up the laptop\n- Accounts one at a time: Google Workspace, then Slack, GitHub, Linear\n- MFA right behind Workspace and behind GitHub, so he can't skip either\n- Vanta last: policies, training, device agent\n\nTwo bits I've left open rather than guessing — which right-to-work check applies in Germany, and which Slack channels he actually needs.\n\nHappy with that, or is there something I've missed?",
     offersWorkflow: true,
   },
 ];
@@ -154,7 +154,7 @@ export const SESSION_V2: SessionTurn[] = [
     ada: "just me. jason would never log into another tool and matty's only here two days a week",
     steps: ["Putting a workflow together"],
     craig:
-      "Fair enough — plenty of people do it that way, and it's simpler. Everything lands on you, and you pass on what's Jason's.\n\nHere's what I'd build:\n- Contract first — signing it is what gets him an account here\n- Then payroll, right to work, and the laptop, which he ticks off himself\n- Accounts one at a time: Google Workspace first, because everything else is addressed to that email. Then Slack, GitHub, Linear\n- MFA right behind Workspace and behind GitHub — they run in order, so he can't reach Linear without doing both\n- Vanta last: policies, security training, device agent\n\nTwo bits I've left open rather than guessing — which right-to-work check applies in Germany, and which Slack channels he actually needs.\n\nGive me a second and I'll write it.",
+      "Fair enough — plenty of people do it that way, and it's simpler. Everything lands on you, and you pass on what's Jason's.\n\nHere's what I'd build:\n- Contract first — signing it is what gets him an account here\n- Then payroll, right to work, and the laptop, which he ticks off himself\n- Accounts one at a time: Google Workspace first, because everything else is addressed to that email. Then Slack, GitHub, Linear\n- MFA right behind Workspace and behind GitHub — they run in order, so he can't reach Linear without doing both\n- Vanta last: policies, security training, device agent\n\nTwo bits I've left open rather than guessing — which right-to-work check applies in Germany, and which Slack channels he actually needs.\n\nHappy with that, or is there something I've missed?",
     offersWorkflow: true,
   },
 ];

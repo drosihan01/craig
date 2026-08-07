@@ -329,19 +329,43 @@ function MessageBody({
   content: string;
   streaming?: boolean;
 }) {
-  const blocks = content.split("\n\n");
+  /* Runs, not blocks. Craig writes a lead line and then bullets under it in
+     the same paragraph, so splitting on blank lines alone would leave the
+     hyphens sitting in prose. This walks the lines and starts a new run
+     whenever the shape changes. */
+  const runs: { bullet: boolean; lines: string[] }[] = [];
+
+  for (const line of content.split("\n")) {
+    const bullet = line.startsWith("- ");
+    const blank = line.trim() === "";
+    const current = runs[runs.length - 1];
+
+    if (blank) {
+      if (current) runs.push({ bullet: false, lines: [] });
+      continue;
+    }
+    if (!current || current.bullet !== bullet || current.lines.length === 0) {
+      if (current && current.lines.length === 0 && current.bullet === bullet) {
+        current.lines.push(line);
+        continue;
+      }
+      runs.push({ bullet, lines: [line] });
+      continue;
+    }
+    current.lines.push(line);
+  }
+
+  const filled = runs.filter((r) => r.lines.length > 0);
 
   return (
     <div className="flex flex-col gap-3 text-base leading-relaxed text-text">
-      {blocks.map((block, i) => {
-        const lines = block.split("\n");
-        const isList = lines.every((l) => l.startsWith("- "));
-        const last = i === blocks.length - 1;
+      {filled.map((run, i) => {
+        const last = i === filled.length - 1;
 
-        if (isList && lines.length > 0 && block.trim() !== "") {
+        if (run.bullet) {
           return (
             <ul key={i} className="flex flex-col gap-1.5">
-              {lines.map((line, j) => (
+              {run.lines.map((line, j) => (
                 <li key={j} className="flex gap-2.5">
                   <span
                     aria-hidden
@@ -356,7 +380,7 @@ function MessageBody({
 
         return (
           <p key={i} className="whitespace-pre-wrap">
-            {block}
+            {run.lines.join("\n")}
             {last && streaming && (
               <span
                 aria-hidden

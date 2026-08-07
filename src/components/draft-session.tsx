@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import {
   Badge,
+  Button,
   buttonVariants,
   Card,
   ChatTranscript,
@@ -14,7 +15,7 @@ import {
   PromptBar,
   type ChatMessage,
 } from "@/components/ui";
-import { Code, Groups } from "@/components/ui/icons";
+import { AutoAwesome, Code, Groups } from "@/components/ui/icons";
 import { NEW_HIRE } from "@/lib/demo";
 import { SESSION, type SessionTurn } from "@/lib/demo-session";
 import { WORKFLOW, stepCount, unconfiguredCount } from "@/lib/demo-workflow";
@@ -115,10 +116,9 @@ export function DraftSession({
   /** Fired on the first message, so a page can drop its own chrome. */
   onStart?: () => void;
   /**
-   * Fired when Craig finishes and would hand over the draft. When passed, the
-   * hand-off card is suppressed and the page takes over — first-run goes to a
-   * build screen instead, because "here's a card, click it" is a worse ending
-   * than watching the thing get made.
+   * Called when Ada asks for the workflow to be built. When passed, the
+   * hand-off card becomes a build prompt and this fires on the button rather
+   * than on Craig finishing his sentence.
    */
   onFinish?: () => void;
 }) {
@@ -209,10 +209,11 @@ export function DraftSession({
           if (i === words.length - 1) {
             setBusy(false);
             setReplies(turn?.replies ?? []);
-            if (turn?.offersWorkflow) {
-              if (onFinish) onFinish();
-              else setOfferDraft(true);
-            }
+            /* Never builds on its own. The last turn puts the offer on
+               screen and waits — Ada might want to add three more things, and
+               a workflow that appears while she's still talking is one she
+               didn't ask for. */
+            if (turn?.offersWorkflow) setOfferDraft(true);
           }
         },
         startAt + i * 18,
@@ -238,7 +239,8 @@ export function DraftSession({
 
         <div className="shrink-0 pb-6">
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
-            {offerDraft && <DraftHandoff />}
+            {offerDraft &&
+              (onFinish ? <BuildPrompt onBuild={onFinish} /> : <DraftHandoff />)}
 
             {replies.length > 0 && (
               <ReplyOptions
@@ -425,5 +427,33 @@ function DraftHandoff() {
         }
       />
     </List>
+  );
+}
+
+/**
+ * The end of the conversation, and a decision rather than an outcome.
+ *
+ * Craig proposes; Ada decides. He asks whether it's right, and building only
+ * happens when she says so — the composer is still there underneath, so
+ * "actually, add a background check" is as available as "go on then". A
+ * workflow that materialises while somebody is still mid-thought is one they
+ * didn't ask for, and they'll spend the next ten minutes undoing it.
+ */
+function BuildPrompt({ onBuild }: { onBuild: () => void }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-accent bg-accent-subtle/30 p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-base font-medium">Shall I build it?</p>
+        <p className="text-sm leading-relaxed text-text-muted">
+          You can change every step afterwards, and nothing runs until you put
+          somebody through it. Or keep going below — I&apos;ll add whatever
+          else you think of.
+        </p>
+      </div>
+      <Button size="sm" className="w-fit" onClick={onBuild}>
+        <AutoAwesome />
+        Build this workflow
+      </Button>
+    </div>
   );
 }
