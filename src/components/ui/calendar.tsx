@@ -271,12 +271,14 @@ export function DatePicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-describedby={describedBy}
-        aria-invalid={invalid}
+        /* role=button doesn't support aria-invalid, so the invalid state is
+           carried on a data attribute and styled from that instead. */
+        data-invalid={invalid || undefined}
         className={cn(
           "flex h-8 w-full items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-base shadow-e1",
           "transition-[border-color,box-shadow] hover:border-border-strong",
           "focus:border-accent-ring focus:outline-none focus:ring-[3px] focus:ring-accent-ring/20",
-          "aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger/20",
+          "data-[invalid]:border-danger data-[invalid]:ring-danger/20",
           value ? "text-text" : "text-text-subtle",
         )}
       >

@@ -36,6 +36,7 @@ ICONS = {
     "AutoAwesome": "auto_awesome",
     "Close": "close",
     "ContentCopy": "content_copy",
+    "ExpandLess": "expand_less",
     "ExpandMore": "expand_more",
     "Forum": "forum",
     "Refresh": "refresh",

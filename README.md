@@ -100,6 +100,11 @@ Notable choices:
   `Date` + `Intl`. All maths is local-time: a UTC-based `Date` lands on the
   wrong day for anyone east of Greenwich, which is most of this product's
   users. Use `toISODate`, never `toISOString`.
+- **Panels never carry `overflow: hidden`.** That makes an element a scroll
+  container, which then becomes the scrollport for any `sticky` child — the
+  child offsets by its `top` immediately and never sticks, because that
+  container doesn't scroll. In `AppShell` the `<aside>` owns width (and so the
+  collapse animation) and an inner sticky wrapper owns clipping.
 - **Auth components render and validate shape, nothing else.** Auth belongs on
   the server; a component that "signs you in" in the browser is a component
   that lies. `/sign-in` has no backend behind it yet.

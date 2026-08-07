@@ -19,6 +19,17 @@ import { cn } from "@/lib/cn";
  * If we ever need nested dialogs or collision-aware popovers, swap in Radix.
  */
 
+/* Mount detection without setState-in-effect: the server snapshot is false and
+   the client snapshot is true, so the portal renders only after hydration. */
+const neverChanges = () => () => {};
+function useMounted() {
+  return React.useSyncExternalStore(
+    neverChanges,
+    () => true,
+    () => false,
+  );
+}
+
 const FOCUSABLE =
   'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
@@ -58,9 +69,7 @@ export function Dialog({
   const titleId = React.useId();
   const descId = React.useId();
 
-  // Portal target — null until mounted, so SSR renders nothing.
-  const [host, setHost] = React.useState<HTMLElement | null>(null);
-  React.useEffect(() => setHost(document.body), []);
+  const mounted = useMounted();
 
   React.useEffect(() => {
     if (!open) return;
@@ -122,7 +131,7 @@ export function Dialog({
     };
   }, [open, onClose]);
 
-  if (!open || !host) return null;
+  if (!open || !mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -176,7 +185,7 @@ export function Dialog({
         )}
       </div>
     </div>,
-    host,
+    document.body,
   );
 }
 

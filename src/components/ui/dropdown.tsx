@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check } from "./icons";
+import { Check, ExpandMore } from "./icons";
 import { cn } from "@/lib/cn";
 
 /**
@@ -41,6 +41,8 @@ export function DropdownMenu({
   side = "bottom",
   width = "w-56",
   className,
+  triggerClassName,
+  triggerProps,
   menuClassName,
 }: {
   /** Rendered inside the trigger button. */
@@ -54,6 +56,10 @@ export function DropdownMenu({
   side?: DropdownSide;
   width?: string;
   className?: string;
+  /** Applied to the trigger button — pass `w-full` to make it fill its cell. */
+  triggerClassName?: string;
+  /** Spread onto the trigger button, so Field can wire id and aria-* to it. */
+  triggerProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
   menuClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -62,8 +68,6 @@ export function DropdownMenu({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const itemRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
   const menuId = React.useId();
-
-  const selectable = items.filter((i) => !i.disabled);
 
   const close = React.useCallback((focusTrigger = true) => {
     setOpen(false);
@@ -159,7 +163,8 @@ export function DropdownMenu({
         aria-expanded={open}
         aria-label={label}
         aria-controls={open ? menuId : undefined}
-        className="inline-flex items-center"
+        {...triggerProps}
+        className={cn("inline-flex items-center", triggerClassName)}
       >
         {trigger}
       </button>
@@ -251,5 +256,68 @@ export function DropdownMenu({
         </div>
       )}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SelectMenu                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * DropdownMenu wearing a form control's clothes. Use this in forms rather than
+ * the native `Select` when options need descriptions, icons or grouping — the
+ * native one is still the right call for long, plain lists, where the OS picker
+ * beats anything we can draw (especially on mobile).
+ */
+export function SelectMenu({
+  value,
+  onChange,
+  options,
+  label,
+  placeholder = "Select…",
+  id,
+  className,
+  "aria-describedby": describedBy,
+  invalid,
+}: {
+  value?: string;
+  onChange: (id: string) => void;
+  options: DropdownItem[];
+  label: string;
+  placeholder?: string;
+  id?: string;
+  className?: string;
+  "aria-describedby"?: string;
+  invalid?: boolean;
+}) {
+  const current = options.find((o) => o.id === value);
+
+  return (
+    <DropdownMenu
+      label={label}
+      selectedId={value ?? ""}
+      onSelect={onChange}
+      items={options}
+      className={cn("w-full", className)}
+      triggerClassName="w-full"
+      width="w-full"
+      triggerProps={{ id, "aria-describedby": describedBy }}
+      trigger={
+        <span
+          data-invalid={invalid || undefined}
+          className={cn(
+            "flex h-8 w-full items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-base shadow-e1",
+            "transition-[border-color,box-shadow] hover:border-border-strong",
+            "data-[invalid]:border-danger",
+            current ? "text-text" : "text-text-subtle",
+          )}
+        >
+          <span className="min-w-0 flex-1 truncate text-left">
+            {current ? current.label : placeholder}
+          </span>
+          <ExpandMore className="size-4 shrink-0 text-text-subtle" />
+        </span>
+      }
+    />
   );
 }

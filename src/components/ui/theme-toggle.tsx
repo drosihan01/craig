@@ -10,20 +10,33 @@ import { cn } from "@/lib/cn";
 /** Inlined in <head> so the theme is applied before first paint. */
 export const themeScript = `(function(){try{var t=localStorage.getItem("craig-theme");var d=t?t==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
 
-export function ThemeToggle({ className }: { className?: string }) {
-  const [dark, setDark] = React.useState(false);
+/* The theme lives on <html>, not in React — so it's read as an external store
+   rather than mirrored into state. The server snapshot is `false` to match the
+   pre-hydration markup; the inline script above has already set the real class
+   by then, and the first client snapshot picks it up. */
+const themeListeners = new Set<() => void>();
 
-  React.useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
-  }, []);
+function subscribeTheme(cb: () => void) {
+  themeListeners.add(cb);
+  return () => {
+    themeListeners.delete(cb);
+  };
+}
+
+export function ThemeToggle({ className }: { className?: string }) {
+  const dark = React.useSyncExternalStore(
+    subscribeTheme,
+    () => document.documentElement.classList.contains("dark"),
+    () => false,
+  );
 
   function toggle() {
     const next = !dark;
-    setDark(next);
     document.documentElement.classList.toggle("dark", next);
     try {
       localStorage.setItem("craig-theme", next ? "dark" : "light");
     } catch {}
+    themeListeners.forEach((l) => l());
   }
 
   return (

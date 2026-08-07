@@ -33,10 +33,12 @@ import {
   EmptyState,
   Field,
   Input,
+  DatePicker,
   Progress,
   Radio,
   SegmentedControl,
   Select,
+  SelectMenu,
   Separator,
   Skeleton,
   StatusPill,
@@ -61,6 +63,18 @@ import {
   CalendarDemo,
   DropdownDemo,
 } from "./_components/misc-demo";
+import { Api, Usage } from "./_components/api";
+import {
+  APPSHELL_PROPS,
+  AUTH_PROPS,
+  CALENDAR_PROPS,
+  CHAT_PROPS,
+  DATEPICKER_PROPS,
+  DIALOG_PROPS,
+  DROPDOWN_PROPS,
+  PROMPTBAR_PROPS,
+  WORKFLOW_PROPS,
+} from "./_components/api-data";
 import { Demo, Section, Swatch } from "./_components/specimen";
 
 const SEMANTIC = [
@@ -233,6 +247,8 @@ const ALL_STATUSES: TaskStatus[] = [
 export default function DesignSystemPage() {
   const [tab, setTab] = React.useState("overview");
   const [segment, setSegment] = React.useState("board");
+  const [owner, setOwner] = React.useState("hr");
+  const [startDate, setStartDate] = React.useState<Date | null>(null);
 
   return (
     <div className="py-10">
@@ -591,17 +607,44 @@ export default function DesignSystemPage() {
             <Field label="Search">
               <Input placeholder="Search steps…" icon={<Search />} />
             </Field>
-            <Field
-              label="Start date"
-              error="Start date must be in the future"
-            >
-              <Input type="date" defaultValue="2026-01-04" />
+            <Field label="Start date" hint="Must be in the future">
+              <DatePicker
+                value={startDate}
+                onChange={setStartDate}
+                min={new Date()}
+              />
             </Field>
             <Field label="Owner" hint="Receives every escalation">
-              <Select defaultValue="hr">
-                <option value="hr">People &amp; Culture</option>
-                <option value="mgr">Hiring manager</option>
-                <option value="it">IT service desk</option>
+              <SelectMenu
+                label="Owner"
+                value={owner}
+                onChange={setOwner}
+                options={[
+                  {
+                    id: "hr",
+                    label: "People & Culture",
+                    description: "Default for anything unassigned",
+                  },
+                  {
+                    id: "mgr",
+                    label: "Hiring manager",
+                    description: "The new starter's direct manager",
+                  },
+                  {
+                    id: "it",
+                    label: "IT service desk",
+                    description: "Accounts, equipment, access",
+                  },
+                ]}
+              />
+            </Field>
+            <Field
+              label="Native select"
+              hint="Still right for long, plain lists — the OS picker wins on mobile"
+            >
+              <Select defaultValue="au">
+                <option value="au">Australia</option>
+                <option value="nz">New Zealand</option>
               </Select>
             </Field>
             <Field
@@ -866,6 +909,8 @@ export default function DesignSystemPage() {
             steps={WORKFLOW_STEPS}
           />
         </Demo>
+        <Api component="WorkflowProgress" props={WORKFLOW_PROPS} />
+        <Usage>{`import { WorkflowProgress, Stepper, Progress } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -933,6 +978,8 @@ export default function DesignSystemPage() {
         <Demo title="As a menu, and as a select">
           <DropdownDemo />
         </Demo>
+        <Api component="DropdownMenu" props={DROPDOWN_PROPS} />
+        <Usage>{`import { DropdownMenu, SelectMenu } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -944,6 +991,13 @@ export default function DesignSystemPage() {
         <Demo title="Calendar and date picker" className="items-start">
           <CalendarDemo />
         </Demo>
+        <Api component="Calendar" props={CALENDAR_PROPS} />
+        <Api
+          component="DatePicker"
+          props={DATEPICKER_PROPS}
+          note="Calendar in a popover, styled as a form control"
+        />
+        <Usage>{`import { Calendar, DatePicker, toISODate } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -955,6 +1009,8 @@ export default function DesignSystemPage() {
         <Demo title="Sizes and intent">
           <DialogDemo />
         </Demo>
+        <Api component="Dialog" props={DIALOG_PROPS} />
+        <Usage>{`import { Dialog, DialogClose } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -978,6 +1034,10 @@ export default function DesignSystemPage() {
         <Demo title="Model picker" className="items-start">
           <ModelPickerDemo />
         </Demo>
+
+        <Api component="ChatModal" props={CHAT_PROPS} />
+        <Api component="PromptBar" props={PROMPTBAR_PROPS} />
+        <Usage>{`import { ChatModal, PromptBar, CHAT_MODELS } from "@/components/ui";`}</Usage>
 
         <Callout tone="warning" icon={<Warning />} title="The model choice is a data boundary">
           <p>
@@ -1004,15 +1064,10 @@ export default function DesignSystemPage() {
               <span className="font-medium text-text">Craig.</span> for the nav,
               one at the far right for the details panel.
             </p>
-            <p className="text-sm text-text-subtle">
-              <code className="font-mono text-xs">AppShell</code> takes{" "}
-              <code className="font-mono text-xs">nav</code>,{" "}
-              <code className="font-mono text-xs">aside</code>,{" "}
-              <code className="font-mono text-xs">account</code> and{" "}
-              <code className="font-mono text-xs">actions</code>.
-            </p>
           </div>
         </Demo>
+        <Api component="AppShell" props={APPSHELL_PROPS} />
+        <Usage>{`import { AppShell } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -1024,6 +1079,13 @@ export default function DesignSystemPage() {
         <Demo title="Sign in" className="items-start">
           <AuthDemo />
         </Demo>
+
+        <Api
+          component="Auth"
+          props={AUTH_PROPS}
+          note="four pieces, composed by the /sign-in route"
+        />
+        <Usage>{`import { AuthShell, GoogleButton, AuthDivider, PasswordInput } from "@/components/ui";`}</Usage>
 
         <Callout tone="info" icon={<Info />} title="On the Google mark">
           <p>

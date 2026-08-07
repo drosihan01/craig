@@ -36,6 +36,7 @@ export {
 export { Dialog, DialogClose, type DialogProps } from "./dialog";
 export {
   DropdownMenu,
+  SelectMenu,
   type DropdownItem,
   type DropdownAlign,
   type DropdownSide,
