@@ -3,7 +3,6 @@
 import * as React from "react";
 import {
   AppShell,
-  BackLink,
   Badge,
   BlockInspector,
   Button,
@@ -21,7 +20,7 @@ import {
 } from "@/components/ui";
 import { BLOCK_TYPES } from "@/components/ui/workflow-builder";
 import { AutoAwesome } from "@/components/ui/icons";
-import { ACCOUNT, PEOPLE } from "@/lib/demo";
+import { ACCOUNT, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
 /* Drafted from Ada's handbook — the first-week checklist in that doc is
@@ -29,31 +28,34 @@ import { AdminNav, NavStat } from "@/components/app-nav";
    surfaces (an unowned step, a handbook nobody has reviewed) are the point:
    Craig's job here is to make the undocumented parts visible, not to invent
    process a three-person company doesn't want. */
+/* Exactly the nine steps Craig proposes at the end of the scripted session,
+   in the same order and with the same two gaps left open. If the conversation
+   and the draft disagree, the demo's whole argument falls over. */
 const INITIAL: WorkflowBlock[] = [
   {
     id: "t",
     kind: "trigger",
     title: "A new hire is added",
-    summary: "Role is Engineer · Katalis",
+    summary: `Engineer · ${NEW_HIRE.name} starts in ${NEW_HIRE.startsIn}`,
   },
   {
     id: "b1",
     kind: "document",
-    title: "Contract signed and payroll details in",
+    title: "Contract and payroll details",
     summary: "Before day one",
     owner: PEOPLE.ada.name,
   },
   {
     id: "b2",
     kind: "task",
-    title: "Order laptop",
-    summary: "Two weeks lead time — start this when they sign",
+    title: "Order the laptop",
+    summary: "Two weeks to arrive — start this the day he signs",
     owner: PEOPLE.ada.name,
   },
   {
     id: "b3",
     kind: "task",
-    title: "GitHub, AWS and model provider keys",
+    title: "GitHub, AWS and the provider keys",
     summary: "Jason owns all of these",
     owner: PEOPLE.jason.name,
   },
@@ -62,13 +64,13 @@ const INITIAL: WorkflowBlock[] = [
     kind: "task",
     title: "Add to Slack channels",
     summary: "Which ones is currently tribal knowledge",
-    incomplete: "No channel list — ask Ada or Jason",
+    incomplete: "Nobody owns this yet",
   },
   {
     id: "b5",
     kind: "delay",
     title: "Wait until day one",
-    summary: "Resumes 9:00am, their time",
+    summary: "Resumes 9:00am Berlin — 9h ahead of Jason",
   },
   {
     id: "b6",
@@ -76,21 +78,28 @@ const INITIAL: WorkflowBlock[] = [
     title: "Read the handbook",
     summary: "Katalis Handbook — last updated Feb 2026",
     owner: PEOPLE.ada.name,
-    incomplete: "Handbook is out of date",
+    incomplete: "Needs refreshing before he reads it",
   },
   {
     id: "b7",
     kind: "task",
-    title: "Walk through who owns what with Jason",
-    summary: "The bit that only exists in his head",
+    title: "Walk through what's live and what's fallback",
+    summary: "Half an hour with Jason — the bit only in his head",
     owner: PEOPLE.jason.name,
   },
   {
     id: "b8",
     kind: "approval",
     title: "Jason signs off on prod access",
-    summary: "Nothing touches prod until this clears",
+    summary: "Nothing touches routing until this clears",
     owner: PEOPLE.jason.name,
+  },
+  {
+    id: "b9",
+    kind: "task",
+    title: "30-day check-in",
+    summary: "What should have been written down and wasn't",
+    owner: PEOPLE.ada.name,
   },
 ];
 
@@ -238,35 +247,27 @@ export default function BuilderPage() {
       }
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
+      fill
       actions={
         <>
+          <Badge tone="warning" size="sm">
+            Draft
+          </Badge>
           <Button size="sm" variant="ghost">
             <AutoAwesome />
             Ask Craig
           </Button>
-          <Button size="sm">Publish</Button>
+          <Button size="sm" disabled={unconfigured > 0}>
+            Publish
+          </Button>
         </>
       }
     >
-      <div className="py-8">
-        <header className="mb-6 flex flex-col gap-1">
-          <BackLink href="/design-system" className="mb-5">
-            Back to design system
-          </BackLink>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-[-0.02em]">
-              Workflow builder
-            </h1>
-            <Badge tone="warning">Draft</Badge>
-          </div>
-          <p className="max-w-xl text-md text-text-muted">
-            One column, top to bottom, in the order it runs. Drag the canvas to
-            pan, ⌘-scroll to zoom, and use the connector between blocks to
-            insert a step.
-          </p>
-        </header>
-
-        <WorkflowCanvas className="h-[calc(100vh-15rem)] min-h-[32rem]">
+      {/* Full bleed. The canvas is the page — a title and a paragraph above it
+          would be repeating the header and stealing the space the work needs.
+          The negative margins cancel the content column's padding. */}
+      <div className="-mx-4 h-[calc(100vh-3rem)] lg:-mx-8">
+        <WorkflowCanvas className="h-full rounded-none border-0">
           <CanvasPanel side="top-left">
             <div className="flex items-center gap-1 px-1">
               <Badge tone="neutral" size="sm">
