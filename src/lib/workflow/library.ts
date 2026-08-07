@@ -17,6 +17,7 @@ import {
   RocketLaunch,
   School,
   TaskAlt,
+  VerifiedUser,
 } from "@/components/ui/icons";
 /* Real marks where a freely licensed one exists. Slack and AWS get the same
    neutral placeholder as each other rather than a semantic guess apiece —
@@ -204,7 +205,9 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             id: "provider",
             label: "Signing method",
             kind: "select",
+            hint: "Signing in Craig is also how they get their account",
             options: [
+              { id: "craig", label: "In Craig" },
               { id: "docusign", label: "DocuSign" },
               { id: "dropbox-sign", label: "Dropbox Sign" },
               { id: "email", label: "Email a PDF back" },
@@ -801,6 +804,33 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
               { id: "viewer", label: "Viewer" },
               { id: "editor", label: "Editor" },
             ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "vanta",
+        "Vanta",
+        "Security training, policy acceptance and the device agent — the compliance half, in one place.",
+        VerifiedUser,
+        [
+          {
+            id: "tasks",
+            label: "What they have to complete",
+            kind: "multiselect",
+            options: [
+              { id: "policies", label: "Accept policies" },
+              { id: "training", label: "Security awareness training" },
+              { id: "agent", label: "Install the device agent" },
+              { id: "background", label: "Background check" },
+            ],
+            required: true,
+          },
+          {
+            id: "deadline",
+            label: "Done by",
+            kind: "when",
+            hint: "SOC 2 wants a date, not a vibe",
             required: true,
           },
         ],

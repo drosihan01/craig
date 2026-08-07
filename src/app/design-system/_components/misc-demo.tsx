@@ -220,7 +220,7 @@ const DEMO_BLOCKS: WorkflowBlock[] = [
   {
     id: "t",
     kind: "trigger",
-    title: "A new seat is added",
+    title: "New seat added",
     summary: "The only trigger there is",
   },
   {

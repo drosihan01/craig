@@ -10,11 +10,10 @@ import { NEW_HIRE, PEOPLE } from "@/lib/demo";
  * never retroactively rewrite an onboarding someone is halfway through —
  * least of all marking a step incomplete that they already finished.
  *
- * The state below is deliberately mid-flight and deliberately awkward: Nils
- * has done everything that was his to do, and he is now sitting behind two
- * steps that belong to Jason, who is nine hours behind him. That's the case
- * the product exists for. A demo where everything is green demonstrates
- * nothing.
+ * The state below is deliberately mid-flight. Nils is partway through, one
+ * step is waiting on Ada to decide something nobody has written down, and the
+ * MFA step in front of him gates everything after it. A demo where everything
+ * is green demonstrates nothing.
  *
  * Fixture data. Goes when WorkflowInstance is a real type.
  */
@@ -45,9 +44,9 @@ export const RUN_STEPS: RunStep[] = [
     id: "r1",
     title: "Sign your contract",
     description:
-      "Employment agreement, IP assignment and an NDA. Ada has already countersigned.",
+      "Employment agreement, IP assignment and an NDA. Ada has already countersigned — signing it is also what got you this page.",
     status: "complete",
-    owner: PEOPLE.ada.name,
+    owner: me,
     mine: true,
   },
   {
@@ -63,95 +62,84 @@ export const RUN_STEPS: RunStep[] = [
     id: "r3",
     title: "Right to work",
     description:
-      "German residence and work permit, checked by Ada. Cleared before your start date.",
+      "German residence and work permit. Ada checks it, but you upload it.",
     status: "complete",
-    owner: PEOPLE.ada.name,
-    mine: false,
+    owner: me,
+    mine: true,
   },
   {
     id: "r4",
-    title: "Your laptop",
-    description: "MacBook Pro 14. Shipped to your address in Berlin.",
+    title: "Collect your laptop",
+    description:
+      "MacBook Pro 14, in the office. Tick it when you have it — nobody else needs to.",
     status: "complete",
-    owner: PEOPLE.ada.name,
-    mine: false,
+    owner: me,
+    mine: true,
   },
   {
     id: "r5",
     title: "Google Workspace",
-    description: "nils@katalis.ai, plus the everyone@ and engineering@ groups.",
+    description:
+      "nils@katalis.ai, plus the everyone@ and engineering@ groups. Everything below is addressed to it, so this one comes first.",
     status: "complete",
-    owner: PEOPLE.jason.name,
-    mine: false,
+    owner: me,
+    mine: true,
   },
   {
     id: "r6",
-    title: "Slack",
+    title: "MFA on Google Workspace",
     description:
-      "Your account is live, but nobody has decided which channels you should be in. Jason is on it.",
-    status: "awaiting",
-    owner: PEOPLE.jason.name,
-    mine: false,
-    waitingOn: PEOPLE.jason.name,
+      "A passkey on nils@katalis.ai. Two minutes, and nothing below unlocks until it's done.",
+    status: "complete",
+    owner: me,
+    mine: true,
   },
   {
     id: "r7",
-    title: "GitHub",
-    description: "Write access on the engineering and infra teams.",
-    status: "complete",
-    owner: PEOPLE.jason.name,
-    mine: false,
+    title: "Slack",
+    description:
+      "Your invite is waiting. Nobody has decided which channels you should be in yet — Ada is on that.",
+    status: "awaiting",
+    owner: me,
+    mine: true,
+    waitingOn: PEOPLE.ada.name,
   },
   {
     id: "r8",
-    title: "Linear",
-    description: "Engineering and Infra.",
+    title: "GitHub",
+    description: "Write access on the engineering and infra teams.",
     status: "complete",
-    owner: PEOPLE.jason.name,
-    mine: false,
+    owner: me,
+    mine: true,
   },
   {
     id: "r9",
-    title: "AWS",
+    title: "MFA on GitHub",
     description:
-      "Dev and staging through SSO. Production comes later, once you've been walked through what's live.",
-    status: "awaiting",
-    owner: PEOPLE.jason.name,
-    mine: false,
-    waitingOn: PEOPLE.jason.name,
-  },
-  {
-    id: "r10",
-    title: "Set up multi-factor",
-    description:
-      "A passkey on your email, GitHub and the AWS console. Takes about two minutes and it's the one thing here nobody can do for you.",
+      "Same again. Source control is the other account worth stealing, and it's the last thing between you and the rest of the list.",
     status: "in_progress",
     owner: me,
     mine: true,
-    metrics: [
-      { value: 1, label: "of 3 done" },
-      { value: "~2 min", label: "left" },
-    ],
+    metrics: [{ value: "~2 min", label: "left" }],
     primaryAction: { label: "Set up multi-factor", href: "#" },
   },
   {
-    id: "r11",
-    title: "Five questions",
-    description:
-      "Not a test — nobody sees the answers. It's the fastest way to find the two or three things nobody has thought to tell you.",
+    id: "r10",
+    title: "Linear",
+    description: "Engineering and Infra.",
     status: "not_started",
     owner: me,
     mine: true,
-    primaryAction: { label: "Start", href: "#" },
   },
   {
-    id: "r12",
-    title: "Half an hour with Jason",
+    id: "r11",
+    title: "Vanta",
     description:
-      "The bit that isn't written down anywhere: what's live, what's fallback, and what breaking production actually looks like here.",
+      "Accept the policies, do the security training, install the device agent. Dull, and the reason Katalis can sell to anyone with a procurement team.",
     status: "not_started",
-    owner: PEOPLE.jason.name,
-    mine: false,
+    owner: me,
+    mine: true,
+    primaryAction: { label: "Open Vanta", href: "#" },
   },
 ];
 

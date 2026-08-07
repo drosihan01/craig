@@ -8,9 +8,10 @@ import {
   CraigMark,
   PromptBar,
   Separator,
-  StatusPill,
   useToast,
   ToastProvider,
+  WorkflowProgress,
+  type WorkflowStep,
 } from "@/components/ui";
 import { Check, Schedule } from "@/components/ui/icons";
 import { COMPANY, PEOPLE } from "@/lib/demo";
@@ -18,10 +19,8 @@ import {
   RUN,
   RUN_STEPS,
   runSummary,
-  statusWord,
   type RunStep,
 } from "@/lib/demo-run";
-import { cn } from "@/lib/cn";
 
 /**
  * The new starter's view. The half of the product the whole thing is for.
@@ -132,29 +131,17 @@ function StarterView() {
           />
         )}
 
-        <section className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-              Everything, in order
-            </h2>
-            <span className="text-xs text-text-subtle">
-              {done} of {total} done
-            </span>
-          </div>
-
-          <ol className="flex flex-col gap-2">
-            {steps.map((s, i) => (
-              <StepRow
-                key={s.id}
-                step={s}
-                index={i + 1}
-                nudged={nudged.has(s.id)}
-                onNudge={() => nudge(s)}
-                onComplete={() => complete(s)}
-              />
-            ))}
-          </ol>
-        </section>
+        {/* The stepper card from the design system, which is what it was
+            built for: the numbered marker, the dashed run inside a card and
+            the solid segment between them. It has room for what a step
+            actually produced, which a row doesn't. */}
+        <WorkflowProgress
+          title="Everything, in order"
+          steps={steps.map((s) => toCard(s, nudged.has(s.id), {
+            onComplete: () => complete(s),
+            onNudge: () => nudge(s),
+          }))}
+        />
 
         <Separator />
 
@@ -252,101 +239,40 @@ function WaitingOn({
   );
 }
 
-function StepRow({
-  step,
-  index,
-  nudged,
-  onNudge,
-  onComplete,
-}: {
-  step: RunStep;
-  index: number;
-  nudged: boolean;
-  onNudge: () => void;
-  onComplete: () => void;
-}) {
+/**
+ * A running step, in the shape the stepper card wants.
+ *
+ * The actions are the only real translation. A step that's his gets a button
+ * that finishes it; one that's waiting on somebody gets a nudge instead, and
+ * once nudged it gets nothing — a second identical button is an invitation to
+ * pester, which is the opposite of what this is for.
+ */
+function toCard(
+  step: RunStep,
+  nudged: boolean,
+  on: { onComplete: () => void; onNudge: () => void },
+): WorkflowStep {
   const done = step.status === "complete";
-  const current = step.status === "in_progress";
 
-  return (
-    <li
-      className={cn(
-        "flex items-start gap-3 rounded-xl border bg-surface p-3.5 transition-colors",
-        current ? "border-accent shadow-e2" : "border-border",
-        done && "opacity-60",
-      )}
-    >
-      {/* Ticked, numbered, or neither. The number is only useful while it's
-          still ahead of you. */}
-      <span
-        aria-hidden
-        className={cn(
-          "flex size-6 shrink-0 items-center justify-center rounded-full text-2xs font-semibold tabular-nums",
-          done
-            ? "bg-success-subtle text-success"
-            : current
-              ? "bg-accent text-accent-fg"
-              : "bg-surface-sunken text-text-subtle",
-        )}
-      >
-        {done ? <Check className="size-3.5" /> : index}
-      </span>
+  if (done) return step;
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              "text-base font-medium",
-              done && "line-through decoration-text-subtle",
-            )}
-          >
-            {step.title}
-          </span>
-          <StatusPill status={step.status} size="sm" />
-          {!step.mine && !done && (
-            <span className="text-2xs text-text-subtle">{step.owner}</span>
-          )}
-        </div>
+  if (step.waitingOn) {
+    return {
+      ...step,
+      primaryAction: nudged
+        ? undefined
+        : {
+            label: `Nudge ${step.waitingOn.split(" ")[0]}`,
+            onClick: on.onNudge,
+          },
+    };
+  }
 
-        {step.description && !done && (
-          <p className="text-sm leading-relaxed text-text-muted">
-            {step.description}
-          </p>
-        )}
-
-        {step.metrics && !done && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 pt-0.5">
-            {step.metrics.map((m) => (
-              <span key={m.label} className="text-xs text-text-subtle">
-                <span className="font-medium text-text">{m.value}</span>{" "}
-                {m.label}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {!done && (
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {step.mine ? (
-              <Button size="sm" onClick={onComplete}>
-                {step.primaryAction?.label ?? "Mark done"}
-              </Button>
-            ) : step.waitingOn && !nudged ? (
-              <Button size="sm" variant="secondary" onClick={onNudge}>
-                Nudge {step.waitingOn.split(" ")[0]}
-              </Button>
-            ) : step.waitingOn ? (
-              <span className="text-xs text-text-subtle">
-                {step.waitingOn.split(" ")[0]} has been asked.
-              </span>
-            ) : (
-              <span className="text-xs text-text-subtle">
-                {statusWord[step.status]} · nothing for you to do.
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </li>
-  );
+  return {
+    ...step,
+    primaryAction: {
+      label: step.primaryAction?.label ?? "Mark done",
+      onClick: on.onComplete,
+    },
+  };
 }

@@ -15,16 +15,13 @@ import {
   Progress,
   PromptBar,
   Separator,
+  isUnconfigured,
+  setupWarning,
   type AppNotification,
 } from "@/components/ui";
 import { PersonAdd, Warning } from "@/components/ui/icons";
 import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
-import {
-  WORKFLOW,
-  WORKFLOWS,
-  stepCount,
-  unconfiguredCount,
-} from "@/lib/demo-workflow";
+import { WORKFLOW, WORKFLOWS, stepCount } from "@/lib/demo-workflow";
 import { AddSeat, SeatState } from "@/components/add-seat";
 import { DraftSession } from "@/components/draft-session";
 import { type Onboarding } from "@/lib/onboarding";
@@ -168,14 +165,19 @@ interface OpenItem {
 function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
   const items: OpenItem[] = [];
 
+  /* One row per unconfigured step, not one per workflow. "3 steps need setting
+     up" is a number you have to go and decode; "Configure Slack in Engineer —
+     needs channels to add them to" is a thing you can finish. Each row links
+     straight to its block, so clearing the list is three clicks rather than
+     three hunts. */
   for (const w of WORKFLOWS) {
-    const gaps = unconfiguredCount(w.blocks);
-    if (gaps > 0) {
+    for (const b of w.blocks) {
+      if (!isUnconfigured(b)) continue;
       items.push({
-        id: `gaps-${w.id}`,
-        title: `${gaps} ${gaps === 1 ? "step needs" : "steps need"} setting up in ${w.name}`,
-        detail: "Nothing can be assigned to it until they're done",
-        href: `/builder/${w.id}`,
+        id: `${w.id}-${b.id}`,
+        title: `Configure “${b.title}” in ${w.name}`,
+        detail: setupWarning(b) ?? "Something is missing",
+        href: `/builder/${w.id}?step=${b.id}`,
         urgent: true,
       });
     }
@@ -196,15 +198,6 @@ function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
       urgent: true,
     });
   }
-
-  items.push({
-    id: "handbook",
-    title: "The handbook hasn't been reviewed since Feb 2026",
-    detail: fresh
-      ? "It's the only thing the quiz has to draw questions from"
-      : "It's what the pop quiz would read from",
-    href: "/resources",
-  });
 
   return items;
 }

@@ -22,7 +22,7 @@ import {
   type WorkflowBlock,
 } from "@/components/ui";
 import { AutoAwesome, ChevronLeft, PlayArrow } from "@/components/ui/icons";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ACCOUNT, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import {
   findWorkflow,
@@ -81,13 +81,33 @@ let seq = 0;
 const nextId = () => `b${Date.now()}-${seq++}`;
 
 export default function BuilderPage() {
+  return (
+    /* useSearchParams needs a boundary. The fallback is the same page with
+       nothing selected, which is the correct thing to show if ?step never
+       resolves. */
+    <React.Suspense fallback={<Builder step={null} />}>
+      <BuilderWithParams />
+    </React.Suspense>
+  );
+}
+
+function BuilderWithParams() {
+  /* ?step= is how Home's worklist links to a specific block. Landing on the
+     canvas and hunting for the one that needs you is the difference between a
+     list you clear and a list you look at. */
+  const step = useSearchParams().get("step");
+  return <Builder step={step} />;
+}
+
+function Builder({ step }: { step: string | null }) {
   const params = useParams<{ id: string }>();
   const workflow = findWorkflow(params.id);
 
   const [blocks, setBlocks] = React.useState<WorkflowBlock[]>(workflow.blocks);
-  /* Opens on the workflow rather than on a block. Landing inside one step's
-     settings before you've seen the shape of the thing is backwards. */
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  /* Opens on the workflow rather than on a block — landing inside one step's
+     settings before you've seen the shape of the thing is backwards — unless
+     something linked here asking for a specific one. */
+  const [selectedId, setSelectedId] = React.useState<string | null>(step);
   const [testing, setTesting] = React.useState(false);
 
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
@@ -155,6 +175,14 @@ export default function BuilderPage() {
             </button>
 
             <BlockInspector block={selected}>
+              {/* The trigger has nothing to edit. It's the same block in every
+                  workflow and it fires on one event — offering a title field
+                  for it would imply otherwise. */}
+              {selected.kind === "trigger" ? (
+                <p className="text-sm leading-relaxed text-text-subtle">
+                  Nothing to set up. This step is the same in every workflow.
+                </p>
+              ) : (
               <div className="flex flex-col gap-4">
                 <Separator />
                 <Field label="Title">
@@ -221,6 +249,7 @@ export default function BuilderPage() {
                   </>
                 )}
               </div>
+              )}
             </BlockInspector>
           </div>
         ) : (

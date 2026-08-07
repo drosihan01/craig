@@ -2,6 +2,10 @@ import type { WorkflowBlock } from "@/components/ui";
 import { isUnconfigured } from "@/components/ui";
 import { NEW_HIRE, PEOPLE } from "@/lib/demo";
 
+/* Every step in the Engineer draft is the new starter's. Named once so it
+   reads as a role rather than a string repeated eleven times. */
+const NEW = "The new hire";
+
 /**
  * The workflows Katalis has, and the metadata the list page shows about them.
  *
@@ -22,43 +26,52 @@ import { NEW_HIRE, PEOPLE } from "@/lib/demo";
 const TRIGGER: WorkflowBlock = {
   id: "t",
   kind: "trigger",
-  title: "A new seat is added",
-  summary: "Anyone added in People starts this",
+  title: "New seat added",
+  summary:
+    "Runs whenever someone is given a seat in People. Every workflow starts here, and this step has nothing to configure.",
 };
 
 /**
  * The Engineer draft — what Craig proposes at the end of the scripted session.
  *
- * Composed from the block library rather than hand-written, which is the whole
- * point of the library existing. Three things are left open on purpose and
- * they're the three Craig flags in the conversation:
+ * Almost every step is the new starter's. That isn't a simplification, it's
+ * the shape that falls out of Ada being the only person in Craig: there is
+ * nobody else to assign anything to, so the workflow is a list of things Nils
+ * does and Ada watches.
  *
- *   1. Nils is in Berlin and nobody has said which right-to-work check applies.
- *   2. The Slack channel list is tribal knowledge — the field is empty because
- *      nobody at Katalis can currently fill it in.
- *   3. The pop quiz has nothing current to draw questions from.
+ * Signing the contract is the hinge. It's the first thing, it happens before
+ * he has an account, and doing it is what gives him one — so everything after
+ * it can live inside Craig.
  *
- * It ends at the 1:1 with Jason. Everything after that — prod access, the
- * thirty-day check-in — depends on how the first week actually goes, and a
- * draft that guesses at week three is a draft nobody trusts about week one.
+ * The laptop is his to tick rather than Ada's to mark. It's the one step that
+ * genuinely depends on someone else being in the room, and a step that sits
+ * waiting on a person who isn't looking at Craig is a step that stalls.
  *
- * Everything else carries real config, so "configured" means something.
+ * MFA sits directly behind each account rather than once at the end. The
+ * workflow runs in order, so position is the gate — he cannot get to GitHub
+ * without having put a passkey on the Workspace account, and cannot get to
+ * Linear without having done GitHub. No new mechanism, just sequence used for
+ * what it's for.
+ *
+ * Two things are left open on purpose, and they're the two Craig flags in the
+ * conversation: which right-to-work check applies to a Berlin hire, and which
+ * Slack channels he actually needs. Everything else carries real config, so
+ * "configured" means something.
  */
 export const INITIAL: WorkflowBlock[] = [
   TRIGGER,
 
-  /* Before he starts ------------------------------------------------------ */
   {
     id: "b1",
     kind: "document",
     preset: "sign-contract",
     title: "Sign contract",
-    summary: "Ada countersigns",
-    owner: PEOPLE.ada.name,
+    summary: "Signed in Craig — and it's how he gets his account",
+    owner: NEW,
     config: {
       template: "Katalis — engineer contract.pdf",
       countersign: PEOPLE.ada.name,
-      provider: "docusign",
+      provider: "craig",
       acks: ["ip", "nda"],
     },
   },
@@ -68,11 +81,11 @@ export const INITIAL: WorkflowBlock[] = [
     preset: "payroll-details",
     title: "Personal and payroll details",
     summary: "Deel — he's employed through the German entity",
-    owner: PEOPLE.ada.name,
+    owner: NEW,
     config: {
       fields: ["legal-name", "address", "bank", "tax", "emergency"],
       system: "deel",
-      owner: PEOPLE.ada.name,
+      owner: NEW,
     },
   },
   {
@@ -81,7 +94,7 @@ export const INITIAL: WorkflowBlock[] = [
     preset: "verify-identity",
     title: "Verify employment eligibility",
     summary: "Germany — nobody has said which check that means",
-    owner: PEOPLE.ada.name,
+    owner: NEW,
     /* Deliberately empty: the check field is required, so this shows as
        unconfigured without anyone typing a warning string. */
     config: { verifier: PEOPLE.ada.name, deadline: "before-start" },
@@ -90,130 +103,109 @@ export const INITIAL: WorkflowBlock[] = [
     id: "b4",
     kind: "task",
     preset: "laptop",
-    title: "Issue laptop",
-    summary: "Two weeks to arrive — order the day he signs",
-    owner: PEOPLE.ada.name,
+    title: "Collect your laptop",
+    summary: "He ticks it himself — nobody has to be watching Craig",
+    owner: NEW,
     config: {
       spec: "MacBook Pro 14, M4, 24GB",
-      ship: "His address in Berlin",
-      owner: PEOPLE.ada.name,
-      when: "on-signing",
+      ship: "Collected in the office",
+      owner: NEW,
+      when: "day-one",
     },
   },
 
-  /* Accounts -------------------------------------------------------------- */
   {
     id: "b5",
     kind: "task",
     preset: "google-workspace",
     title: "Google Workspace",
-    summary: "nils@katalis.ai",
-    owner: PEOPLE.jason.name,
+    summary: "nils@katalis.ai — everything after this is addressed to it",
+    owner: NEW,
     config: {
       domain: "katalis.ai",
       groups: ["everyone", "eng", "alerts"],
       license: "standard",
-      owner: PEOPLE.jason.name,
-      when: "week-before",
+      owner: NEW,
+      when: "day-one",
     },
   },
   {
     id: "b6",
     kind: "task",
-    preset: "slack",
-    title: "Slack",
-    summary: "Which channels is currently tribal knowledge",
-    owner: PEOPLE.jason.name,
-    config: {
-      workspace: "katalis.slack.com",
-      type: "member",
-      owner: PEOPLE.jason.name,
-      when: "week-before",
-    },
+    preset: "mfa",
+    title: "MFA on Google Workspace",
+    summary: "A passkey, before the account gets used for anything",
+    owner: NEW,
+    config: { systems: ["email"], method: "passkey", deadline: "day-one" },
   },
   {
     id: "b7",
     kind: "task",
-    preset: "github",
-    title: "GitHub",
-    summary: "Write on the engineering team, not admin",
-    owner: PEOPLE.jason.name,
+    preset: "slack",
+    title: "Slack",
+    summary: "Which channels is currently tribal knowledge",
+    owner: NEW,
     config: {
-      org: "github.com/katalis",
-      teams: ["eng", "infra"],
-      permission: "write",
-      owner: PEOPLE.jason.name,
-      when: "week-before",
+      workspace: "katalis.slack.com",
+      type: "member",
+      owner: NEW,
+      when: "day-one",
     },
   },
   {
     id: "b8",
     kind: "task",
-    preset: "linear",
-    title: "Linear",
-    summary: "Engineering and Infra",
-    owner: PEOPLE.jason.name,
+    preset: "github",
+    title: "GitHub",
+    summary: "Write on the engineering team, not admin",
+    owner: NEW,
     config: {
-      workspace: "linear.app/katalis",
+      org: "github.com/katalis",
       teams: ["eng", "infra"],
-      role: "member",
-      owner: PEOPLE.jason.name,
-      when: "week-before",
+      permission: "write",
+      owner: NEW,
+      when: "day-one",
     },
   },
   {
     id: "b9",
     kind: "task",
-    preset: "aws",
-    title: "AWS",
-    summary: "dev and staging — prod when Jason says so",
-    owner: PEOPLE.jason.name,
-    config: {
-      method: "sso",
-      accounts: ["dev", "staging"],
-      role: "developer",
-      owner: PEOPLE.jason.name,
-      when: "week-before",
-    },
+    preset: "mfa",
+    title: "MFA on GitHub",
+    summary: "Same again. Source control is the other account worth stealing",
+    owner: NEW,
+    config: { systems: ["code"], method: "passkey", deadline: "day-one" },
   },
   {
     id: "b10",
     kind: "task",
-    preset: "mfa",
-    title: "Set up MFA",
-    summary: "Passkeys — before any of the above get used in anger",
-    owner: PEOPLE.jason.name,
+    preset: "linear",
+    title: "Linear",
+    summary: "Engineering and Infra",
+    owner: NEW,
     config: {
-      systems: ["email", "code", "cloud"],
-      method: "passkey",
-      deadline: "day-one",
+      workspace: "linear.app/katalis",
+      teams: ["eng", "infra"],
+      role: "member",
+      owner: NEW,
+      when: "day-one",
     },
   },
-
-  /* Day one --------------------------------------------------------------- */
   {
     id: "b11",
     kind: "task",
-    preset: "pop-quiz",
-    title: "Pop quiz",
-    summary: "Five questions, then go and ask Craig the rest",
-    owner: "The new hire",
-    config: { count: "5", outcome: "chat", when: "day-one" },
-    /* The source field is empty on purpose: the only thing to draw questions
-       from is a handbook nobody has opened since February. */
-    incomplete: "The handbook it would read is from Feb 2026",
-  },
-  {
-    id: "b12",
-    kind: "task",
-    preset: "meet-manager",
-    title: "1:1 with Jason",
-    summary: "Half an hour, first week — everything the quiz didn't cover",
-    owner: PEOPLE.jason.name,
-    config: { manager: PEOPLE.jason.name, when: "first-week", length: "30" },
+    preset: "vanta",
+    title: "Vanta",
+    summary: "Policies, security training, device agent",
+    owner: NEW,
+    config: {
+      tasks: ["policies", "training", "agent"],
+      deadline: "first-week",
+      owner: NEW,
+      when: "first-week",
+    },
   },
 ];
-
 
 /**
  * The finished one.
