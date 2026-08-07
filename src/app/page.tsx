@@ -3,11 +3,14 @@
 import * as React from "react";
 import {
   AppShell,
+  Badge,
+  Card,
   CraigMark,
   PromptBar,
   Separator,
   type AppNotification,
 } from "@/components/ui";
+import { Campaign, Code, Groups, Schedule } from "@/components/ui/icons";
 import { ACCOUNT } from "@/lib/demo";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
@@ -30,16 +33,54 @@ const NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-/* In Ada's voice, not a marketing deck's — the point of the prompt is that it
-   takes the company as it actually is. */
-const SUGGESTIONS = [
-  "we're 3 people doing AI infra, first non-founder hire starts in two weeks and i have nothing written down",
-  "everything lives in slack and a notion doc i wrote at 11pm before a fundraise call",
-  "async, no meetings, we ship fast and things break sometimes — that's fine, but new people don't know that",
+/**
+ * Starting points, not finished workflows. Each one is a shape an admin can
+ * recognise for a role they're actually hiring — describing the company in
+ * prose is the better path, but it's a blank box, and a blank box is where
+ * most people stop.
+ *
+ * Step counts are deliberately small. A twenty-step template for a
+ * three-person company is a template nobody finishes.
+ */
+const TEMPLATES = [
+  {
+    id: "engineer",
+    icon: Code,
+    title: "Engineer",
+    description:
+      "Repo and infra access, a walkthrough of who owns what, and a prod sign-off before anything ships.",
+    steps: 8,
+    tag: "Most used",
+  },
+  {
+    id: "first-hire",
+    icon: Groups,
+    title: "First non-founder hire",
+    description:
+      "For when nothing is written down yet. Heavier on context and introductions than on process.",
+    steps: 6,
+  },
+  {
+    id: "contractor",
+    icon: Schedule,
+    title: "Contractor or part-time",
+    description:
+      "Scoped access, a clear end date, and an offboarding step that actually fires.",
+    steps: 5,
+  },
+  {
+    id: "gtm",
+    icon: Campaign,
+    title: "Sales and GTM",
+    description:
+      "CRM access, the pitch, and shadowing calls in the first fortnight.",
+    steps: 7,
+  },
 ];
 
 export default function AdminHomePage() {
   const [sent, setSent] = React.useState<string | null>(null);
+  const [files, setFiles] = React.useState<File[]>([]);
 
   return (
     <AppShell
@@ -54,13 +95,6 @@ export default function AdminHomePage() {
           <h1 className="text-4xl font-semibold tracking-[-0.03em]">
             Tell me a little bit about your company
           </h1>
-          <p className="max-w-md text-md leading-relaxed text-text-muted">
-            What you do, roughly how many people, and what a new starter&apos;s
-            first week usually looks like. Rough is fine — you can attach a
-            handbook too, however out of date it is. I&apos;ll draft the
-            onboarding from there, and you&apos;ll edit it before anything goes
-            live.
-          </p>
         </div>
 
         <div className="pt-8">
@@ -68,24 +102,55 @@ export default function AdminHomePage() {
             autoFocus
             placeholder="we're 3 people doing AI infra…"
             onSubmit={setSent}
-            footnote="Craigson Lambda 2.0 · stays inside Katalis"
+            onAttach={setFiles}
+            footnote="Attach a handbook if you have one — however out of date it is"
           />
         </div>
 
-        <div className="flex flex-col gap-2 pt-6">
+        <div className="flex flex-col gap-3 pt-8">
           <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-            Or start from one of these
+            Or start from a template
           </p>
-          <div className="flex flex-col gap-1.5">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSent(s)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-left text-base text-text-muted transition-colors hover:border-border-strong hover:bg-surface-hover hover:text-text"
+          <div className="grid gap-3 sm:grid-cols-2">
+            {TEMPLATES.map((t) => (
+              <Card
+                key={t.id}
+                interactive
+                role="button"
+                tabIndex={0}
+                onClick={() => setSent(t.title)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSent(t.title);
+                  }
+                }}
+                className="flex flex-col gap-2 p-4"
               >
-                {s}
-              </button>
+                <div className="flex items-start gap-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-subtle-fg">
+                    <t.icon className="size-4" />
+                  </span>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="truncate text-base font-medium">
+                      {t.title}
+                    </span>
+                    {t.tag && (
+                      <Badge tone="accent" size="sm" className="shrink-0">
+                        {t.tag}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-sm leading-relaxed text-text-muted">
+                  {t.description}
+                </p>
+
+                <span className="mt-auto pt-1 text-2xs text-text-subtle">
+                  {t.steps} steps · you edit before anything goes live
+                </span>
+              </Card>
             ))}
           </div>
         </div>
@@ -104,8 +169,9 @@ export default function AdminHomePage() {
                   and a 30-day check-in.
                 </p>
                 <p className="text-sm text-text-subtle">
-                  Nothing is created yet. This is where the generated draft
-                  would appear for you to review.
+                  {files.length > 0
+                    ? `${files.length} file${files.length > 1 ? "s" : ""} attached. Nothing is created yet — this is where the generated draft would appear.`
+                    : "Nothing is created yet. This is where the generated draft would appear for you to review."}
                 </p>
               </div>
             </div>

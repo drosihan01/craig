@@ -5,9 +5,14 @@ import { Check, ExpandMore } from "./icons";
 import { cn } from "@/lib/cn";
 
 /**
- * Which model answers, and how hard it thinks. Craigson Lambda is the in-house
- * one and the default — it's the only one that sees company data, so anything
- * touching a real new starter's record should stay on it.
+ * Which model answers, and how hard it thinks.
+ *
+ * Craigson Lambda is the in-house one and the *intended* default — it's the
+ * only model that can see company data, so anything touching a real new hire's
+ * record has to run on it. It isn't trained yet, so it's listed and disabled
+ * rather than hidden: hiding it would suggest the in-house option was never
+ * planned, and the data boundary it exists to enforce still needs designing
+ * around.
  */
 
 export interface ChatModel {
@@ -17,6 +22,11 @@ export interface ChatModel {
   description: string;
   /** In-house models can be trusted with employee data; hosted ones can't. */
   internal?: boolean;
+  /** Selectable. An unavailable model still appears — hiding it would make the
+      in-house option look like it was never planned. */
+  available?: boolean;
+  /** Why it can't be picked. Shown in place of the description. */
+  unavailableReason?: string;
 }
 
 export const CHAT_MODELS: ChatModel[] = [
@@ -26,6 +36,8 @@ export const CHAT_MODELS: ChatModel[] = [
     vendor: "In-house",
     description: "Knows your workflows and policies. Data stays internal.",
     internal: true,
+    available: false,
+    unavailableReason: "Not available yet — in training",
   },
   {
     id: "claude",
@@ -41,7 +53,11 @@ export const CHAT_MODELS: ChatModel[] = [
   },
 ];
 
-export const DEFAULT_MODEL = CHAT_MODELS[0];
+/* The first *available* model, not simply the first. Craigson is the intended
+   default and the only one that can see company data, but it isn't running
+   yet — defaulting to it would mean every request silently failed. */
+export const DEFAULT_MODEL =
+  CHAT_MODELS.find((m) => m.available !== false) ?? CHAT_MODELS[0];
 
 export const EFFORT_LEVELS = [
   { id: "low", name: "Low", description: "Fastest. Short, direct answers." },
@@ -60,6 +76,7 @@ interface MenuOption {
   name: string;
   description: string;
   tag?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -147,11 +164,18 @@ function InlineMenu({
                   type="button"
                   role="option"
                   aria-selected={selected}
+                  aria-disabled={o.disabled || undefined}
+                  disabled={o.disabled}
                   onClick={() => {
                     onSelect(o.id);
                     setOpen(false);
                   }}
-                  className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-hover"
+                  className={cn(
+                    "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+                    o.disabled
+                      ? "cursor-not-allowed opacity-45"
+                      : "hover:bg-surface-hover",
+                  )}
                 >
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex items-center gap-1.5">
@@ -204,13 +228,14 @@ export function ModelPicker({
       selectedId={value.id}
       onSelect={(id) => {
         const next = CHAT_MODELS.find((m) => m.id === id);
-        if (next) onChange(next);
+        if (next && next.available !== false) onChange(next);
       }}
       options={CHAT_MODELS.map((m) => ({
         id: m.id,
         name: m.name,
-        description: m.description,
+        description: m.unavailableReason ?? m.description,
         tag: m.vendor,
+        disabled: m.available === false,
       }))}
       trigger={
         <span className="max-w-44 truncate text-sm font-medium text-text">

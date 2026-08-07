@@ -14,6 +14,9 @@ BASE = ("https://raw.githubusercontent.com/google/material-design-icons/master"
 # export name -> Material Symbols name
 ICONS = {
     "Add": "add",
+    "Groups": "groups",
+    "Code": "code",
+    "Campaign": "campaign",
     "Science": "science",
     "Cancel": "cancel",
     "CheckCircle": "check_circle",

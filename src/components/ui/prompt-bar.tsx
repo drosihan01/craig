@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Add, ArrowUpward, Mic, StopCircle } from "./icons";
+import { Add, ArrowUpward, Close, Description, Mic, StopCircle } from "./icons";
 import { DEFAULT_MODEL, ModelPicker, type ChatModel } from "./model-picker";
 import { cn } from "@/lib/cn";
 
@@ -21,6 +21,10 @@ export interface PromptBarProps {
   onStop?: () => void;
   /** Speech-to-text into this field. Not a live-voice mode. */
   dictation?: boolean;
+  /** Enables the attach button. Fires with the full list after every change. */
+  onAttach?: (files: File[]) => void;
+  /** Passed straight to the file input. */
+  accept?: string;
   /** Larger padding and radius for standalone page-level use. */
   size?: "sm" | "lg";
   /** Line under the bar — disclaimer, hint, character count. */
@@ -37,13 +41,17 @@ export function PromptBar({
   busy,
   onStop,
   dictation = true,
+  onAttach,
+  accept = ".pdf,.doc,.docx,.md,.txt,.rtf",
   size = "lg",
   footnote,
   autoFocus,
   className,
 }: PromptBarProps) {
   const [value, setValue] = React.useState("");
+  const [files, setFiles] = React.useState<File[]>([]);
   const [internalModel, setInternalModel] = React.useState(DEFAULT_MODEL);
+  const fileRef = React.useRef<HTMLInputElement>(null);
 
   const model = controlledModel ?? internalModel;
   const setModel = onModelChange ?? setInternalModel;
@@ -62,6 +70,19 @@ export function PromptBar({
     if (!text || busy) return;
     onSubmit(text);
     setValue("");
+  }
+
+  function addFiles(list: FileList | null) {
+    if (!list?.length) return;
+    const next = [...files, ...Array.from(list)];
+    setFiles(next);
+    onAttach?.(next);
+  }
+
+  function removeFile(index: number) {
+    const next = files.filter((_, i) => i !== index);
+    setFiles(next);
+    onAttach?.(next);
   }
 
   const lg = size === "lg";
@@ -99,8 +120,55 @@ export function PromptBar({
           )}
         />
 
+        {files.length > 0 && (
+          <ul
+            className={cn(
+              "flex flex-wrap gap-1.5 pt-2",
+              lg ? "px-4" : "px-3.5",
+            )}
+          >
+            {files.map((f, i) => (
+              <li
+                key={`${f.name}-${i}`}
+                className="flex max-w-56 items-center gap-1.5 rounded-md border border-border bg-surface-sunken py-1 pl-1.5 pr-1 text-xs"
+              >
+                <Description className="size-3.5 shrink-0 text-text-subtle" />
+                <span className="truncate text-text-muted">{f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(i)}
+                  aria-label={`Remove ${f.name}`}
+                  className="inline-flex size-4 shrink-0 items-center justify-center rounded text-text-subtle transition-colors hover:text-text"
+                >
+                  <Close className="size-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div className={cn("flex items-center gap-1", lg ? "p-2.5" : "px-2 pb-2")}>
-          <IconButton label="Add context">
+          {/* A real file input, kept out of the layout and driven by the button
+              — styling an <input type="file"> directly is not portable, and the
+              button needs to look like the rest of the bar. */}
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            accept={accept}
+            onChange={(e) => {
+              addFiles(e.target.files);
+              // Reset so picking the same file twice still fires a change.
+              e.target.value = "";
+            }}
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden
+          />
+          <IconButton
+            label="Attach a file"
+            onClick={() => fileRef.current?.click()}
+          >
             <Add className="size-4" />
           </IconButton>
 
@@ -150,14 +218,17 @@ export function PromptBar({
 
 function IconButton({
   label,
+  onClick,
   children,
 }: {
   label: string;
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
       aria-label={label}
       title={label}
       className="inline-flex size-7 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
