@@ -20,6 +20,7 @@ const ITEMS = [
   { label: "Home", href: "/" },
   { label: "Workflows", href: "/builder" },
   { label: "Resources", href: "/resources" },
+  { label: "Email", href: "/email" },
   { label: "People", href: "/people" },
   { label: "Settings", href: "/settings" },
 ];

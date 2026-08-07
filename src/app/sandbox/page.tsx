@@ -14,8 +14,13 @@ import {
   CardTitle,
   Checkbox,
   ControlRow,
+  EmailPreview,
+  Field,
+  Input,
+  SelectMenu,
   MARK_MIN_SIZE,
   MARK_STROKE,
+  Button,
   Progress,
   Separator,
   StatusPill,
@@ -27,12 +32,17 @@ import {
   AltRoute,
   Database,
   Description,
+  Mail,
   MenuBook,
   OpenInNew,
   Palette,
   PersonAdd,
   PlayArrow,
 } from "@/components/ui/icons";
+import {
+  AUDIENCE,
+  TEMPLATES as EMAIL_TEMPLATES,
+} from "@/lib/email";
 import { SECTIONS } from "@/app/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
 import { cn } from "@/lib/cn";
@@ -337,6 +347,7 @@ const SANDBOX_SECTIONS = [
   { value: "docs", label: "Docs" },
   { value: "backend", label: "Backend" },
   { value: "demo", label: "Demo" },
+  { value: "mail", label: "Mail" },
 ];
 
 export default function SandboxPage() {
@@ -398,6 +409,7 @@ export default function SandboxPage() {
           {tab === "docs" && <DocsTab />}
           {tab === "backend" && <BackendTab />}
           {tab === "demo" && <DemoTab />}
+          {tab === "mail" && <MailTab />}
         </div>
       </div>
     </AppShell>
@@ -784,11 +796,136 @@ function DemoTab() {
   );
 }
 
+/* --- Mail ------------------------------------------------------------------ */
+
+/**
+ * The send harness.
+ *
+ * Deliberately here and not in /email. The editor is Ada's — it's the copy that
+ * goes out under Katalis's name, so it lives in the product. Punching a
+ * template at a personal inbox to see what a real client does with it is a
+ * build tool, and a build tool with somebody's Gmail address hardcoded in it
+ * is exactly the sort of thing that ships by accident.
+ *
+ * The address comes from an env var, never the source. This repo is public.
+ */
+function MailTab() {
+  const [templateId, setTemplateId] = React.useState(EMAIL_TEMPLATES[0].id);
+  const template =
+    EMAIL_TEMPLATES.find((t) => t.id === templateId) ?? EMAIL_TEMPLATES[0];
+
+  const inbox = process.env.NEXT_PUBLIC_CRAIG_TEST_INBOX;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Callout tone="warning" title="Nothing can send yet">
+        Craig has no server. Every screen in this repo is front-end state, and
+        real mail needs an API route plus a provider key — the first backend
+        this project would have. The button below is real and disabled, rather
+        than fake and satisfying.
+      </Callout>
+
+      <Card>
+        <CardHeader className="flex-row items-start gap-3">
+          <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-text-muted">
+            <Mail className="size-4" />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <CardTitle>Send a test</CardTitle>
+            <CardDescription>
+              Pick a template, punch it at a real inbox, see what a real client
+              does with it.
+            </CardDescription>
+          </div>
+        </CardHeader>
+
+        <CardContent className="flex flex-col gap-4">
+          <Field label="Template">
+            <SelectMenu
+              label="Template"
+              value={templateId}
+              onChange={setTemplateId}
+              options={EMAIL_TEMPLATES.map((t) => ({
+                id: t.id,
+                label: t.name,
+                description: AUDIENCE[t.audience].label,
+              }))}
+            />
+          </Field>
+
+          <Field
+            label="To"
+            hint={
+              inbox
+                ? "From NEXT_PUBLIC_CRAIG_TEST_INBOX."
+                : "Set NEXT_PUBLIC_CRAIG_TEST_INBOX in .env.local. Not committed, because this repo is public."
+            }
+          >
+            <Input
+              readOnly
+              value={inbox ?? ""}
+              placeholder="you@example.com — not set"
+            />
+          </Field>
+
+          <div className="flex items-center gap-3">
+            <Button size="sm" disabled>
+              <Mail />
+              Send test
+            </Button>
+            <span className="text-xs text-text-subtle">
+              Needs an API route and a provider.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            What would arrive
+          </p>
+          <Link
+            href="/email"
+            className="text-xs text-accent underline-offset-4 hover:underline"
+          >
+            Edit the copy in the product →
+          </Link>
+        </div>
+        <EmailPreview template={template} />
+      </div>
+
+      <Callout tone="neutral" title="What wiring it up needs">
+        <ul className="mt-1 flex list-disc flex-col gap-1 pl-4">
+          <li>
+            A route handler at <Code>src/app/api/email/test/route.ts</Code>.
+          </li>
+          <li>
+            A provider. Resend is the least friction — one dependency, one key.
+          </li>
+          <li>
+            <Code>RESEND_API_KEY</Code> in <Code>.env.local</Code>, and never in
+            a commit. Server-side only, so no <Code>NEXT_PUBLIC_</Code> prefix.
+          </li>
+          <li>
+            A verified sending domain, or everything lands in spam and the test
+            tells you nothing.
+          </li>
+        </ul>
+      </Callout>
+    </div>
+  );
+}
+
 /* --- Shell furniture ------------------------------------------------------- */
 
 const ROUTES: { href: string; label: string; note: string }[] = [
   { href: "/", label: "Admin home", note: "The prompt" },
-  { href: "/builder", label: "Workflow builder", note: "The draft" },
+  { href: "/builder", label: "Workflows", note: "The draft" },
+  { href: "/resources", label: "Resources", note: "Mostly gaps" },
+  { href: "/email", label: "Email", note: "What Craig sends" },
+  { href: "/people", label: "People", note: "Seats" },
+  { href: "/settings", label: "Settings", note: "Empty on purpose" },
   { href: "/design-system", label: "Design system", note: "The primitives" },
   { href: "/sign-in", label: "Sign in", note: "Shape only" },
 ];

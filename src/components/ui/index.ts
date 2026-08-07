@@ -111,6 +111,7 @@ export {
 export { BlockPicker } from "./block-picker";
 export { BlockSetup } from "./block-setup";
 export { TestRun } from "./test-run";
+export { EmailPreview } from "./email-preview";
 export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";
 export {
   CraigMark,
