@@ -20,8 +20,8 @@ import { cn } from "@/lib/cn";
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 1.6;
 const ZOOM_STEP = 0.1;
-/** Dot spacing at 100%. Wide, so the grid reads as texture, not as a ruler. */
-const GRID = 36;
+/** Dot spacing. Wide, so the grid reads as texture rather than as a ruler. */
+const GRID = 56;
 
 const clampZoom = (z: number) =>
   Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100));
@@ -129,8 +129,9 @@ export function WorkflowCanvas({
       )}
       style={{
         backgroundImage:
-          "radial-gradient(circle, var(--color-border-strong) 1px, transparent 1px)",
-        backgroundSize: `${GRID * zoom}px ${GRID * zoom}px`,
+          "radial-gradient(circle, var(--color-border) 1px, transparent 1px)",
+        // Fixed spacing — deliberately not multiplied by zoom.
+        backgroundSize: `${GRID}px ${GRID}px`,
         backgroundPosition: `${pan.x}px ${pan.y}px`,
       }}
     >

@@ -309,6 +309,12 @@ export const AUTH_PROPS: PropDoc[] = [
     description:
       "Adds a reveal toggle. Forwards its ref, so it drops into a Field like any other control.",
   },
+  {
+    name: "ContinueAs",
+    type: "account, onContinue, onUseAnother",
+    description:
+      "\"Continue as …\" for a device that has signed in before. A hint about who was here last, never proof of who they are — clicking it starts a real sign-in. Always pair it with a way to use another account.",
+  },
 ];
 
 export const BUILDER_PROPS: PropDoc[] = [
@@ -341,5 +347,124 @@ export const BUILDER_PROPS: PropDoc[] = [
     name: "onRemove / onDuplicate",
     type: "(id: string) => void",
     description: "Omitted automatically for the trigger, which is structural.",
+  },
+];
+
+export const MARK_PROPS: PropDoc[] = [
+  {
+    name: "strokeWidth",
+    type: "number",
+    default: "MARK_STROKE.lg (7)",
+    description:
+      "In the mark's own 256-unit space, so it scales with the render size. Use .lg at 40px+, .md from 24–40px, .sm below — a 7 lands at about half a pixel at 20px.",
+  },
+  {
+    name: "className",
+    type: "string",
+    description:
+      "Sizing and colour. The mark strokes in currentColor, so it inherits from whatever it sits in.",
+  },
+  {
+    name: "title",
+    type: "string",
+    description:
+      "Give it one only when the mark is the sole label. Without it the SVG is aria-hidden, which is right beside the wordmark.",
+  },
+];
+
+export const CANVAS_PROPS: PropDoc[] = [
+  {
+    name: "children",
+    type: "ReactNode",
+    required: true,
+    description: "The pannable content. Put CanvasPanel children here too.",
+  },
+  {
+    name: "className",
+    type: "string",
+    description:
+      "Set the viewport height here — the canvas clips to it. It has no intrinsic size.",
+  },
+];
+
+export const CANVASPANEL_PROPS: PropDoc[] = [
+  {
+    name: "side",
+    type: '"top-left" | "top-right" | "bottom-left"',
+    default: '"top-left"',
+    description:
+      "Which corner it floats in. bottom-right is taken by the zoom controls.",
+  },
+  {
+    name: "children",
+    type: "ReactNode",
+    required: true,
+    description:
+      "Panel contents. Pointer events are stopped inside, so interacting with a panel never pans the canvas.",
+  },
+];
+
+export const SELECTMENU_PROPS: PropDoc[] = [
+  {
+    name: "value / onChange",
+    type: "string · (id: string) => void",
+    required: true,
+    description: "Controlled. onChange receives the chosen option's id.",
+  },
+  {
+    name: "options",
+    type: "DropdownItem[]",
+    required: true,
+    description: "Same shape as DropdownMenu — descriptions and icons included.",
+  },
+  {
+    name: "label",
+    type: "string",
+    required: true,
+    description: "Accessible name for the trigger and the listbox.",
+  },
+  {
+    name: "placeholder",
+    type: "string",
+    default: '"Select…"',
+    description: "Shown when value matches no option.",
+  },
+  {
+    name: "invalid",
+    type: "boolean",
+    description:
+      "Draws the error border. Carried on a data attribute, since role=button doesn't support aria-invalid.",
+  },
+];
+
+export const TEXTAREA_PROPS: PropDoc[] = [
+  {
+    name: "autoResize",
+    type: "boolean",
+    default: "true",
+    description:
+      "Grow to fit, then scroll. Hides the native grabber while on — dragging to a height the next keystroke overwrites is just noise.",
+  },
+  {
+    name: "minRows / maxRows",
+    type: "number",
+    default: "3 · 12",
+    description: "Starting height, and where it stops growing and scrolls.",
+  },
+];
+
+export const BACKLINK_PROPS: PropDoc[] = [
+  {
+    name: "href",
+    type: "string",
+    required: true,
+    description: "Where back goes.",
+  },
+  {
+    name: "children",
+    type: "ReactNode",
+    required: true,
+    description:
+      "Name the destination — 'Back to design system', not 'Back'. It sits in the content column, above the page title.",
   },
 ];

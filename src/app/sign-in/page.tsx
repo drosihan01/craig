@@ -9,6 +9,7 @@ import {
   GoogleButton,
   Input,
   Callout,
+  ContinueAs,
   PasswordInput,
 } from "@/components/ui";
 import { Warning } from "@/components/ui/icons";
@@ -26,6 +27,10 @@ export default function SignInPage() {
     password?: string;
   }>({});
   const [pending, setPending] = React.useState(false);
+  /* Whether this device has seen someone sign in before. Hard-coded here —
+     in the real thing it comes from a client-side hint, never from anything
+     treated as proof of identity. */
+  const [returning, setReturning] = React.useState(true);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +53,14 @@ export default function SignInPage() {
       subtitle="Onboarding workflows for your team"
       footer={
         <>
+          <a
+            href="/design-system"
+            className="text-accent underline-offset-4 hover:underline"
+          >
+            ← Back to design system
+          </a>
+          <br />
+          <br />
           Trouble signing in?{" "}
           <a href="#" className="text-accent underline-offset-4 hover:underline">
             Contact People &amp; Culture
@@ -55,8 +68,24 @@ export default function SignInPage() {
         </>
       }
     >
-      <GoogleButton />
-      <AuthDivider label="or continue with email" />
+      {returning ? (
+        <>
+          <ContinueAs
+            account={{
+              name: "Dzaky Rosihan",
+              email: "dzaky.rosihan@kmart.com.au",
+              method: "google",
+            }}
+            onUseAnother={() => setReturning(false)}
+          />
+          <AuthDivider label="or sign in another way" />
+        </>
+      ) : (
+        <>
+          <GoogleButton />
+          <AuthDivider label="or continue with email" />
+        </>
+      )}
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <Field label="Work email" error={errors.email}>

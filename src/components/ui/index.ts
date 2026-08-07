@@ -60,6 +60,8 @@ export {
   GoogleButton,
   AuthDivider,
   PasswordInput,
+  ContinueAs,
+  type LastAccount,
 } from "./auth";
 export {
   ModelPicker,
@@ -82,6 +84,8 @@ export {
   type WorkflowBlock,
 } from "./workflow-builder";
 export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";
+export { CraigMark, CraigLockup, MARK_STROKE } from "./craig-mark";
+export { BackLink } from "./back-link";
 export { ThemeToggle } from "./theme-toggle";
 export * as Icons from "./icons";
 export { type IconProps } from "./icons";

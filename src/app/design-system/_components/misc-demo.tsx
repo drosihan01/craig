@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   AuthDivider,
   Badge,
+  ContinueAs,
   Button,
   Calendar,
   DatePicker,
@@ -13,6 +14,8 @@ import {
   Input,
   PasswordInput,
   WorkflowBuilder,
+  WorkflowCanvas,
+  CanvasPanel,
   type BlockKind,
   type WorkflowBlock,
 } from "@/components/ui";
@@ -174,6 +177,17 @@ export function AuthDemo() {
         </div>
       </div>
 
+      <div className="flex w-full max-w-sm flex-col gap-3">
+        <p className="text-sm font-medium">Returning to this device</p>
+        <ContinueAs
+          account={{
+            name: "Dzaky Rosihan",
+            email: "dzaky.rosihan@kmart.com.au",
+            method: "google",
+          }}
+        />
+      </div>
+
       <div className="flex flex-col gap-3">
         <p className="text-sm font-medium">Pieces</p>
         <GoogleButton className="w-64" />
@@ -225,11 +239,18 @@ const DEMO_BLOCKS: WorkflowBlock[] = [
 
 let n = 0;
 
-export function BuilderDemo() {
+export function CanvasDemo() {
   const [blocks, setBlocks] = React.useState(DEMO_BLOCKS);
   const [selected, setSelected] = React.useState<string | null>("a");
 
   return (
+    <WorkflowCanvas className="h-[34rem] w-full rounded-none border-0">
+      <CanvasPanel side="top-left">
+        <span className="px-1.5 text-2xs text-text-subtle">
+          {blocks.length - 1} steps
+        </span>
+      </CanvasPanel>
+      <div className="px-8 py-10">
     <WorkflowBuilder
       className="w-full"
       blocks={blocks}
@@ -267,5 +288,7 @@ export function BuilderDemo() {
         })
       }
     />
+      </div>
+    </WorkflowCanvas>
   );
 }

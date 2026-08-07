@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   AppShell,
+  BackLink,
   Badge,
   BlockInspector,
   Button,
@@ -196,6 +197,9 @@ export default function BuilderPage() {
     >
       <div className="py-8">
         <header className="mb-6 flex flex-col gap-1">
+          <BackLink href="/design-system" className="mb-2">
+            Back to design system
+          </BackLink>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-[-0.02em]">
               Workflow builder

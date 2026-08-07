@@ -19,6 +19,10 @@ import {
 import {
   Avatar,
   AvatarStack,
+  BackLink,
+  CraigLockup,
+  CraigMark,
+  MARK_STROKE,
   Badge,
   Button,
   Callout,
@@ -60,8 +64,8 @@ import {
 } from "./_components/chat-demo";
 import {
   AuthDemo,
-  BuilderDemo,
   CalendarDemo,
+  CanvasDemo,
   DropdownDemo,
 } from "./_components/misc-demo";
 import { Api, Usage } from "./_components/api";
@@ -74,7 +78,13 @@ import {
   DIALOG_PROPS,
   DROPDOWN_PROPS,
   PROMPTBAR_PROPS,
+  BACKLINK_PROPS,
   BUILDER_PROPS,
+  CANVASPANEL_PROPS,
+  CANVAS_PROPS,
+  MARK_PROPS,
+  SELECTMENU_PROPS,
+  TEXTAREA_PROPS,
   WORKFLOW_PROPS,
 } from "./_components/api-data";
 import { Demo, Section, Swatch } from "./_components/specimen";
@@ -268,6 +278,18 @@ export default function DesignSystemPage() {
           or the type scale lands everywhere at once.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
+          <a
+            href="/builder"
+            className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-sunken px-2 text-xs font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover"
+          >
+            Workflow builder →
+          </a>
+          <a
+            href="/sign-in"
+            className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-sunken px-2 text-xs font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover"
+          >
+            Sign in →
+          </a>
           <Badge>Google Sans Flex</Badge>
           <Badge>Material Symbols</Badge>
           <Badge>Charcoal brown</Badge>
@@ -280,35 +302,58 @@ export default function DesignSystemPage() {
       <Section
         id="brand"
         title="Brand"
-        description="The wordmark is the mark for now. The full stop is part of it — it sets the tone the rest of the system follows: quiet, deliberate, finished."
+        description="A drawn mark and a wordmark. The full stop is part of the wordmark — it sets the tone the rest of the system follows: quiet, deliberate, finished."
       >
-        <Demo title="Wordmark" className="gap-8">
-          <span className="text-3xl font-semibold tracking-[-0.03em]">
-            Craig.
+        <Demo title="Mark" note="stroked, drawn in currentColor">
+          <div className="flex items-end gap-7">
+            <CraigMark className="size-20 text-text" />
+            <CraigMark className="size-12 text-text" />
+            <CraigMark
+              strokeWidth={MARK_STROKE.md}
+              className="size-8 text-text"
+            />
+            <CraigMark
+              strokeWidth={MARK_STROKE.sm}
+              className="size-5 text-text"
+            />
+          </div>
+        </Demo>
+
+        <Demo title="Lockup">
+          <div className="flex items-center gap-8">
+            <CraigLockup className="text-2xl" markClassName="size-7" />
+            <CraigLockup className="text-lg" markClassName="size-6" />
+            <CraigLockup className="text-base" />
+          </div>
+        </Demo>
+
+        <Demo title="On accent" className="gap-6">
+          <span className="flex size-14 items-center justify-center rounded-xl bg-accent text-accent-fg">
+            <CraigMark strokeWidth={MARK_STROKE.md} className="size-9" />
           </span>
-          <span className="text-xl font-semibold tracking-[-0.02em]">
-            Craig.
+          <span className="flex size-14 items-center justify-center rounded-xl bg-accent-subtle text-accent-subtle-fg">
+            <CraigMark strokeWidth={MARK_STROKE.md} className="size-9" />
           </span>
-          <span className="text-base font-semibold tracking-[-0.01em]">
-            Craig.
+          <span className="flex size-14 items-center justify-center rounded-xl border border-border bg-surface text-text">
+            <CraigMark strokeWidth={MARK_STROKE.md} className="size-9" />
           </span>
         </Demo>
 
-        <Demo title="Logo mark" note="not designed yet">
-          <div className="flex items-center gap-5">
-            <div className="flex size-16 items-center justify-center rounded-lg border border-dashed border-border-strong text-2xs text-text-subtle">
-              64
-            </div>
-            <div className="flex size-8 items-center justify-center rounded-md border border-dashed border-border-strong text-2xs text-text-subtle">
-              32
-            </div>
-            <div className="flex size-5 items-center justify-center rounded border border-dashed border-border-strong" />
-            <p className="max-w-xs text-sm text-text-subtle">
-              Placeholder slots. Until there&apos;s a mark, the header runs the
-              wordmark alone rather than a stand-in glyph.
-            </p>
-          </div>
-        </Demo>
+        <Api component="CraigMark" props={MARK_PROPS} />
+        <Usage>{`import { CraigMark, CraigLockup, MARK_STROKE } from "@/components/ui";`}</Usage>
+
+        <Callout tone="info" icon={<Info />} title="Stroke weight is not one value">
+          <p>
+            The stroke is measured in the mark&apos;s own 256-unit space, so it
+            scales with the render size — a 7 lands at about half a pixel at
+            20px and anti-aliases into a grey smudge. Use{" "}
+            <code className="font-mono text-xs">MARK_STROKE.lg</code> at 40px
+            and up, <code className="font-mono text-xs">.md</code> from 24–40px
+            and <code className="font-mono text-xs">.sm</code> below that. The
+            eyes are filled rather than stroked so they stay solid as the weight
+            changes.
+          </p>
+        </Callout>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -661,6 +706,14 @@ export default function DesignSystemPage() {
             </Field>
           </div>
         </Demo>
+
+        <Api
+          component="SelectMenu"
+          props={SELECTMENU_PROPS}
+          note="DropdownMenu wearing a form control's clothes"
+        />
+        <Api component="Textarea" props={TEXTAREA_PROPS} />
+        <Usage>{`import { Field, Input, Textarea, Select, SelectMenu, DatePicker } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -1069,7 +1122,12 @@ export default function DesignSystemPage() {
           </div>
         </Demo>
         <Api component="AppShell" props={APPSHELL_PROPS} />
-        <Usage>{`import { AppShell } from "@/components/ui";`}</Usage>
+
+        <Demo title="Back link" note="for pages the nav can't reach">
+          <BackLink href="/design-system">Back to design system</BackLink>
+        </Demo>
+        <Api component="BackLink" props={BACKLINK_PROPS} />
+        <Usage>{`import { AppShell, BackLink } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -1078,11 +1136,21 @@ export default function DesignSystemPage() {
         title="Workflow builder"
         description="One column, top to bottom, in the order the workflow runs. A free canvas would let an admin draw a shape that doesn't correspond to any execution order — a single column can only express what the engine can actually do."
       >
-        <Demo title="Blocks" className="items-stretch bg-canvas">
-          <BuilderDemo />
+        <Demo
+          title="Blocks on a canvas"
+          note="drag to pan · ⌘-scroll or the controls to zoom"
+          className="items-stretch p-0"
+        >
+          <CanvasDemo />
         </Demo>
         <Api component="WorkflowBuilder" props={BUILDER_PROPS} />
-        <Usage>{`import { WorkflowBuilder, BlockInspector, BLOCK_TYPES } from "@/components/ui";`}</Usage>
+        <Api
+          component="WorkflowCanvas"
+          props={CANVAS_PROPS}
+          note="pan, zoom and the dot grid"
+        />
+        <Api component="CanvasPanel" props={CANVASPANEL_PROPS} />
+        <Usage>{`import { WorkflowBuilder, WorkflowCanvas, CanvasPanel, BlockInspector } from "@/components/ui";`}</Usage>
         <Callout tone="info" icon={<Info />} title="The full builder space">
           <p>
             <a href="/builder" className="font-medium underline underline-offset-4">

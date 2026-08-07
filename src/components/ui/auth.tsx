@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { CraigMark } from "./craig-mark";
 import { Visibility, VisibilityOff } from "./icons";
 import { cn } from "@/lib/cn";
 
@@ -29,6 +30,7 @@ export function AuthShell({
     <main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-7 flex flex-col items-center gap-2 text-center">
+          <CraigMark className="size-11 text-accent" />
           <span className="text-xl font-semibold tracking-[-0.02em]">
             Craig.
           </span>
@@ -109,6 +111,86 @@ export function GoogleButton({
       </span>
       {label}
     </button>
+  );
+}
+
+/* --- Returning user -------------------------------------------------------- */
+
+/**
+ * "Continue as …" for someone who has signed in on this device before.
+ *
+ * This is a *hint*, not a session — it says who was here last, nothing more.
+ * The identity shown comes from a client-side record and must never be trusted
+ * as proof of anything; clicking it starts a real sign-in for that account.
+ * Show it only when the previous session is genuinely resumable, and always
+ * leave a way to use a different account.
+ */
+export interface LastAccount {
+  name: string;
+  email: string;
+  /** Where they came in from last time, if that's known. */
+  method?: "google" | "password";
+}
+
+export function ContinueAs({
+  account,
+  onContinue,
+  onUseAnother,
+  loading,
+  className,
+}: {
+  account: LastAccount;
+  onContinue?: () => void;
+  onUseAnother?: () => void;
+  loading?: boolean;
+  className?: string;
+}) {
+  const initials = account.name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <div className={cn("flex flex-col gap-3", className)}>
+      <button
+        type="button"
+        onClick={onContinue}
+        disabled={loading}
+        className={cn(
+          "group flex w-full items-center gap-3 rounded-lg border border-border bg-surface p-2.5 text-left shadow-e1",
+          "transition-[border-color,box-shadow] hover:border-accent hover:shadow-e2",
+          "disabled:pointer-events-none disabled:opacity-50",
+        )}
+      >
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-sm font-semibold text-accent-subtle-fg">
+          {initials}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-base font-medium text-text">
+            Continue as {account.name.split(" ")[0]}
+          </span>
+          <span className="truncate text-sm text-text-subtle">
+            {account.email}
+          </span>
+        </span>
+        {account.method === "google" && (
+          <span className="flex size-4.5 shrink-0 items-center justify-center rounded-sm bg-white">
+            <GoogleMark className="size-3.5" />
+          </span>
+        )}
+      </button>
+
+      <button
+        type="button"
+        onClick={onUseAnother}
+        className="self-center text-sm text-text-muted underline-offset-4 transition-colors hover:text-text hover:underline"
+      >
+        Use a different account
+      </button>
+    </div>
   );
 }
 

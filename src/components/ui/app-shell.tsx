@@ -12,6 +12,7 @@ import {
   Settings,
 } from "./icons";
 import { Avatar } from "./avatar";
+import { CraigMark, MARK_STROKE } from "./craig-mark";
 import { DropdownMenu } from "./dropdown";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/cn";
@@ -164,6 +165,7 @@ export function AppShell({
               navOpen && nav ? "craig-col-nav" : "lg:w-auto",
             )}
           >
+            <CraigMark strokeWidth={MARK_STROKE.sm} className="size-5" />
             <span className="truncate text-base font-semibold tracking-[-0.01em]">
               Craig.
             </span>
