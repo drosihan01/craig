@@ -135,7 +135,6 @@ function usePersistedWidth(key: string) {
   return [width, setWidth] as const;
 }
 
-
 /**
  * Whether the viewport is wide enough for the side columns.
  *
@@ -166,6 +165,7 @@ export function AppShell({
   nav,
   aside,
   asideTitle,
+  themeToggle = true,
   account,
   actions,
   fill,
@@ -182,6 +182,11 @@ export function AppShell({
       shouting. The drawer still gets a name, since a sheet with no title is
       unlabelled to a screen reader. */
   asideTitle?: string;
+  /** Off for pages whose header is already a working toolbar — the canvas
+      being the obvious one. Theme is still reachable from every other page,
+      and one fewer thing between the workflow's name and Publish is worth
+      more there than a control nobody touches mid-build. */
+  themeToggle?: boolean;
   account?: AccountInfo;
   actions?: React.ReactNode;
   /** Omit entirely to hide the bell — an empty array still shows it, correctly
@@ -253,12 +258,24 @@ export function AppShell({
               and mixed two unrelated kinds of control. */}
           <div className="flex min-w-0 flex-1 items-center gap-3 px-4">
             {title && (
-              <span className="truncate text-base text-text-muted">{title}</span>
+              <span className="truncate text-base text-text-muted">
+                {title}
+              </span>
             )}
             {actions && (
-              <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
+              /* Pushed right when there's no theme toggle to do it — an
+                 action bar floating mid-header, with nothing to its right,
+                 reads as unfinished. */
+              <div
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5",
+                  !themeToggle && "ml-auto",
+                )}
+              >
+                {actions}
+              </div>
             )}
-            <ThemeToggle className="ml-auto shrink-0" />
+            {themeToggle && <ThemeToggle className="ml-auto shrink-0" />}
           </div>
 
           {/* Right cell — tracks the details column's width, same rule. The
