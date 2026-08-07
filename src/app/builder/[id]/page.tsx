@@ -32,6 +32,7 @@ import {
 } from "@/lib/demo-workflow";
 import { blockFromPreset, type BlockPreset } from "@/lib/workflow/library";
 import { AdminNav, NavStat } from "@/components/app-nav";
+import { WorkflowAssistant } from "@/components/workflow-assistant";
 
 /* Drafted from Ada's handbook, then built out of the block library. Each
    account is its own step — separate admin panels that fail independently,
@@ -252,13 +253,27 @@ function Builder({ step }: { step: string | null }) {
             </BlockInspector>
           </div>
         ) : (
-          <WorkflowDetail
-            workflow={workflow}
-            blocks={blocks}
-            steps={steps}
-            unconfigured={unconfigured}
-            onSelect={setSelectedId}
-          />
+          <div className="flex flex-col gap-5">
+            {/* Craig first. The canvas is a good editor and a bad
+                conversation — "katalis.slack.com" is four words, and doing it
+                by hand is select the block, find the field, type. */}
+            <WorkflowAssistant
+              blocks={blocks}
+              onPatch={patch}
+              onInsert={(b) => setBlocks((prev) => [...prev, b])}
+              onSelect={setSelectedId}
+            />
+
+            <Separator />
+
+            <WorkflowDetail
+              workflow={workflow}
+              blocks={blocks}
+              steps={steps}
+              unconfigured={unconfigured}
+              onSelect={setSelectedId}
+            />
+          </div>
         )
       }
       notifications={NOTIFICATIONS}
