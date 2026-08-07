@@ -165,7 +165,6 @@ export function AppShell({
   nav,
   aside,
   asideTitle,
-  themeToggle = true,
   account,
   actions,
   fill,
@@ -182,11 +181,6 @@ export function AppShell({
       shouting. The drawer still gets a name, since a sheet with no title is
       unlabelled to a screen reader. */
   asideTitle?: string;
-  /** Off for pages whose header is already a working toolbar — the canvas
-      being the obvious one. Theme is still reachable from every other page,
-      and one fewer thing between the workflow's name and Publish is worth
-      more there than a control nobody touches mid-build. */
-  themeToggle?: boolean;
   account?: AccountInfo;
   actions?: React.ReactNode;
   /** Omit entirely to hide the bell — an empty array still shows it, correctly
@@ -262,60 +256,57 @@ export function AppShell({
                 {title}
               </span>
             )}
+            {/* Hard right. The title anchors the left of the cell and the
+                things you do to the page anchor its right, against the rule
+                that separates them from the app's own controls. */}
             {actions && (
-              /* Pushed right when there's no theme toggle to do it — an
-                 action bar floating mid-header, with nothing to its right,
-                 reads as unfinished. */
-              <div
-                className={cn(
-                  "flex shrink-0 items-center gap-1.5",
-                  !themeToggle && "ml-auto",
-                )}
-              >
+              <div className="ml-auto flex shrink-0 items-center gap-1.5">
                 {actions}
               </div>
             )}
-            {themeToggle && <ThemeToggle className="ml-auto shrink-0" />}
           </div>
 
-          {/* Right cell — tracks the details column's width, same rule. The
-              panel's toggle sits hard left, against the rule it actually
-              moves, mirroring the nav toggle in the brand cell. Notifications
-              take the far corner.
+          {/* Right cell — the app's own controls, never the page's. Tracks the
+              details column's width, same rule. The panel's toggle sits hard
+              left, against the rule it actually moves, mirroring the nav
+              toggle in the brand cell; theme and notifications take the far
+              corner.
 
-              Omitted entirely when there's neither a panel nor a bell:
-              otherwise it renders as an empty stub with a divider hanging off
-              it, which reads as a rendering bug rather than as a frame. */}
-          {(aside || notifications) && (
-            <div
-              className={cn(
-                "flex shrink-0 items-center gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
-                asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
-              )}
-            >
-              {aside &&
-                (isDesktop ? (
-                  <PanelToggle
-                    open={asideOpen}
-                    onToggle={toggleAside}
-                    side="right"
-                  />
-                ) : (
-                  <DrawerToggle
-                    label="Open details"
-                    onClick={() => setDrawer("aside")}
-                  />
-                ))}
-              {notifications && (
-                <NotificationBell
-                  items={notifications}
-                  onSelect={onNotificationSelect}
-                  onMarkAllRead={onMarkAllRead}
-                  className="ml-auto shrink-0"
+              Theme lives here rather than in the centre because it belongs to
+              the app, not to the workflow you happen to be looking at — and
+              because with it out of the way the centre cell's actions can go
+              hard right, which is where you look for them. Collapse the panel
+              and it's three icons, which is a corner, not a toolbar. */}
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
+              asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
+            )}
+          >
+            {aside &&
+              (isDesktop ? (
+                <PanelToggle
+                  open={asideOpen}
+                  onToggle={toggleAside}
+                  side="right"
                 />
-              )}
-            </div>
-          )}
+              ) : (
+                <DrawerToggle
+                  label="Open details"
+                  onClick={() => setDrawer("aside")}
+                />
+              ))}
+            <ThemeToggle className="ml-auto shrink-0" />
+
+            {notifications && (
+              <NotificationBell
+                items={notifications}
+                onSelect={onNotificationSelect}
+                onMarkAllRead={onMarkAllRead}
+                className="shrink-0"
+              />
+            )}
+          </div>
         </div>
       </header>
 

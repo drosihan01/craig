@@ -270,7 +270,6 @@ function Builder({ step }: { step: string | null }) {
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
       fill
-      themeToggle={false}
       actions={
         /* A trigger on its own is valid but pointless, so an empty workflow is
            unpublishable for a different reason to an unconfigured one. */
