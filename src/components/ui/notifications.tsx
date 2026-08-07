@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle,
   DoneAll,
@@ -21,6 +22,11 @@ import { cn } from "@/lib/cn";
  * Read state is owned by the caller. The panel never marks anything read on
  * its own: "I opened the list" is not "I dealt with it", and quietly clearing
  * the badge loses the one signal telling someone they still owe something.
+ *
+ * Unread uses `info`, not the accent. The accent means "this is the action to
+ * take"; unread means "this is new" — different claims, so different colours.
+ * It's also the one cool hue in a warm palette, which is what makes a 6px dot
+ * findable at all.
  */
 
 export type NotificationKind =
@@ -149,7 +155,7 @@ export function NotificationItem({
 
         {!n.read && (
           <span
-            className="mt-1.5 size-2 shrink-0 rounded-full bg-accent"
+            className="mt-2 size-1.5 shrink-0 rounded-full bg-info"
             aria-label="Unread"
           />
         )}
@@ -225,6 +231,12 @@ export function NotificationList({
  * Header trigger. Hand-rolled rather than a DropdownMenu because the panel is
  * a list of links with their own structure, not a menu of commands — putting
  * menuitem roles on it would lie to a screen reader about what it is.
+ *
+ * The panel is portalled to <body> and positioned from the trigger's rect. It
+ * can't be an absolutely-positioned child: the app header carries a
+ * backdrop-filter, which creates a stacking context the panel would be trapped
+ * inside, so the part of it hanging below the header gets painted over by the
+ * page. Portalling takes it out of that context entirely.
  */
 export function NotificationBell({
   items,
@@ -238,16 +250,37 @@ export function NotificationBell({
   className?: string;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [rect, setRect] = React.useState<DOMRect | null>(null);
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const panelId = React.useId();
 
   const unread = items.filter((n) => !n.read).length;
 
+  // Re-anchor on open, and follow the trigger if the page scrolls or resizes.
+  React.useEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const el = triggerRef.current;
+      if (el) setRect(el.getBoundingClientRect());
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, [open]);
+
   React.useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // The panel is portalled, so it isn't inside rootRef — check both.
+      if (rootRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -280,29 +313,43 @@ export function NotificationBell({
       >
         <Notifications className="size-4" />
         {unread > 0 && (
+          /* A dot, not a count. The exact number doesn't change what you do —
+             you open the panel either way — and it reads as quieter chrome.
+             The count is still announced through the button's label. */
           <span
             aria-hidden
-            className="absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-4 text-accent-fg ring-2 ring-canvas"
-          >
-            {unread > 9 ? "9+" : unread}
-          </span>
+            /* 4px, tucked into the bell's own top-right rather than the
+               button's corner. The halo is the same hue at low alpha, which
+               separates it from the glyph without a hard canvas-coloured ring
+               punching a hole in the icon. */
+            className="absolute right-1.5 top-1.5 size-1 rounded-full bg-info ring-1 ring-info/30"
+          />
         )}
       </button>
 
-      {open && (
-        <div
-          id={panelId}
-          role="dialog"
-          aria-label="Notifications"
-          className="absolute right-0 top-full z-40 mt-1.5 w-[22rem] overflow-hidden rounded-lg border border-border bg-surface-raised shadow-e4 motion-safe:animate-[dialog-in_140ms_cubic-bezier(0.32,0.72,0,1)]"
-        >
-          <NotificationList
-            items={items}
-            onSelect={onSelect}
-            onMarkAllRead={onMarkAllRead}
-          />
-        </div>
-      )}
+      {open &&
+        rect &&
+        createPortal(
+          <div
+            ref={panelRef}
+            id={panelId}
+            role="dialog"
+            aria-label="Notifications"
+            style={{
+              position: "fixed",
+              top: rect.bottom + 6,
+              right: Math.max(8, window.innerWidth - rect.right),
+            }}
+            className="z-[70] w-[22rem] overflow-hidden rounded-lg border border-border bg-surface-raised shadow-e4 motion-safe:animate-[dialog-in_140ms_cubic-bezier(0.32,0.72,0,1)]"
+          >
+            <NotificationList
+              items={items}
+              onSelect={onSelect}
+              onMarkAllRead={onMarkAllRead}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

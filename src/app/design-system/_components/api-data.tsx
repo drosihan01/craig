@@ -266,7 +266,7 @@ export const APPSHELL_PROPS: PropDoc[] = [
     name: "actions",
     type: "ReactNode",
     description:
-      "Header controls, in the right cell before the theme and panel toggles.",
+      "The page's own actions — rendered in the centre cell, left-aligned beside the title. The right cell is system chrome only (notifications, theme, panel toggle), so the two don't compete.",
   },
 ];
 

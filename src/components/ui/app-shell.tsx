@@ -188,9 +188,25 @@ export function AppShell({
             )}
           </div>
 
+          {/* Centre cell: everything belonging to the page. Title and actions
+              left-aligned, notifications pushed to its right edge. The right
+              cell stays system chrome only — theme and panel toggles — because
+              putting page concerns and app concerns in one corner crowded it
+              and mixed two unrelated kinds of control. */}
           <div className="flex min-w-0 flex-1 items-center gap-3 px-4">
             {title && (
               <span className="truncate text-base text-text-muted">{title}</span>
+            )}
+            {actions && (
+              <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
+            )}
+            {notifications && (
+              <NotificationBell
+                items={notifications}
+                onSelect={onNotificationSelect}
+                onMarkAllRead={onMarkAllRead}
+                className="ml-auto shrink-0"
+              />
             )}
           </div>
 
@@ -201,14 +217,6 @@ export function AppShell({
               asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
             )}
           >
-            {actions}
-            {notifications && (
-              <NotificationBell
-                items={notifications}
-                onSelect={onNotificationSelect}
-                onMarkAllRead={onMarkAllRead}
-              />
-            )}
             <ThemeToggle />
             {aside && (
               <PanelToggle
