@@ -310,3 +310,36 @@ export const AUTH_PROPS: PropDoc[] = [
       "Adds a reveal toggle. Forwards its ref, so it drops into a Field like any other control.",
   },
 ];
+
+export const BUILDER_PROPS: PropDoc[] = [
+  {
+    name: "blocks",
+    type: "WorkflowBlock[]",
+    required: true,
+    description:
+      "id, kind, title, and optionally summary, owner and incomplete. Index 0 must be the trigger.",
+  },
+  {
+    name: "selectedId / onSelect",
+    type: "string | null · (id) => void",
+    description:
+      "Selection is owned by the caller, so the same state can drive the inspector in the right panel.",
+  },
+  {
+    name: "onInsert",
+    type: "(kind, index) => void",
+    description:
+      "index is the position the new block should occupy. Fired from the connector between blocks.",
+  },
+  {
+    name: "onMove",
+    type: "(id, -1 | 1) => void",
+    description:
+      "Swap with the neighbour. The trigger is excluded and index 0 is never a valid destination.",
+  },
+  {
+    name: "onRemove / onDuplicate",
+    type: "(id: string) => void",
+    description: "Omitted automatically for the trigger, which is structural.",
+  },
+];

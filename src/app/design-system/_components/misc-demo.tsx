@@ -12,7 +12,11 @@ import {
   GoogleButton,
   Input,
   PasswordInput,
+  WorkflowBuilder,
+  type BlockKind,
+  type WorkflowBlock,
 } from "@/components/ui";
+import { BLOCK_TYPES } from "@/components/ui/workflow-builder";
 import {
   ContentCopy,
   Delete,
@@ -186,5 +190,82 @@ export function AuthDemo() {
         </Badge>
       </div>
     </div>
+  );
+}
+
+/* --- Workflow builder ------------------------------------------------------ */
+
+const DEMO_BLOCKS: WorkflowBlock[] = [
+  {
+    id: "t",
+    kind: "trigger",
+    title: "A new starter is added",
+    summary: "Role is Retail team member",
+  },
+  {
+    id: "a",
+    kind: "task",
+    title: "Order laptop and store login",
+    summary: "Due 3 days before start date",
+    owner: "IT service desk",
+  },
+  {
+    id: "b",
+    kind: "approval",
+    title: "Hiring manager confirms readiness",
+    owner: "Hiring manager",
+  },
+  {
+    id: "c",
+    kind: "notify",
+    title: "Send the welcome email",
+    incomplete: "No template chosen",
+  },
+];
+
+let n = 0;
+
+export function BuilderDemo() {
+  const [blocks, setBlocks] = React.useState(DEMO_BLOCKS);
+  const [selected, setSelected] = React.useState<string | null>("a");
+
+  return (
+    <WorkflowBuilder
+      className="w-full"
+      blocks={blocks}
+      selectedId={selected}
+      onSelect={setSelected}
+      onInsert={(kind: BlockKind, index: number) => {
+        const id = `d${n++}`;
+        setBlocks((prev) => [
+          ...prev.slice(0, index),
+          {
+            id,
+            kind,
+            title: `New ${BLOCK_TYPES[kind].label.toLowerCase()}`,
+            incomplete: "Not configured",
+          },
+          ...prev.slice(index),
+        ]);
+        setSelected(id);
+      }}
+      onRemove={(id) => setBlocks((p) => p.filter((b) => b.id !== id))}
+      onDuplicate={(id) =>
+        setBlocks((p) => {
+          const i = p.findIndex((b) => b.id === id);
+          return [...p.slice(0, i + 1), { ...p[i], id: `d${n++}` }, ...p.slice(i + 1)];
+        })
+      }
+      onMove={(id, dir) =>
+        setBlocks((p) => {
+          const i = p.findIndex((b) => b.id === id);
+          const j = i + dir;
+          if (i < 1 || j < 1 || j >= p.length) return p;
+          const next = [...p];
+          [next[i], next[j]] = [next[j], next[i]];
+          return next;
+        })
+      }
+    />
   );
 }

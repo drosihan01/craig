@@ -45,8 +45,8 @@ public/fonts/            Google Sans Flex, self-hosted (see README)
 scripts/gen-icons.py     vendors Material Symbols into components/ui/icons.tsx
 ```
 
-Routes: `/design-system` (the showcase), `/sign-in`. `/` redirects to the
-showcase until there's an app to land on.
+Routes: `/design-system` (the showcase), `/builder` (the workflow builder),
+`/sign-in`. `/` redirects to the showcase until there's an app to land on.
 
 ## Design system
 
@@ -100,6 +100,12 @@ Notable choices:
   `Date` + `Intl`. All maths is local-time: a UTC-based `Date` lands on the
   wrong day for anyone east of Greenwich, which is most of this product's
   users. Use `toISODate`, never `toISOString`.
+- **The workflow builder is one vertical column, not a canvas.** A free canvas
+  would let an admin draw a shape that doesn't correspond to any execution
+  order; a single column can only express what the engine can actually run.
+  The trigger is structural — exactly one, always first, not movable or
+  deletable — and steps are inserted *between* blocks from the connector rather
+  than dragged in from a palette.
 - **Panels never carry `overflow: hidden`.** That makes an element a scroll
   container, which then becomes the scrollport for any `sticky` child — the
   child offsets by its `top` immediately and never sticks, because that

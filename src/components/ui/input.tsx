@@ -47,18 +47,81 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   },
 );
 
-export const Textarea = React.forwardRef<
-  HTMLTextAreaElement,
-  React.TextareaHTMLAttributes<HTMLTextAreaElement>
->(function Textarea({ className, ...props }, ref) {
-  return (
-    <textarea
-      ref={ref}
-      className={cn(fieldBase, "min-h-20 px-2.5 py-2 text-base", className)}
-      {...props}
-    />
-  );
-});
+export interface TextareaProps
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  /** Grow with the content instead of showing a drag handle. Default on. */
+  autoResize?: boolean;
+  minRows?: number;
+  /** Stop growing here and scroll instead. */
+  maxRows?: number;
+}
+
+/**
+ * Grows to fit its content and then scrolls, so short answers get a short box
+ * and long ones don't need dragging. The native resize grabber is hidden while
+ * auto-resizing — leaving it would let you drag to a height the next keystroke
+ * overwrites.
+ */
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  function Textarea(
+    { className, autoResize = true, minRows = 3, maxRows = 12, ...props },
+    forwardedRef,
+  ) {
+    const innerRef = React.useRef<HTMLTextAreaElement>(null);
+
+    // Merge the forwarded ref so callers still get the node.
+    const setRef = React.useCallback(
+      (node: HTMLTextAreaElement | null) => {
+        innerRef.current = node;
+        if (typeof forwardedRef === "function") forwardedRef(node);
+        else if (forwardedRef) forwardedRef.current = node;
+      },
+      [forwardedRef],
+    );
+
+    const fit = React.useCallback(() => {
+      const el = innerRef.current;
+      if (!el || !autoResize) return;
+
+      const cs = getComputedStyle(el);
+      const line = parseFloat(cs.lineHeight) || 20;
+      const chrome =
+        parseFloat(cs.paddingTop) +
+        parseFloat(cs.paddingBottom) +
+        parseFloat(cs.borderTopWidth) +
+        parseFloat(cs.borderBottomWidth);
+
+      // Reset first — scrollHeight only shrinks if the box isn't already
+      // holding the taller size open.
+      el.style.height = "auto";
+      const max = line * maxRows + chrome;
+      const next = Math.min(el.scrollHeight, max);
+      el.style.height = `${next}px`;
+      el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+    }, [autoResize, maxRows]);
+
+    // Re-fit when a controlled value changes from outside.
+    React.useEffect(fit, [fit, props.value]);
+
+    return (
+      <textarea
+        ref={setRef}
+        rows={minRows}
+        onInput={(e) => {
+          fit();
+          props.onInput?.(e);
+        }}
+        className={cn(
+          fieldBase,
+          "px-2.5 py-2 text-base leading-relaxed",
+          autoResize ? "resize-none" : "min-h-20 resize-y",
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
+);
 
 export const Select = React.forwardRef<
   HTMLSelectElement,

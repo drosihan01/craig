@@ -44,6 +44,7 @@ export const SECTIONS: NavGroup[] = [
     group: "Patterns",
     items: [
       { id: "shell", label: "App shell" },
+      { id: "builder", label: "Workflow builder" },
       { id: "auth", label: "Auth" },
       { id: "patterns", label: "In context" },
     ],

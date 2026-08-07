@@ -14,6 +14,12 @@ BASE = ("https://raw.githubusercontent.com/google/material-design-icons/master"
 # export name -> Material Symbols name
 ICONS = {
     "Add": "add",
+    "AltRoute": "alt_route",
+    "ArrowDownward": "arrow_downward",
+    "Bolt": "bolt",
+    "HowToReg": "how_to_reg",
+    "Schedule": "schedule",
+    "TaskAlt": "task_alt",
     "ArrowBack": "arrow_back",
     "CalendarToday": "calendar_today",
     "ChevronLeft": "chevron_left",

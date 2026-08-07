@@ -60,6 +60,7 @@ import {
 } from "./_components/chat-demo";
 import {
   AuthDemo,
+  BuilderDemo,
   CalendarDemo,
   DropdownDemo,
 } from "./_components/misc-demo";
@@ -73,6 +74,7 @@ import {
   DIALOG_PROPS,
   DROPDOWN_PROPS,
   PROMPTBAR_PROPS,
+  BUILDER_PROPS,
   WORKFLOW_PROPS,
 } from "./_components/api-data";
 import { Demo, Section, Swatch } from "./_components/specimen";
@@ -649,7 +651,7 @@ export default function DesignSystemPage() {
             </Field>
             <Field
               label="Welcome message"
-              hint="Markdown supported"
+              hint="Grows as you type, then scrolls at 12 lines"
               className="sm:col-span-2"
             >
               <Textarea placeholder="Tell them what day one looks like…" />
@@ -1068,6 +1070,28 @@ export default function DesignSystemPage() {
         </Demo>
         <Api component="AppShell" props={APPSHELL_PROPS} />
         <Usage>{`import { AppShell } from "@/components/ui";`}</Usage>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="builder"
+        title="Workflow builder"
+        description="One column, top to bottom, in the order the workflow runs. A free canvas would let an admin draw a shape that doesn't correspond to any execution order — a single column can only express what the engine can actually do."
+      >
+        <Demo title="Blocks" className="items-stretch bg-canvas">
+          <BuilderDemo />
+        </Demo>
+        <Api component="WorkflowBuilder" props={BUILDER_PROPS} />
+        <Usage>{`import { WorkflowBuilder, BlockInspector, BLOCK_TYPES } from "@/components/ui";`}</Usage>
+        <Callout tone="info" icon={<Info />} title="The full builder space">
+          <p>
+            <a href="/builder" className="font-medium underline underline-offset-4">
+              Open /builder
+            </a>{" "}
+            — the canvas inside the app shell, with the selected block&apos;s
+            inspector in the right panel. Hover a connector to insert a step.
+          </p>
+        </Callout>
       </Section>
 
       {/* ---------------------------------------------------------------- */}

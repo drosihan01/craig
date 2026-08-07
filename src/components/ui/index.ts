@@ -1,5 +1,11 @@
 export { Button, buttonVariants, type ButtonProps } from "./button";
-export { Input, Textarea, Select, type InputProps } from "./input";
+export {
+  Input,
+  Textarea,
+  Select,
+  type InputProps,
+  type TextareaProps,
+} from "./input";
 export { Field, Label } from "./field";
 export { Checkbox, Radio, Switch, ControlRow } from "./checkbox";
 export {
@@ -66,6 +72,15 @@ export {
 } from "./model-picker";
 export { PromptBar, type PromptBarProps } from "./prompt-bar";
 export { ChatModal, type ChatMessage } from "./chat";
+export {
+  WorkflowBuilder,
+  BlockInspector,
+  BLOCK_TYPES,
+  INSERTABLE,
+  type BlockKind,
+  type BlockTypeDef,
+  type WorkflowBlock,
+} from "./workflow-builder";
 export { ThemeToggle } from "./theme-toggle";
 export * as Icons from "./icons";
 export { type IconProps } from "./icons";
