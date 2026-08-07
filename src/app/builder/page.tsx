@@ -26,9 +26,9 @@ import { cn } from "@/lib/cn";
 /**
  * Pick a workflow, then build it.
  *
- * Katalis has two: the Engineer draft Craig wrote from the handbook, and an
- * empty one. That's the honest state of a three-person company that started
- * last week — padding it with sample workflows would make the product look
+ * Katalis has three: the one Craig drafted from the handbook, a short one for
+ * trying the product out, and an empty one. That's the honest state of a
+ * three-person company — padding it with samples would make the product look
  * busier and the customer look further along than they are.
  */
 
@@ -41,10 +41,9 @@ const NOTIFICATIONS: AppNotification[] = [
   {
     id: "w1",
     kind: "assigned",
-    title: "Jason owns six of the twelve steps",
-    description: "Every account and the 1:1",
+    title: "Two steps still need configuring",
+    description: "The Katalis employee workflow can't be assigned until they are",
     timestamp: new Date(Date.now() - 4 * 60_000),
-    actor: "Jason Cho",
   },
 ];
 
@@ -71,7 +70,7 @@ export default function WorkflowsPage() {
             Workflows
           </h1>
           <p className="text-md text-text-muted">
-            One per kind of hire. Open one to change what happens and in what
+            One workflow per kind of hire. Open one to change its steps or their
             order.
           </p>
         </header>
@@ -134,7 +133,7 @@ export default function WorkflowsPage() {
                    "drafted for undefined" is how you find that out late. */
                 description={
                   empty
-                    ? "Nothing but a trigger. Build it from the block library."
+                    ? "A trigger and nothing else. Build it from the block library."
                     : w.forWho
                       ? `${count} steps · drafted for ${w.forWho}, starts in ${w.startsIn}`
                       : `${count} steps · ${w.role}`
@@ -160,7 +159,7 @@ export default function WorkflowsPage() {
                 </ListIcon>
               }
               title="Describe it to Craig"
-              description="Tell him who you're hiring and what they'll need. He drafts it, you edit it."
+              description="Tell Craig who you're hiring and what they need. He produces a draft for you to review."
             />
             <ListItem
               href={`/builder/${BLANK_WORKFLOW.id}`}
@@ -170,12 +169,12 @@ export default function WorkflowsPage() {
                 </ListIcon>
               }
               title="Start blank"
-              description="A trigger and nothing else. Build it from the block library."
+              description="A trigger and nothing else. Built from the block library."
             />
           </List>
           <p className="pt-1 text-xs leading-relaxed text-text-subtle">
-            Add one when you hire for a different kind of role — a contractor
-            or a first GTM person needs a different shape to an engineer.
+            Add a workflow when a role needs a different shape — a contractor
+            and a permanent hire rarely need the same steps.
           </p>
         </div>
       </div>
@@ -201,8 +200,8 @@ function WorkflowsNav() {
       <Separator />
 
       <p className="px-2 text-xs leading-relaxed text-text-subtle">
-        A workflow is ready when every step has what it needs. Until then it
-        can&apos;t be assigned to anyone.
+        A workflow is ready once every step has what it needs. Until then it
+        cannot be assigned.
       </p>
     </AdminNav>
   );

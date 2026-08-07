@@ -96,6 +96,16 @@ export interface SetupField {
 export interface BlockPreset {
   id: string;
   label: string;
+  /**
+   * Why this one can't be picked yet. Shown in place of the description and
+   * greys the card out.
+   *
+   * Left in the picker rather than deleted: the list is the product's claim
+   * about what onboarding is made of, and a shorter list would be a smaller
+   * claim. Saying "not yet" is honest; quietly not having it looks like an
+   * oversight.
+   */
+  unavailable?: string;
   /** One line, shown in the picker. */
   description: string;
   /** Which mechanism the engine runs. */
@@ -153,6 +163,21 @@ const WHEN: SetupField = {
   options: WHEN_OPTIONS,
 };
 
+/* Services Craig can't provision yet, and why. Everything absent from here is
+   pickable. */
+const UNAVAILABLE: Record<string, string> = {
+  aws: "Cloud access keeps a human in the loop — deliberate, not missing",
+  notion: "Notion's API can't manage workspace members",
+  figma: "Seat management needs an Enterprise plan",
+  okta: "Coming when Craig supports SSO",
+  onepassword: "Needs a SCIM bridge — coming later",
+  jira: "Coming soon",
+  asana: "Coming soon",
+  zoom: "Coming soon",
+  dropbox: "Coming soon",
+  "custom-app": "Coming soon",
+};
+
 /** An account on a third-party service. */
 function account(
   id: string,
@@ -168,6 +193,7 @@ function account(
     kind: "task",
     icon,
     title: label,
+    unavailable: UNAVAILABLE[id],
     setup: [...fields, WHO_PROVISIONS, WHEN],
   };
 }
@@ -317,6 +343,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
     presets: [
       {
         id: "background-check",
+        unavailable: "Needs a provider account — coming later",
         label: "Background check",
         description:
           "Criminal record or police check through a provider. Needs consent before it starts.",
@@ -361,6 +388,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       },
       {
         id: "reference-check",
+        unavailable: "Coming soon",
         label: "Reference check",
         description: "Previous employers, chased by a named person.",
         kind: "task",
@@ -389,6 +417,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       },
       {
         id: "health-check",
+        unavailable: "Coming soon",
         label: "Occupational health",
         description:
           "Pre-employment health or fitness assessment, where the role needs one.",
@@ -955,6 +984,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
     presets: [
       {
         id: "training",
+        unavailable: "Use Vanta for now",
         label: "Training & required reading",
         description:
           "Security awareness, policies, and anything specific to the role.",
@@ -984,6 +1014,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       },
       {
         id: "pop-quiz",
+        unavailable: "Coming soon",
         label: "Pop quiz",
         description:
           "A handful of questions pulled from the knowledge base, and a nudge to go and ask Craig the rest.",
@@ -1036,6 +1067,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
     presets: [
       {
         id: "meet-manager",
+        unavailable: "Needs calendar access — coming later",
         label: "Manager 1:1",
         description:
           "A first conversation with whoever they report to, booked rather than hoped for.",
@@ -1064,6 +1096,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       },
       {
         id: "meet-team",
+        unavailable: "Needs calendar access — coming later",
         label: "Meet the team",
         description:
           "Named people, booked in. “Say hi to everyone” is not a step.",
@@ -1084,6 +1117,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       },
       {
         id: "walkthrough",
+        unavailable: "Needs calendar access — coming later",
         label: "Walkthrough with an owner",
         description:
           "Half an hour on the part of the system that only lives in someone's head.",
@@ -1103,6 +1137,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       },
       {
         id: "first-task",
+        unavailable: "Coming soon",
         label: "First task",
         description:
           "Something small, real and shippable. Confidence comes from finishing, not reading.",
@@ -1122,6 +1157,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       },
       {
         id: "check-in",
+        unavailable: "Needs calendar access — coming later",
         label: "Check-in",
         description:
           "A proper conversation once they've been here long enough to have opinions.",

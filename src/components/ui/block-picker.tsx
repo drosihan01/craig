@@ -113,34 +113,54 @@ function PresetCard({
   onPick: () => void;
 }) {
   const required = p.setup.filter((f) => f.required).length;
+  const off = Boolean(p.unavailable);
 
   return (
     <button
       type="button"
       onClick={onPick}
+      disabled={off}
+      /* Disabled rather than hidden. The library is the product's claim about
+         what onboarding is made of, and a shorter list is a smaller claim —
+         "not yet" is honest, quietly missing looks like an oversight. */
       className={cn(
         "group flex items-start gap-3 rounded-xl border border-border bg-surface p-3.5 text-left",
         "transition-[border-color,box-shadow] duration-150 ease-out-quart",
-        "hover:border-accent hover:shadow-e2",
+        off
+          ? "cursor-not-allowed opacity-50"
+          : "hover:border-accent hover:shadow-e2",
       )}
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-subtle-fg">
+      <span
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-lg",
+          off
+            ? "bg-surface-sunken text-text-subtle"
+            : "bg-accent-subtle text-accent-subtle-fg",
+        )}
+      >
         <p.icon className="size-4.5" />
       </span>
 
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-base font-medium">{p.label}</span>
-          {/* Says up front how much setup this one needs, so nobody adds it
-              expecting it to be finished. */}
-          {required > 0 && (
-            <span className="shrink-0 rounded-sm bg-surface-sunken px-1 py-px text-2xs tabular-nums text-text-subtle">
-              {required} to set up
+          {off ? (
+            <span className="shrink-0 rounded-sm border border-dashed border-border-strong px-1 py-px text-2xs text-text-subtle">
+              Soon
             </span>
+          ) : (
+            /* Says up front how much setup this one needs, so nobody adds it
+               expecting it to be finished. */
+            required > 0 && (
+              <span className="shrink-0 rounded-sm bg-surface-sunken px-1 py-px text-2xs tabular-nums text-text-subtle">
+                {required} to set up
+              </span>
+            )
           )}
         </span>
         <span className="text-xs leading-relaxed text-text-subtle">
-          {p.description}
+          {p.unavailable ?? p.description}
         </span>
       </span>
     </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Check, ExpandMore } from "./icons";
 import { cn } from "@/lib/cn";
 
@@ -26,6 +27,17 @@ export interface DropdownItem {
   /** Draws a divider above this item. */
   separatorBefore?: boolean;
   onSelect?: () => void;
+}
+
+/* Mount detection without setState-in-an-effect: the server snapshot is false
+   and the client's is true, so the portal only renders after hydration. */
+const neverChanges = () => () => {};
+function useMounted() {
+  return React.useSyncExternalStore(
+    neverChanges,
+    () => true,
+    () => false,
+  );
 }
 
 export type DropdownAlign = "start" | "end";
@@ -65,7 +77,10 @@ export function DropdownMenu({
   const [open, setOpen] = React.useState(false);
   const [activeIndex, setActiveIndex] = React.useState(-1);
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const mounted = useMounted();
+  const [rect, setRect] = React.useState<DOMRect | null>(null);
   const itemRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
   const menuId = React.useId();
 
@@ -79,7 +94,12 @@ export function DropdownMenu({
     if (!open) return;
 
     function onPointerDown(e: PointerEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) close(false);
+      const t = e.target as Node;
+      /* The menu is portalled out, so it is no longer a descendant of the
+         trigger — both have to count as "inside" or the first click on a menu
+         item closes the menu instead of choosing anything. */
+      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      close(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -88,11 +108,23 @@ export function DropdownMenu({
       }
     }
 
+    /* Anchored to the trigger's viewport position, so it has to be recomputed
+       when anything moves underneath it. */
+    function place() {
+      const el = triggerRef.current;
+      if (el) setRect(el.getBoundingClientRect());
+    }
+    place();
+
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKey, true);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
     };
   }, [open, close]);
 
@@ -169,17 +201,32 @@ export function DropdownMenu({
         {trigger}
       </button>
 
-      {open && (
+      {open &&
+        mounted &&
+        rect &&
+        createPortal(
         <div
+          ref={menuRef}
           id={menuId}
           role={selectedId !== undefined ? "listbox" : "menu"}
           aria-label={label}
           onKeyDown={onMenuKeyDown}
+          /* Fixed and portalled to <body>. Absolute positioning meant any
+             ancestor with `overflow: hidden` — a bordered List, a scrolling
+             side panel, a card — clipped the menu to its own box. Portalling
+             takes it out of every one of those at once, which no amount of
+             z-index can do. */
+          style={{
+            top: side === "bottom" ? rect.bottom + 6 : undefined,
+            bottom:
+              side === "top" ? window.innerHeight - rect.top + 6 : undefined,
+            left: align === "start" ? rect.left : undefined,
+            right:
+              align === "end" ? window.innerWidth - rect.right : undefined,
+          }}
           className={cn(
-            "absolute z-30 overflow-hidden rounded-lg border border-border bg-surface-raised p-1 shadow-e3",
+            "fixed z-50 overflow-hidden rounded-lg border border-border bg-surface-raised p-1 shadow-e3",
             "motion-safe:animate-[dialog-in_140ms_cubic-bezier(0.32,0.72,0,1)]",
-            side === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5",
-            align === "start" ? "left-0" : "right-0",
             width,
             menuClassName,
           )}
@@ -253,7 +300,8 @@ export function DropdownMenu({
               </React.Fragment>
             );
           })}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

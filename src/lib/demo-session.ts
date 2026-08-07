@@ -17,11 +17,19 @@
  * is putting their name to it; it should read like something they'd be happy
  * to have said.
  *
- * Craig: a friendly neighbour who happens to be good at this, and pleased to
- * be helping. Warm, a bit enthusiastic, plain sentences, contractions, says
- * "honestly" and "ah". He notices things and mentions them; he doesn't analyse
- * them at you. He reassures — most of what Ada is worried about is normal —
- * without ever pretending a real gap isn't one.
+ * Craig: the enthusiastic neighbour who happens to be very good at this.
+ * Friendly and genuinely pleased to be helping, but he knows what he's doing
+ * and it shows — warm without being chummy, professional without being stiff.
+ * Plain sentences, contractions, the occasional "honestly" or "ah". He notices
+ * things and mentions them; he doesn't analyse them at you, and he never
+ * performs concern. He reassures where reassurance is true — most of what Ada
+ * is worried about is normal — without ever pretending a real gap isn't one.
+ *
+ * Shape matters as much as tone. Ada skims: she reads the first line, then her
+ * eye goes hunting for a list. So Craig leads with one sentence that says the
+ * thing, then bullets, then at most one line to close. Lines starting "- "
+ * render as a real list. Four warm paragraphs is a message she won't finish,
+ * however good it is.
  *
  * If a line could open a consulting deck — "two risks, and they're different
  * kinds" — it's wrong. No balanced clauses, no "rather than" constructions, no
@@ -64,7 +72,7 @@ export const SESSION: SessionTurn[] = [
       "Looking for what isn't written down",
     ],
     craig:
-      "Ah brilliant, thanks — had a proper read. Genuinely more than enough to work with, don't worry about the state of it.\n\nCouple of things jumped straight out. Your handbook tells the new person to “figure out who owns what — honestly it's just the three of us right now so ask”. That's the bit that'll trip Nils up. It isn't really a step, it's just Jason.\n\nAnd of the four things on your first-week list, three of them land on Jason too — GitHub, the infra tooling, and whoever knows the answer.\n\nThat matters a bit more than usual coming from a 400-person place. He's used to someone handing him a checklist, and here the checklist says “ask”.",
+      "Ah brilliant, thanks — had a proper read. Genuinely more than enough to work with.\n\nWhat I've got:\n- Three of you, and Jason owns basically all the infra\n- Matty's on contract, two days a week\n- Handbook's from February, four bullets about week one\n- Nils starts in two weeks, coming from a 400-person place\n\nThat last one's the bit I'd think about. He's used to things being written down.",
     question:
       "Two quick ones and I'll have plenty. Is Jason still the only one who can hand out GitHub and AWS? And what actually happens if someone pushes to prod in their first week?",
     replies: [
@@ -80,7 +88,7 @@ export const SESSION: SessionTurn[] = [
       "Checking what's stuck behind what",
     ],
     craig:
-      "Ah that's really useful, thank you. So you've got two things going on, and the good news is they're not the same problem.\n\nAccess is just a queue. It all goes through Jason, there's no backup, and four later things are sat waiting behind it. That one's easy enough to sort.\n\nProd's the more interesting one. Nothing's actually stopping a new person poking at routing, and the only place “what's safe to touch” lives is in Jason's head.",
+      "Ah that's really useful, thank you.\n\nTwo things worth saying out loud:\n- Everything Nils needs on day one goes through Jason — keys, accounts, and whatever's only in his head\n- He's in Berlin, so that's a two-hour overlap on a good day\n\n“Just ask Jason” is really a two-hour window, and someone who won't ask twice will guess instead.",
     question:
       "One more and then I'll put something together — who's the first person Nils talks to who isn't you or Jason?",
     replies: [
@@ -93,7 +101,7 @@ export const SESSION: SessionTurn[] = [
     ada: "...nobody lol. matty i guess but he's part time and remote and i don't think they'd overlap much. that's bad isn't it",
     steps: ["Putting a workflow together"],
     craig:
-      "Honestly? Completely normal at three people — I wouldn't lose sleep over it. Worth saying out loud though, especially with Nils nine hours ahead of Jason. “Just ask Jason” is really a two-hour window a day, and someone who won't ask twice will just have a guess instead.\n\nRight — here's what I'd put together. One workflow, engineer, twelve steps. Sounds like a lot; most of it is one account each.\n\nBefore he starts — contract and payroll with you, and get the laptop ordered the day he signs. Two weeks to arrive, so it's really the first thing even though it feels like the last.\n\nAccounts — Google, Slack, GitHub, Linear and AWS, all Jason, all a week out. One step each rather than one big “access” step, because they're five different admin panels and they fail one at a time. Then MFA before any of it gets used properly.\n\nDay one — a short quiz instead of “read the handbook”. Five questions, and whatever he gets wrong opens straight into a chat with me. Reading a doc and having read a doc aren't the same thing, and he's the sort who won't ask twice.\n\nThen half an hour with Jason, first week. That's where the stuff that isn't written down actually gets handed over.\n\nI've stopped it there. Prod access, a thirty-day check-in — those depend on how the first week goes, and guessing at week three is how you end up with a draft nobody trusts about week one.\n\nThree bits I've left open rather than guessing at them: which right-to-work check applies in Germany, which Slack channels he actually needs, and what the quiz reads from — which right now is that February handbook. They'll show as unconfigured so you'll spot them before you publish.\n\nHave a look and change whatever you like — it's only a draft, nothing's live until you say so.",
+      "Honestly? Completely normal at three people. I wouldn't lose sleep over it.\n\nHere's what I'd put together:\n- Contract first — signing it is what gets him an account here\n- Then payroll, right to work, and picking up the laptop\n- Accounts one at a time: Google Workspace, then Slack, GitHub, Linear\n- MFA right behind Workspace and behind GitHub, so he can't skip either\n- Vanta last: policies, training, device agent\n\nTwo bits I've left open rather than guessing — which right-to-work check applies in Germany, and which Slack channels he actually needs.\n\nGive me a second and I'll write it.",
     offersWorkflow: true,
   },
 ];
@@ -122,7 +130,7 @@ export const SESSION_V2: SessionTurn[] = [
       "Working out what's missing",
     ],
     craig:
-      "Right, got it. Read the handbook — it's four bullets long under “first week”, which honestly is four more than most people have.\n\nHere's what I'd flag, and it isn't the handbook. Almost everything Nils will need on day one runs through Jason: the keys, the accounts, and whatever he knows about the routing layer that nobody has written down. That's completely normal at three people. It stops being fine when the new person is coming from somewhere with four hundred people and a wiki — his instinct when he's stuck won't be to ask, it'll be to go and look. And there's nothing to look at.\n\nSo I'd rather get some of it out of Jason's head before day one than hope it comes up.",
+      "Right, got it. Read the handbook — four bullets under “first week”, which is four more than most people have.\n\nThe bit I'd flag isn't the handbook though:\n- Almost everything Nils needs on day one runs through Jason\n- The keys, the accounts, and whatever he knows about the routing layer\n- None of it is written down anywhere\n\nNormal at three people. It stops being fine when the new person is used to a wiki — his instinct when he's stuck won't be to ask, it'll be to go and look.",
     question: "How much of the infra side is only in Jason's head?",
     replies: [
       "Most of it. The routing and fallback layer especially — it's never been written down.",
@@ -134,7 +142,7 @@ export const SESSION_V2: SessionTurn[] = [
     ada: "most of it. the routing layer especially — what's actually live vs what's a stub, and why. he'd have to draw it on a whiteboard, which he can't do because nils is in berlin",
     steps: ["Noting that", "Checking the time difference"],
     craig:
-      "Berlin — so Nils is nine hours ahead of Jason. That's about a two-hour overlap on a good day, and Jason will be starting his morning as Nils is finishing.\n\n“Just ask Jason” is really a two-hour window, and someone who won't ask twice will have a guess instead. So anything that only exists in Jason's head has to come out of it before day one, or Nils spends week one guessing and Jason spends it answering the same question at 7am.",
+      "Berlin — so he's nine hours ahead of Jason.\n\nWhat that actually means:\n- About a two-hour overlap on a good day\n- Jason's starting his morning as Nils finishes his\n- “Just ask Jason” is really that two-hour window\n\nSo anything that only exists in Jason's head has to come out before day one, or Nils spends week one guessing.",
     question: "Is anyone else going to be in Craig with you?",
     replies: [
       "No — just me. Jason would never log into another tool.",
@@ -146,7 +154,7 @@ export const SESSION_V2: SessionTurn[] = [
     ada: "just me. jason would never log into another tool and matty's only here two days a week",
     steps: ["Putting a workflow together"],
     craig:
-      "Fair enough — plenty of people do it that way, and it's simpler. Everything lands on you, and you pass on what's Jason's. I'll keep track of which is which so you're not holding it in your head.\n\nHere's what I'd put together. It starts with the contract, and signing it is what gets him an account here — so everything after it he can just do himself. Then payroll, right to work, and picking up the laptop, which he ticks off himself rather than waiting on anybody.\n\nThen accounts, one step each: Google Workspace first, because everything else is addressed to that email. Then Slack, GitHub, Linear.\n\nMFA goes right behind Workspace and right behind GitHub rather than once at the end. They run in order, so he can't get to GitHub without a passkey on his email, and can't get to Linear without one on GitHub. Those are the two accounts worth stealing.\n\nVanta last — policies, security training, the device agent. Dull, and it's the reason you'll be able to sell to anyone with a procurement team.\n\nTwo bits I've left open rather than guessing: which right-to-work check applies in Germany, and which Slack channels he actually needs. I'd only be making those up.\n\nGive me a second and I'll write it.",
+      "Fair enough — plenty of people do it that way, and it's simpler. Everything lands on you, and you pass on what's Jason's.\n\nHere's what I'd build:\n- Contract first — signing it is what gets him an account here\n- Then payroll, right to work, and the laptop, which he ticks off himself\n- Accounts one at a time: Google Workspace first, because everything else is addressed to that email. Then Slack, GitHub, Linear\n- MFA right behind Workspace and behind GitHub — they run in order, so he can't reach Linear without doing both\n- Vanta last: policies, security training, device agent\n\nTwo bits I've left open rather than guessing — which right-to-work check applies in Germany, and which Slack channels he actually needs.\n\nGive me a second and I'll write it.",
     offersWorkflow: true,
   },
 ];

@@ -28,7 +28,7 @@ export interface RunStep extends WorkflowStep {
 
 export const RUN = {
   id: "run-nils",
-  workflow: "Engineer",
+  workflow: "Katalis employee",
   company: "Katalis",
   person: NEW_HIRE.name,
   email: NEW_HIRE.email,

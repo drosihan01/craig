@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import {
-  Avatar,
+  AppShell,
   Badge,
   Button,
   CraigMark,
+  Progress,
   PromptBar,
   Separator,
   useToast,
@@ -14,36 +15,31 @@ import {
   type WorkflowStep,
 } from "@/components/ui";
 import { Check, Schedule } from "@/components/ui/icons";
-import { COMPANY, PEOPLE } from "@/lib/demo";
-import {
-  RUN,
-  RUN_STEPS,
-  runSummary,
-  type RunStep,
-} from "@/lib/demo-run";
+import { COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
+import { RUN, RUN_STEPS, runSummary, type RunStep } from "@/lib/demo-run";
 
 /**
  * The new starter's view. The half of the product the whole thing is for.
  *
- * Deliberately *not* the AppShell. Nils has no nav, no notification bell, no
- * account menu and nothing to administer — giving him admin chrome with every
- * item greyed out would tell him, on day one, that he's in someone else's
- * tool. This page belongs to him.
+ * Same shell as every other screen. Nils isn't visiting a microsite — he's a
+ * Katalis person with an account, and a different frame would make this feel
+ * like two products. What changes is what goes *in* the frame: no nav, since
+ * there's nowhere for him to go; his own progress on the left; and on the
+ * right the two things he'd otherwise have to ask a person for.
  *
- * Three decisions it's built on:
+ * Three decisions the page is built on:
  *
- * 1. He sees the whole path, not the next step. "Twelve things, eight done,
- *    two waiting on Jason" is what kills the day-one anxiety. Revealing one
- *    step at a time feels like being led around a building blindfolded.
+ * 1. He sees the whole path, not the next step. "Eleven things, seven done"
+ *    is what kills the day-one anxiety. Revealing one step at a time feels
+ *    like being led around a building blindfolded.
  *
- * 2. Steps that aren't his are visibly not his, and say whose they are. Half
- *    of any onboarding is other people's homework, and a checklist that
- *    doesn't distinguish makes someone feel behind on things they can't touch.
+ * 2. Anything waiting on someone else says so, and says who. From his side a
+ *    blocked step is indistinguishable from one he's forgotten unless you tell
+ *    him, and the difference is whether he spends the morning feeling behind.
  *
- * 3. He can nudge without composing a message. Nils is nine hours ahead of
- *    Jason and by his own account won't ask twice — so the asking has to be
- *    one button, and it has to come from Craig rather than from him. That's
- *    the single most important control on this page.
+ * 3. He can nudge without composing a message. He's nine hours ahead of Jason
+ *    and by his own account won't ask twice — so the asking has to be one
+ *    button, and it has to come from Craig rather than from him.
  */
 
 export default function OnboardingPage() {
@@ -79,163 +75,177 @@ function StarterView() {
   }
 
   return (
-    <main className="min-h-screen bg-canvas">
-      {/* His chrome, not the admin's: who this is and who it's from. */}
-      <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-3.5">
-          <CraigMark className="size-6 text-accent" />
-          <span className="text-base font-medium">{COMPANY.name}</span>
-          <span className="ml-auto flex items-center gap-2">
-            <span className="hidden text-sm text-text-subtle sm:inline">
-              {RUN.person}
-            </span>
-            <Avatar name={RUN.person} size="sm" />
-          </span>
+    <AppShell
+      title={COMPANY.name}
+      /* His account, not the admin's. Every other screen in the product is
+         Ada's; this one is his, and the panel footer is where that shows. */
+      account={{
+        name: NEW_HIRE.name,
+        email: NEW_HIRE.email,
+        role: NEW_HIRE.role,
+      }}
+      nav={<StarterNav done={done} total={total} left={mine.length} />}
+      asideTitle="Waiting on"
+      aside={<StarterAside waiting={waiting} nudged={nudged} onNudge={nudge} />}
+    >
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 py-10">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-semibold tracking-[-0.02em]">
+            Morning, {firstName}
+          </h1>
+          <p className="text-md leading-relaxed text-text-muted">
+            {mine.length === 0 ? (
+              <>
+                Nothing needs you right now — {waiting.length}{" "}
+                {waiting.length === 1 ? "thing is" : "things are"} with someone
+                else.
+              </>
+            ) : (
+              <>
+                {mine.length} {mine.length === 1 ? "thing" : "things"} for you
+                to do, and {waiting.length}{" "}
+                {waiting.length === 1 ? "thing" : "things"} waiting on someone
+                else. Nothing here is urgent.
+              </>
+            )}
+          </p>
         </div>
-      </header>
 
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10">
-        <section className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-semibold tracking-[-0.02em]">
-              Morning, {firstName}
-            </h1>
-            <p className="text-md leading-relaxed text-text-muted">
-              {mine.length === 0 ? (
-                <>
-                  Nothing needs you right now — {waiting.length}{" "}
-                  {waiting.length === 1 ? "thing is" : "things are"} with
-                  someone else.
-                </>
-              ) : (
-                <>
-                  {mine.length} {mine.length === 1 ? "thing" : "things"} for you
-                  to do, and {waiting.length}{" "}
-                  {waiting.length === 1 ? "thing" : "things"} waiting on someone
-                  else. Nothing here is urgent.
-                </>
-              )}
-            </p>
-          </div>
-
-          <ProgressBar done={done} total={total} />
-        </section>
-
-        {/* Waiting-on comes above the list, because it's the thing he can't
-            see from a checklist and the thing he'd otherwise sit on. */}
-        {waiting.length > 0 && (
-          <WaitingOn
-            steps={waiting}
-            nudged={nudged}
-            onNudge={nudge}
-          />
-        )}
-
-        {/* The stepper card from the design system, which is what it was
-            built for: the numbered marker, the dashed run inside a card and
-            the solid segment between them. It has room for what a step
-            actually produced, which a row doesn't. */}
         <WorkflowProgress
           title="Everything, in order"
-          steps={steps.map((s) => toCard(s, nudged.has(s.id), {
-            onComplete: () => complete(s),
-            onNudge: () => nudge(s),
-          }))}
+          steps={steps.map((s) =>
+            toCard(s, nudged.has(s.id), {
+              onComplete: () => complete(s),
+              onNudge: () => nudge(s),
+            }),
+          )}
         />
-
-        <Separator />
-
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <CraigMark className="size-5 text-accent" />
-            <h2 className="text-base font-medium">Ask me anything</h2>
-          </div>
-          <p className="text-sm leading-relaxed text-text-muted">
-            I know how {COMPANY.name} works, who owns what, and everything
-            they&apos;ve written down. Ask me before you ask a person — I
-            don&apos;t mind being asked the same thing twice, and I&apos;m
-            awake when {PEOPLE.jason.name.split(" ")[0]} isn&apos;t.
-          </p>
-          <PromptBar
-            placeholder="Who do I talk to about…"
-            onSubmit={() => {}}
-            footnote={`You're in ${RUN.timezone}. Most of the team isn't.`}
-          />
-        </section>
       </div>
-    </main>
+    </AppShell>
   );
 }
 
-function ProgressBar({ done, total }: { done: number; total: number }) {
+/**
+ * The left panel. No nav — there's nowhere for him to go — so it carries the
+ * one number he actually wants, which is how much is left.
+ */
+function StarterNav({
+  done,
+  total,
+  left,
+}: {
+  done: number;
+  total: number;
+  left: number;
+}) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken">
-        <div
-          className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out-quart"
-          style={{ width: `${(done / total) * 100}%` }}
-        />
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2 px-2">
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Your onboarding
+        </p>
+        <Progress value={done} max={total} label="Onboarding progress" />
+        <p className="text-xs text-text-subtle">
+          {done} of {total} done · started {RUN.startedOn}
+        </p>
       </div>
-      <span className="text-xs text-text-subtle">
-        {done} of {total} done · started {RUN.startedOn}
-      </span>
+
+      <Separator />
+
+      <div className="flex flex-col gap-2 px-2">
+        <p className="text-sm text-text-muted">
+          {left === 0
+            ? "Nothing needs you right now."
+            : `${left} ${left === 1 ? "thing is" : "things are"} yours to do.`}
+        </p>
+        <p className="text-xs leading-relaxed text-text-subtle">
+          You&apos;re in {RUN.timezone}. Most of the team isn&apos;t, so nothing
+          here expects an answer today.
+        </p>
+      </div>
     </div>
   );
 }
 
 /**
- * The steps somebody else is sitting on.
+ * The right panel: the steps somebody else is sitting on, and Craig.
  *
- * Pulled out of the list rather than only marked inside it. From Nils's side
- * these are indistinguishable from "things I've forgotten to do" unless you
- * say otherwise, and the difference between those two states is whether he
- * spends the morning feeling behind.
+ * Pulled out of the list rather than only marked inside it. From his side
+ * these are indistinguishable from things he's forgotten unless you say
+ * otherwise.
  */
-function WaitingOn({
-  steps,
+function StarterAside({
+  waiting,
   nudged,
   onNudge,
 }: {
-  steps: RunStep[];
+  waiting: RunStep[];
   nudged: Set<string>;
   onNudge: (step: RunStep) => void;
 }) {
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-dashed border-border-strong p-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-base font-medium">Not on you</h2>
-        <p className="text-sm leading-relaxed text-text-muted">
-          These are someone else&apos;s to do. You don&apos;t have to chase
-          anyone — but if it&apos;s been a while, I will.
+    <div className="flex flex-col gap-5">
+      {waiting.length === 0 ? (
+        <p className="text-sm leading-relaxed text-text-subtle">
+          Nothing is waiting on anyone else. It&apos;s all yours.
         </p>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm leading-relaxed text-text-muted">
+            Someone else&apos;s to do. You don&apos;t have to chase anyone — but
+            if it&apos;s been a while, I will.
+          </p>
+
+          <div className="flex flex-col gap-2">
+            {waiting.map((s) => (
+              <div
+                key={s.id}
+                className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3"
+              >
+                <div className="flex items-start gap-2">
+                  <Schedule className="mt-0.5 size-4 shrink-0 text-text-subtle" />
+                  <span className="min-w-0 flex-1 text-sm">
+                    <span className="font-medium">{s.title}</span>
+                    <span className="text-text-muted"> · {s.waitingOn}</span>
+                  </span>
+                </div>
+
+                {nudged.has(s.id) ? (
+                  <Badge tone="success" size="sm" className="w-fit">
+                    <Check />
+                    Asked
+                  </Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-fit"
+                    onClick={() => onNudge(s)}
+                  >
+                    Nudge {s.waitingOn?.split(" ")[0]}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Separator />
 
       <div className="flex flex-col gap-2">
-        {steps.map((s) => (
-          <div
-            key={s.id}
-            className="flex flex-wrap items-center gap-2 rounded-lg bg-surface px-3 py-2.5"
-          >
-            <Schedule className="size-4 shrink-0 text-text-subtle" />
-            <span className="min-w-0 flex-1 text-base">
-              <span className="font-medium">{s.title}</span>
-              <span className="text-text-muted"> · {s.waitingOn}</span>
-            </span>
-
-            {nudged.has(s.id) ? (
-              <Badge tone="success" size="sm">
-                <Check />
-                Asked
-              </Badge>
-            ) : (
-              <Button size="sm" variant="secondary" onClick={() => onNudge(s)}>
-                Nudge
-              </Button>
-            )}
-          </div>
-        ))}
+        <div className="flex items-center gap-2">
+          <CraigMark className="size-4 text-accent" />
+          <p className="text-sm font-medium">Ask me anything</p>
+        </div>
+        <p className="text-xs leading-relaxed text-text-subtle">
+          I know how {COMPANY.name} works and who owns what. Ask me before you
+          ask a person — I don&apos;t mind being asked twice, and I&apos;m awake
+          when {PEOPLE.jason.name.split(" ")[0]} isn&apos;t.
+        </p>
+        <PromptBar placeholder="Who do I talk to about…" onSubmit={() => {}} />
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -243,8 +253,8 @@ function WaitingOn({
  * A running step, in the shape the stepper card wants.
  *
  * The actions are the only real translation. A step that's his gets a button
- * that finishes it; one that's waiting on somebody gets a nudge instead, and
- * once nudged it gets nothing — a second identical button is an invitation to
+ * that finishes it; one waiting on somebody gets a nudge instead, and once
+ * nudged it gets nothing — a second identical button is an invitation to
  * pester, which is the opposite of what this is for.
  */
 function toCard(
@@ -252,9 +262,7 @@ function toCard(
   nudged: boolean,
   on: { onComplete: () => void; onNudge: () => void },
 ): WorkflowStep {
-  const done = step.status === "complete";
-
-  if (done) return step;
+  if (step.status === "complete") return step;
 
   if (step.waitingOn) {
     return {

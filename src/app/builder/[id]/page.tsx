@@ -33,15 +33,14 @@ import {
 import { blockFromPreset, type BlockPreset } from "@/lib/workflow/library";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
-/* Drafted from Ada's handbook, then built out of the block library. It looks
-   long because each account is its own step — five admin panels that fail one
-   at a time, not one "access" step that's either done or isn't. It stops at
-   the 1:1 with Jason; what comes after depends on how the first week goes.
+/* Drafted from Ada's handbook, then built out of the block library. Each
+   account is its own step — separate admin panels that fail independently,
+   rather than one "access" step that's either done or isn't.
 
-   The gaps it surfaces (which right-to-work check applies in Germany, which
-   Slack channels, and a handbook too stale to write a quiz from) are the
-   point: Craig's job is to make the undocumented parts visible, not to invent
-   process a three-person company doesn't want. */
+   The gaps it surfaces — which right-to-work check applies in Germany, which
+   Slack channels a new engineer needs — are the point. Craig's job is to make
+   the undocumented parts visible, not to invent process a three-person company
+   doesn't want. */
 const NOTIFICATIONS: AppNotification[] = [
   {
     id: "n1",
@@ -55,21 +54,21 @@ const NOTIFICATIONS: AppNotification[] = [
     id: "n2",
     kind: "overdue",
     title: "The handbook hasn\u2019t been reviewed since Feb 2026",
-    description: "It\u2019s what the pop quiz would read from",
+    description: "Two steps reference it",
     timestamp: new Date(Date.now() - 90 * 60_000),
   },
   {
     id: "n3",
     kind: "complete",
-    title: "Jason completed \u201cGitHub\u201d",
+    title: "GitHub access confirmed",
     timestamp: new Date(Date.now() - 5 * 3_600_000),
     actor: PEOPLE.jason.name,
     read: true,
   },
 ];
 
-/* Everyone a step can fall to. "The new hire" is on the list because plenty of
-   steps are theirs — sitting the quiz isn't Ada's job. */
+/* Everyone a step can be assigned to. "The new hire" is on the list because
+   most steps are theirs. */
 const ASSIGNEES = [
   PEOPLE.ada.name,
   PEOPLE.jason.name,
@@ -180,7 +179,7 @@ function Builder({ step }: { step: string | null }) {
                   for it would imply otherwise. */}
               {selected.kind === "trigger" ? (
                 <p className="text-sm leading-relaxed text-text-subtle">
-                  Nothing to set up. This step is the same in every workflow.
+                  No configuration. This step is identical in every workflow.
                 </p>
               ) : (
               <div className="flex flex-col gap-4">
@@ -228,7 +227,7 @@ function Builder({ step }: { step: string | null }) {
                     <Separator />
                     <Field
                       label="Flagged"
-                      hint="Craig left this open rather than guessing"
+                      hint="Left open rather than guessed at"
                     >
                       <div className="flex flex-col gap-2">
                         <p className="text-sm text-text-muted">
@@ -411,7 +410,7 @@ function WorkflowDetail({
       <Separator />
 
       <p className="text-xs leading-relaxed text-text-subtle">
-        Click a block to configure it. Click the canvas to come back here.
+        Select a step to configure it. Click the canvas to return here.
       </p>
     </div>
   );
@@ -468,7 +467,7 @@ function BuilderNav({
       <Separator />
 
       <p className="px-2 text-xs leading-relaxed text-text-subtle">
-        A workflow can&apos;t be published while any block is unconfigured.
+        A workflow cannot be published while any step is unconfigured.
       </p>
     </AdminNav>
   );

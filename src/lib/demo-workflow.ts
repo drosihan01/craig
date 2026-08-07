@@ -338,9 +338,11 @@ export interface DemoWorkflow {
 }
 
 export const WORKFLOW: DemoWorkflow = {
+  /* The id stays "engineer" — it's in URLs and in the scripted hand-off, and
+     renaming a thing shouldn't move it. */
   id: "engineer",
-  name: "Engineer",
-  role: "Engineering hire",
+  name: "Katalis employee",
+  role: "Anyone joining Katalis",
   blocks: INITIAL,
   forWho: NEW_HIRE.name,
   startsIn: NEW_HIRE.startsIn,
@@ -350,8 +352,8 @@ export const WORKFLOW: DemoWorkflow = {
 
 export const GENERAL_WORKFLOW: DemoWorkflow = {
   id: "general",
-  name: "General hire",
-  role: "Anyone outside engineering",
+  name: "Demo hire",
+  role: "A short one, for trying it out",
   blocks: GENERAL,
   createdBy: PEOPLE.ada.name,
   updated: "Last week",

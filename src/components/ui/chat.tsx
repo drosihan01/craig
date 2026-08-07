@@ -219,15 +219,7 @@ function Message({ message }: { message: ChatMessage }) {
         )}
       </div>
 
-      <div className="whitespace-pre-wrap text-base leading-relaxed text-text">
-        {message.content}
-        {message.streaming && (
-          <span
-            aria-hidden
-            className="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 bg-accent align-baseline motion-safe:animate-[caret-blink_1s_steps(1)_infinite]"
-          />
-        )}
-      </div>
+      <MessageBody content={message.content} streaming={message.streaming} />
 
       {/* The question sits apart from the prose. Buried at the end of four
           paragraphs it gets skimmed past, and then the reply options below
@@ -315,6 +307,65 @@ function EmptyChat({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Craig's prose, with lists rendered as lists.
+ *
+ * He answers in a lead sentence and then bullets, because that's how the
+ * person reading it actually reads. Lines beginning "- " become a real <ul>
+ * rather than hyphens in a paragraph — the markup should say what the shape
+ * says, and a screen reader shouldn't have to guess from punctuation.
+ *
+ * Line-based rather than a markdown parser, so a half-arrived bullet during
+ * streaming renders as a half-arrived bullet instead of throwing.
+ */
+function MessageBody({
+  content,
+  streaming,
+}: {
+  content: string;
+  streaming?: boolean;
+}) {
+  const blocks = content.split("\n\n");
+
+  return (
+    <div className="flex flex-col gap-3 text-base leading-relaxed text-text">
+      {blocks.map((block, i) => {
+        const lines = block.split("\n");
+        const isList = lines.every((l) => l.startsWith("- "));
+        const last = i === blocks.length - 1;
+
+        if (isList && lines.length > 0 && block.trim() !== "") {
+          return (
+            <ul key={i} className="flex flex-col gap-1.5">
+              {lines.map((line, j) => (
+                <li key={j} className="flex gap-2.5">
+                  <span
+                    aria-hidden
+                    className="mt-[0.6em] size-1 shrink-0 rounded-full bg-text-subtle"
+                  />
+                  <span className="min-w-0 flex-1">{line.slice(2)}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        return (
+          <p key={i} className="whitespace-pre-wrap">
+            {block}
+            {last && streaming && (
+              <span
+                aria-hidden
+                className="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 bg-accent align-baseline motion-safe:animate-[caret-blink_1s_steps(1)_infinite]"
+              />
+            )}
+          </p>
+        );
+      })}
     </div>
   );
 }

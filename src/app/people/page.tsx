@@ -12,7 +12,6 @@ import {
   FilterChip,
   List,
   ListItem,
-  ListSection,
   SearchInput,
   SelectMenu,
   Separator,
@@ -34,37 +33,27 @@ import { AdminNav, NavStat } from "@/components/app-nav";
 /**
  * Who's here and what they're allowed to do.
  *
- * Roles are about workflows, not seniority. Ada is the founder and Nils is a
- * new engineer, but the only thing this page decides is who can publish
- * something that then runs against a real person's onboarding.
+ * Roles are about workflows, not seniority. There is one admin — the person
+ * who builds and publishes — and everybody else is a member who completes what
+ * they're given. Anything finer would be a settings screen pretending to be a
+ * security boundary.
  */
 
-type Role = "owner" | "admin" | "contributor" | "starter";
+/* Two roles, and exactly one admin. Craig doesn't have permissions worth
+   modelling beyond "can change the workflows" and "can't" — anything finer
+   would be a settings screen pretending to be a security boundary. */
+type Role = "admin" | "member";
 
-const ROLES: {
-  id: Role;
-  label: string;
-  description: string;
-}[] = [
-  {
-    id: "owner",
-    label: "Owner",
-    description: "Everything, including billing. Only one.",
-  },
+const ROLES: { id: Role; label: string; description: string }[] = [
   {
     id: "admin",
     label: "Admin",
-    description: "Build and publish workflows, and manage people.",
+    description: "Builds workflows and adds people. Only one.",
   },
   {
-    id: "contributor",
-    label: "Contributor",
-    description: "Complete the steps assigned to them. Can't publish.",
-  },
-  {
-    id: "starter",
-    label: "New starter",
-    description: "Sees their own onboarding and nothing else.",
+    id: "member",
+    label: "Member",
+    description: "Completes the steps assigned to them.",
   },
 ];
 
@@ -84,7 +73,7 @@ const INITIAL: Person[] = [
     name: PEOPLE.ada.name,
     email: PEOPLE.ada.email,
     title: "Founder",
-    role: "owner",
+    role: "admin",
     status: "active",
     ownsSteps: 4,
   },
@@ -92,7 +81,7 @@ const INITIAL: Person[] = [
     name: PEOPLE.jason.name,
     email: PEOPLE.jason.email,
     title: "Cofounder",
-    role: "admin",
+    role: "member",
     status: "active",
     ownsSteps: 4,
     note: "Every credential goes through him",
@@ -101,7 +90,7 @@ const INITIAL: Person[] = [
     name: PEOPLE.matty.name,
     email: PEOPLE.matty.email,
     title: "Frontend, contract",
-    role: "contributor",
+    role: "member",
     status: "active",
     ownsSteps: 0,
     note: "Roughly two days a week",
@@ -110,7 +99,7 @@ const INITIAL: Person[] = [
     name: NEW_HIRE.name,
     email: NEW_HIRE.email,
     title: NEW_HIRE.role,
-    role: "starter",
+    role: "member",
     status: "invited",
     note: `Starts in ${NEW_HIRE.startsIn} · ${NEW_HIRE.location}`,
   },
@@ -132,8 +121,8 @@ const SORTS = [
   { id: "steps", label: "Steps owned" },
 ];
 
-/* Sort order for the role field — alphabetical would put Admin above Owner
-   and read as a hierarchy that isn't one. */
+/* Sort order for the role field, taken from the list rather than the
+   alphabet — admin first because there's one of them. */
 const ROLE_ORDER = ROLES.map((r) => r.id);
 
 export default function PeoplePage() {
@@ -146,7 +135,7 @@ export default function PeoplePage() {
     direction: "asc",
   });
 
-  const owners = people.filter((p) => p.role === "owner").length;
+  const admins = people.filter((p) => p.role === "admin").length;
   const invited = people.filter((p) => p.status === "invited").length;
 
   function setRole(email: string, role: Role) {
@@ -175,7 +164,6 @@ export default function PeoplePage() {
       }
     });
 
-  const filtering = Boolean(q || roles.length || statuses.length);
 
   function clear() {
     setQuery("");
@@ -200,8 +188,8 @@ export default function PeoplePage() {
         <header className="mb-5 flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-[-0.02em]">People</h1>
           <p className="text-md text-text-muted">
-            Everyone with a seat, and what they&apos;re allowed to do. {invited}{" "}
-            invite{invited === 1 ? "" : "s"} still pending.
+            Everyone with a seat. {invited} invite
+            {invited === 1 ? "" : "s"} still pending.
           </p>
         </header>
 
@@ -247,7 +235,7 @@ export default function PeoplePage() {
               <PersonRow
                 key={p.email}
                 person={p}
-                isOnlyOwner={p.role === "owner" && owners === 1}
+                isOnlyAdmin={p.role === "admin" && admins === 1}
                 isYou={p.email === ACCOUNT.email}
                 onRole={(role) => setRole(p.email, role)}
               />
@@ -267,26 +255,6 @@ export default function PeoplePage() {
           />
         )}
 
-        <div className="pt-8">
-          <ListSection title="What each role can do" count={ROLES.length}>
-            <List>
-              {ROLES.map((r) => (
-                <ListItem
-                  key={r.id}
-                  title={r.label}
-                  description={r.description}
-                  /* Dimmed when a role filter is on and this isn't in it, so
-                     the legend keeps agreeing with the list above it. */
-                  className={
-                    filtering && roles.length && !roles.includes(r.id)
-                      ? "opacity-45"
-                      : undefined
-                  }
-                />
-              ))}
-            </List>
-          </ListSection>
-        </div>
       </div>
     </AppShell>
   );
@@ -294,12 +262,12 @@ export default function PeoplePage() {
 
 function PersonRow({
   person: p,
-  isOnlyOwner,
+  isOnlyAdmin,
   isYou,
   onRole,
 }: {
   person: Person;
-  isOnlyOwner: boolean;
+  isOnlyAdmin: boolean;
   isYou: boolean;
   onRole: (role: Role) => void;
 }) {
@@ -330,15 +298,15 @@ function PersonRow({
       trailing={
         <>
           <div className="w-40">
-            {isOnlyOwner ? (
-              /* The last owner can't be demoted. Rendering a picker that
+            {isOnlyAdmin ? (
+              /* The only admin can't be demoted. Rendering a picker that
                  refuses on submit would be worse than not offering the choice
                  — locking yourself out of your own account is unrecoverable. */
               <span
-                title="There has to be an owner"
+                title="There has to be an admin"
                 className="flex h-8 items-center gap-2 rounded-md border border-dashed border-border px-2.5 text-base text-text-muted"
               >
-                Owner
+                Admin
                 <Warning className="ml-auto size-3.5 shrink-0 text-text-subtle" />
               </span>
             ) : (
@@ -370,12 +338,12 @@ function PersonRow({
                 : { id: "email", label: "Email", icon: <Mail /> },
               {
                 id: "remove",
-                label: isOnlyOwner
-                  ? "Can't remove the owner"
+                label: isOnlyAdmin
+                  ? "Can't remove the only admin"
                   : "Remove from Katalis",
                 icon: <Delete />,
-                destructive: !isOnlyOwner,
-                disabled: isOnlyOwner,
+                destructive: !isOnlyAdmin,
+                disabled: isOnlyAdmin,
                 separatorBefore: true,
               },
             ]}
@@ -404,8 +372,8 @@ function PeopleNav({ count, invited }: { count: number; invited: number }) {
       <Separator />
 
       <p className="px-2 text-xs leading-relaxed text-text-subtle">
-        Only owners and admins can publish a workflow. Everyone else can
-        complete the steps assigned to them.
+        The admin builds and publishes workflows. Everyone else completes the
+        steps assigned to them.
       </p>
     </AdminNav>
   );
