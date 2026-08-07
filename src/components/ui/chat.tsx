@@ -5,6 +5,7 @@ import { Dialog, DialogClose } from "./dialog";
 import { AutoAwesome, ContentCopy, Refresh } from "./icons";
 import { DEFAULT_MODEL, type ChatModel } from "./model-picker";
 import { PromptBar } from "./prompt-bar";
+import { cn } from "@/lib/cn";
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                     */
@@ -18,6 +19,54 @@ export interface ChatMessage {
   streaming?: boolean;
   /** Which model produced it. Answers outlive the picker's current value. */
   model?: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Transcript                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The message list on its own — used inside ChatModal and inline on a page, so
+ * a conversation looks the same wherever it happens.
+ *
+ * Pins to the bottom as content arrives, but only when the reader is already
+ * near the bottom. Yanking someone back down while they're scrolled up reading
+ * an earlier answer is worse than letting new text arrive off-screen.
+ */
+export function ChatTranscript({
+  messages,
+  className,
+}: {
+  messages: ChatMessage[];
+  className?: string;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const pinned = React.useRef(true);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (el && pinned.current) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  function onScroll() {
+    const el = ref.current;
+    if (!el) return;
+    pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
+
+  return (
+    <div
+      ref={ref}
+      onScroll={onScroll}
+      className={cn("scrollbar-thin overflow-y-auto", className)}
+    >
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+        {messages.map((m) => (
+          <Message key={m.id} message={m} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -49,14 +98,6 @@ export function ChatModal({
   const model = controlledModel ?? internalModel;
   const setModel = onModelChange ?? setInternalModel;
 
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  // Pin to the bottom as content streams in.
-  React.useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
-
   const empty = messages.length === 0;
 
   return (
@@ -70,23 +111,16 @@ export function ChatModal({
         <DialogClose onClose={onClose} />
       </header>
 
-      <div
-        ref={scrollRef}
-        className="scrollbar-thin flex-1 overflow-y-auto px-4 py-5"
-      >
-        {empty ? (
+      {empty ? (
+        <div className="flex-1 overflow-y-auto px-4 py-5">
           <EmptyChat
             suggestions={suggestions}
             onPick={(text) => onSend(text, model)}
           />
-        ) : (
-          <div className="flex flex-col gap-5">
-            {messages.map((m) => (
-              <Message key={m.id} message={m} />
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <ChatTranscript messages={messages} className="flex-1 px-4 py-5" />
+      )}
 
       <div className="border-t border-border p-3">
         <PromptBar
