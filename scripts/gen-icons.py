@@ -14,6 +14,18 @@ BASE = ("https://raw.githubusercontent.com/google/material-design-icons/master"
 # export name -> Material Symbols name
 ICONS = {
     "Add": "add",
+    "GraphicEq": "graphic_eq",
+    "Mic": "mic",
+    "ArrowUpward": "arrow_upward",
+    "AttachFile": "attach_file",
+    "AutoAwesome": "auto_awesome",
+    "Close": "close",
+    "ContentCopy": "content_copy",
+    "ExpandMore": "expand_more",
+    "Forum": "forum",
+    "Refresh": "refresh",
+    "StopCircle": "stop_circle",
+    "Tune": "tune",
     "ArrowForward": "arrow_forward",
     "CalendarMonth": "calendar_month",
     "Check": "check",
@@ -44,21 +56,26 @@ import { cn } from "@/lib/cn";
  * npm sets ship thousands of files; this keeps install size flat and means no
  * runtime dependency. Material Symbols are Apache-2.0.
  *
- * All paths use the 0 -960 960 960 viewBox Material Symbols standardises on,
- * and fill with currentColor so they inherit text colour. Size comes from a
- * className (`size-4`), which overrides the width/height attributes.
+ * Each icon carries its own viewBox. Most Material Symbols use the
+ * 0 -960 960 960 space, but a few files in that directory are still in the
+ * legacy 0 0 24 24 space and ship no viewBox attribute at all — assuming one
+ * space for all of them renders those as an invisible speck. The generator
+ * reads it per file.
+ *
+ * Paths fill with currentColor so they inherit text colour, and size comes
+ * from a className (`size-4`), which overrides the width/height attributes.
  */
 
 export type IconProps = React.SVGProps<SVGSVGElement>;
 
-function icon(displayName: string, d: string) {
+function icon(displayName: string, viewBox: string, d: string) {
   const Component = React.forwardRef<SVGSVGElement, IconProps>(
     function Icon({ className, ...props }, ref) {
       return (
         <svg
           ref={ref}
           xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 -960 960 960"
+          viewBox={viewBox}
           width="24"
           height="24"
           fill="currentColor"
@@ -78,24 +95,45 @@ function icon(displayName: string, d: string) {
 '''
 
 
-def fetch(name: str) -> str:
+def fetch(name: str) -> tuple[str, str]:
+    """Returns (viewBox, path data) for one icon."""
     url = BASE.format(n=name)
     with urllib.request.urlopen(url, timeout=30) as r:
         svg = r.read().decode()
+
+    vb = re.search(r'viewBox="([^"]+)"', svg)
+    if vb:
+        view_box = vb.group(1)
+    else:
+        # No viewBox: legacy 24px file. Build one from width/height so the
+        # coordinates land in the right space.
+        w = re.search(r'width="(\d+)"', svg)
+        h = re.search(r'height="(\d+)"', svg)
+        view_box = f"0 0 {w.group(1) if w else 24} {h.group(1) if h else 24}"
+
     paths = re.findall(r'<path[^>]*\sd="([^"]+)"', svg)
     if not paths:
         raise SystemExit(f"no path found in {url}")
     if len(paths) > 1:
         print(f"  ! {name}: {len(paths)} paths, merging", file=sys.stderr)
-    return " ".join(paths)
+    return view_box, " ".join(paths)
 
 
 def main():
     out = [HEADER]
+    spaces = {}
     for export, mat in ICONS.items():
-        d = fetch(mat)
-        print(f"  {export:18} <- {mat} ({len(d)} chars)")
-        out.append(f'\nexport const {export} = icon(\n  "{export}",\n  "{d}",\n);')
+        view_box, d = fetch(mat)
+        spaces.setdefault(view_box, []).append(export)
+        print(f"  {export:18} <- {mat:20} [{view_box}]")
+        out.append(
+            f'\nexport const {export} = icon(\n  "{export}",\n'
+            f'  "{view_box}",\n  "{d}",\n);'
+        )
+    if len(spaces) > 1:
+        print("\n  note: mixed coordinate spaces —")
+        for vb, names in spaces.items():
+            print(f"    {vb}: {', '.join(names)}")
     target = "src/components/ui/icons.tsx"
     with open(target, "w") as f:
         f.write("\n".join(out) + "\n")

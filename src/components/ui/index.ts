@@ -33,6 +33,18 @@ export {
   type StepMetric,
   type StepAction,
 } from "./step-card";
+export { Dialog, DialogClose, type DialogProps } from "./dialog";
+export {
+  ModelPicker,
+  EffortPicker,
+  CHAT_MODELS,
+  DEFAULT_MODEL,
+  EFFORT_LEVELS,
+  type ChatModel,
+  type Effort,
+} from "./model-picker";
+export { PromptBar, type PromptBarProps } from "./prompt-bar";
+export { ChatModal, type ChatMessage } from "./chat";
 export { ThemeToggle } from "./theme-toggle";
 export * as Icons from "./icons";
 export { type IconProps } from "./icons";

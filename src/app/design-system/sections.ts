@@ -34,6 +34,8 @@ export const SECTIONS: NavGroup[] = [
       { id: "tabs", label: "Tabs" },
       { id: "progress", label: "Progress & steps" },
       { id: "feedback", label: "Feedback" },
+      { id: "dialog", label: "Dialog" },
+      { id: "chat", label: "Chat" },
     ],
   },
   {

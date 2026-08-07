@@ -50,6 +50,12 @@ import {
   type TaskStatus,
   type WorkflowStep,
 } from "@/components/ui";
+import {
+  ChatDemo,
+  DialogDemo,
+  ModelPickerDemo,
+  PromptBarDemo,
+} from "./_components/chat-demo";
 import { Demo, Section, Swatch } from "./_components/specimen";
 
 const SEMANTIC = [
@@ -911,6 +917,50 @@ export default function DesignSystemPage() {
             </Button>
           </Tooltip>
         </Demo>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="dialog"
+        title="Dialog"
+        description="Hand-rolled rather than pulled from Radix — one behaviour, owned outright. Escape and backdrop close it, Tab is trapped inside, focus moves in on open and back to the trigger on close, and the page behind can't scroll."
+      >
+        <Demo title="Sizes and intent">
+          <DialogDemo />
+        </Demo>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="chat"
+        title="Chat"
+        description="Ask Craig — a modal assistant over the workflow you're looking at. User turns are bubbles because they're short; assistant turns run full width with no container so a long answer reads as prose. Enter sends, Shift+Enter breaks the line."
+      >
+        <Demo title="Chat modal" note="replies are canned, but they stream">
+          <ChatDemo />
+        </Demo>
+
+        <Demo
+          title="Prompt bar"
+          note="the composer on its own, no modal"
+          className="items-stretch"
+        >
+          <PromptBarDemo />
+        </Demo>
+
+        <Demo title="Model picker" className="items-start">
+          <ModelPickerDemo />
+        </Demo>
+
+        <Callout tone="warning" icon={<Warning />} title="The model choice is a data boundary">
+          <p>
+            Craigson Lambda 2.0 is in-house and the default — it&apos;s the only
+            one that sees company data. Claude and GPT are hosted, so anything
+            sent to them leaves the tenancy. The composer says which regime
+            you&apos;re in rather than burying it in settings, and that rule
+            belongs in the API layer too, not just this label.
+          </p>
+        </Callout>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
