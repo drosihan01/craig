@@ -13,7 +13,6 @@ import {
   Textarea,
   WorkflowBuilder,
   WorkflowCanvas,
-  CanvasPanel,
   type AppNotification,
   type BlockKind,
   type WorkflowBlock,
@@ -23,7 +22,6 @@ import { AutoAwesome } from "@/components/ui/icons";
 import { ACCOUNT, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { INITIAL, WORKFLOW } from "@/lib/demo-workflow";
 import { AdminNav, NavStat } from "@/components/app-nav";
-import { BackLink } from "@/components/ui";
 
 /* Drafted from Ada's handbook — the first-week checklist in that doc is
    literally four bullets, so the workflow is deliberately small. The gaps it
@@ -211,22 +209,6 @@ export default function BuilderPage() {
           The negative margins cancel the content column's padding. */}
       <div className="-mx-4 h-[calc(100vh-3rem)] lg:-mx-8">
         <WorkflowCanvas className="h-full rounded-none border-0">
-          <CanvasPanel side="top-left">
-            <div className="flex items-center gap-2 px-1">
-              <BackLink href="/builder" className="text-xs">
-                Workflows
-              </BackLink>
-              <span aria-hidden className="h-3 w-px bg-border" />
-              <Badge tone="neutral" size="sm">
-                {steps} steps
-              </Badge>
-              {unconfigured > 0 && (
-                <Badge tone="warning" size="sm">
-                  {unconfigured} unconfigured
-                </Badge>
-              )}
-            </div>
-          </CanvasPanel>
 
           <div className="px-10 py-12">
             <WorkflowBuilder

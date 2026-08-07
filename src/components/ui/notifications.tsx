@@ -12,6 +12,7 @@ import {
   Warning,
 } from "./icons";
 import { Avatar } from "./avatar";
+import { List, ListItem } from "./list";
 import { cn } from "@/lib/cn";
 
 /**
@@ -96,71 +97,53 @@ export function NotificationItem({
   const Icon = kind.icon;
 
   return (
-    <li>
-      <a
-        href={n.href ?? "#"}
-        onClick={() => onSelect?.(n.id)}
-        className={cn(
-          "flex w-full items-start gap-2.5 rounded-lg p-2.5 text-left transition-colors hover:bg-surface-hover",
-          className,
-        )}
-      >
+    <ListItem
+      className={className}
+      href={n.href}
+      onClick={n.href ? undefined : () => onSelect?.(n.id)}
+      leading={
         <span
           aria-hidden
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center rounded-full",
+            "flex size-8 items-center justify-center rounded-full [&_svg]:size-4",
             kind.className,
           )}
         >
-          <Icon className="size-4" />
+          <Icon />
         </span>
-
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span
-            className={cn(
-              "text-base leading-snug",
-              n.read ? "text-text-muted" : "font-medium text-text",
-            )}
-          >
-            {n.title}
-          </span>
-
-          {n.description && (
-            <span className="line-clamp-2 text-sm leading-snug text-text-subtle">
-              {n.description}
-            </span>
+      }
+      title={
+        <span className={n.read ? "font-normal text-text-muted" : undefined}>
+          {n.title}
+        </span>
+      }
+      description={n.description}
+      footnote={
+        <span className="flex items-center gap-1.5">
+          {n.actor && (
+            <>
+              <Avatar name={n.actor} size="xs" />
+              <span className="truncate">{n.actor}</span>
+              <span aria-hidden>·</span>
+            </>
           )}
-
-          <span className="flex items-center gap-1.5 pt-0.5">
-            {n.actor && (
-              <>
-                <Avatar name={n.actor} size="xs" />
-                <span className="truncate text-2xs text-text-subtle">
-                  {n.actor}
-                </span>
-                <span aria-hidden className="text-2xs text-text-subtle">
-                  ·
-                </span>
-              </>
-            )}
-            <time
-              dateTime={n.timestamp.toISOString()}
-              title={n.timestamp.toLocaleString()}
-              className="text-2xs text-text-subtle"
-            >
-              {relativeTime(n.timestamp)}
-            </time>
-          </span>
+          <time
+            dateTime={n.timestamp.toISOString()}
+            title={n.timestamp.toLocaleString()}
+          >
+            {relativeTime(n.timestamp)}
+          </time>
         </span>
-
-        {!n.read && (
+      }
+      trailing={
+        n.read ? undefined : (
           <span
-            className="mt-2 size-1.5 shrink-0 rounded-full bg-info"
+            className="size-1.5 rounded-full bg-info"
             aria-label="Unread"
           />
-        )}
-      </a>
-    </li>
+        )
+      }
+    />
   );
 }
 
@@ -216,11 +199,14 @@ export function NotificationList({
         )}
       </div>
 
-      <ul className="scrollbar-thin max-h-96 overflow-y-auto p-1">
+      <List
+        bordered={false}
+        className="scrollbar-thin max-h-96 overflow-y-auto"
+      >
         {items.map((n) => (
           <NotificationItem key={n.id} notification={n} onSelect={onSelect} />
         ))}
-      </ul>
+      </List>
     </div>
   );
 }
