@@ -197,7 +197,7 @@ export default function BuilderPage() {
     >
       <div className="py-8">
         <header className="mb-6 flex flex-col gap-1">
-          <BackLink href="/design-system" className="mb-2">
+          <BackLink href="/design-system" className="mb-5">
             Back to design system
           </BackLink>
           <div className="flex items-center gap-2">
