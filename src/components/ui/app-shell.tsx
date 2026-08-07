@@ -219,30 +219,36 @@ export function AppShell({
           {/* Right cell — tracks the details column's width, same rule. The
               panel's toggle sits hard left, against the rule it actually
               moves, mirroring the nav toggle in the brand cell. Notifications
-              take the far corner. */}
-          <div
-            className={cn(
-              "flex shrink-0 items-center gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
-              asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
-            )}
-          >
-            {aside && (
-              <PanelToggle
-                open={asideOpen}
-                onToggle={toggleAside}
-                side="right"
-                className="hidden lg:inline-flex"
-              />
-            )}
-            {notifications && (
-              <NotificationBell
-                items={notifications}
-                onSelect={onNotificationSelect}
-                onMarkAllRead={onMarkAllRead}
-                className="ml-auto shrink-0"
-              />
-            )}
-          </div>
+              take the far corner.
+
+              Omitted entirely when there's neither a panel nor a bell:
+              otherwise it renders as an empty stub with a divider hanging off
+              it, which reads as a rendering bug rather than as a frame. */}
+          {(aside || notifications) && (
+            <div
+              className={cn(
+                "flex shrink-0 items-center gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
+                asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
+              )}
+            >
+              {aside && (
+                <PanelToggle
+                  open={asideOpen}
+                  onToggle={toggleAside}
+                  side="right"
+                  className="hidden lg:inline-flex"
+                />
+              )}
+              {notifications && (
+                <NotificationBell
+                  items={notifications}
+                  onSelect={onNotificationSelect}
+                  onMarkAllRead={onMarkAllRead}
+                  className="ml-auto shrink-0"
+                />
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -260,10 +266,7 @@ export function AppShell({
         )}
 
         <main
-          className={cn(
-            "min-w-0 flex-1 px-4 lg:px-8",
-            fill ? "pb-0" : "pb-24",
-          )}
+          className={cn("min-w-0 flex-1 px-4 lg:px-8", fill ? "pb-0" : "pb-24")}
         >
           {children}
         </main>

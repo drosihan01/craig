@@ -295,21 +295,72 @@ const SERVER_WORK: { title: string; body: string; security?: boolean }[] = [
 /*  Demo                                                                      */
 /* -------------------------------------------------------------------------- */
 
-const FLOW: { href: string; label: string; body: string }[] = [
+interface Run {
+  href: string;
+  label: string;
+  body: string;
+}
+
+/**
+ * Demo v1 — Ada, already inside, drafting a workflow from her handbook.
+ * The original run-through. Starts mid-story.
+ */
+const FLOW_V1: Run[] = [
   {
     href: "/sign-in",
     label: "Sign in",
-    body: "Returning-device state, so Ada is offered straight back in. Validation is real, authentication isn't.",
+    body: "Returning-device state, so Ada is offered straight back in.",
   },
   {
     href: "/",
     label: "Admin home",
-    body: "Craig asks before it builds. A workflow generated from nothing is one the admin has to correct line by line.",
+    body: "The dashboard: add someone, what needs you, who's onboarding.",
   },
   {
     href: "/builder",
     label: "Workflow builder",
-    body: "The draft, drawn from Ada's handbook — deliberately small, with the gaps left visible rather than invented over.",
+    body: "The draft, drawn from Ada's handbook — small, with the gaps left visible rather than invented over.",
+  },
+];
+
+/**
+ * Demo v2 — the whole thing, from nobody having heard of Craig.
+ *
+ * The point of starting at signup rather than mid-story: the first screen
+ * after creating an account is a conversation, not a setup wizard. No wizard
+ * would have a field for "three people, nothing written down, handbook from
+ * February", and that's the most important thing about Ada.
+ */
+const FLOW_V2: Run[] = [
+  {
+    href: "/sign-up",
+    label: "Sign up",
+    body: "Three fields, one of them inferred from the email domain. No card.",
+  },
+  {
+    href: "/welcome",
+    label: "Tell Craig about the company",
+    body: "No nav, no side panel — the account is empty, so there's nowhere to go and nothing to show. Just the conversation.",
+  },
+  {
+    href: "/builder/engineer",
+    label: "The draft that falls out of it",
+    body: "Twelve steps, three of them left open because Craig won't guess at a right-to-work check.",
+  },
+  {
+    href: "/",
+    label: "Add someone",
+    body: "The loop. Gated on the workflow actually being able to run.",
+  },
+  {
+    href: "/s/8f2a",
+    label: "Nils claims his seat",
+    body: "No signup form — Ada provisioned the account, he just picks how to sign in.",
+  },
+  {
+    href: "/onboarding",
+    label: "Nils's side",
+    body: "The half the product is for. The whole path, what's not his, and a nudge button.",
   },
 ];
 
@@ -761,11 +812,47 @@ function DemoTab() {
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-2">
+      <RunThrough
+        title="Demo v2 — the whole thing"
+        note="Start here. Begins with nobody having heard of Craig."
+        steps={FLOW_V2}
+      />
+
+      <RunThrough
+        title="Demo v1 — the workflow draft"
+        note="Starts mid-story, with Ada already inside."
+        steps={FLOW_V1}
+      />
+
+      <Callout tone="neutral">
+        The gaps in the drafted workflow — a right-to-work check nobody has
+        specified, a Slack channel list nobody has written down — are
+        deliberate. They&apos;re what Craig is for, and a demo that hides them
+        is demoing the wrong thing.
+      </Callout>
+    </div>
+  );
+}
+
+function RunThrough({
+  title,
+  note,
+  steps,
+}: {
+  title: string;
+  note: string;
+  steps: Run[];
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-0.5">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          The run-through
+          {title}
         </p>
-        {FLOW.map((step, i) => (
+        <p className="text-xs text-text-subtle">{note}</p>
+      </div>
+      <div className="flex flex-col gap-2">
+        {steps.map((step, i) => (
           <Link key={step.href} href={step.href} className="rounded-lg">
             <Card interactive>
               <CardContent className="flex items-start gap-3 pt-4">
@@ -786,12 +873,6 @@ function DemoTab() {
           </Link>
         ))}
       </div>
-
-      <Callout tone="neutral">
-        The gaps in the drafted workflow — an unowned step, a handbook nobody
-        has reviewed since February — are deliberate. They&apos;re what Craig is
-        for, and a demo that hides them is demoing the wrong thing.
-      </Callout>
     </div>
   );
 }
@@ -927,6 +1008,9 @@ const ROUTES: { href: string; label: string; note: string }[] = [
   { href: "/people", label: "People", note: "Seats" },
   { href: "/settings", label: "Settings", note: "Empty on purpose" },
   { href: "/design-system", label: "Design system", note: "The primitives" },
+  { href: "/sign-up", label: "Sign up", note: "Demo v2 starts here" },
+  { href: "/welcome", label: "Welcome", note: "The conversation" },
+  { href: "/onboarding", label: "New starter", note: "Nils's side" },
   { href: "/sign-in", label: "Sign in", note: "Shape only" },
 ];
 

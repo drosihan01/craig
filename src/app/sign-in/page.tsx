@@ -10,11 +10,9 @@ import {
   Field,
   GoogleButton,
   Input,
-  Callout,
   ContinueAs,
   PasswordInput,
 } from "@/components/ui";
-import { Warning } from "@/components/ui/icons";
 import { PEOPLE } from "@/lib/demo";
 
 /**
@@ -56,22 +54,16 @@ export default function SignInPage() {
 
   return (
     <AuthShell
-      title="Sign in"
-      subtitle="Onboarding workflows for Katalis"
+      title="Sign in to Craig"
       footer={
         <>
+          New here?{" "}
           <Link
-            href="/design-system"
+            href="/sign-up"
             className="text-accent underline-offset-4 hover:underline"
           >
-            ← Back to design system
+            Create an account
           </Link>
-          <br />
-          <br />
-          Trouble signing in?{" "}
-          <a href="#" className="text-accent underline-offset-4 hover:underline">
-            Ask Ada
-          </a>
         </>
       }
     >
@@ -128,11 +120,6 @@ export default function SignInPage() {
           Sign in
         </Button>
       </form>
-
-      <Callout tone="neutral" icon={<Warning />} className="mt-5 text-xs">
-        Front-end only — nothing is authenticated. Any of these buttons just
-        routes to the admin home.
-      </Callout>
     </AuthShell>
   );
 }
