@@ -35,6 +35,26 @@ export {
 } from "./step-card";
 export { Dialog, DialogClose, type DialogProps } from "./dialog";
 export {
+  DropdownMenu,
+  type DropdownItem,
+  type DropdownAlign,
+  type DropdownSide,
+} from "./dropdown";
+export {
+  Calendar,
+  DatePicker,
+  toISODate,
+  fromISODate,
+  type CalendarProps,
+} from "./calendar";
+export { AppShell, type AccountInfo } from "./app-shell";
+export {
+  AuthShell,
+  GoogleButton,
+  AuthDivider,
+  PasswordInput,
+} from "./auth";
+export {
   ModelPicker,
   EffortPicker,
   CHAT_MODELS,

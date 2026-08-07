@@ -56,6 +56,11 @@ import {
   ModelPickerDemo,
   PromptBarDemo,
 } from "./_components/chat-demo";
+import {
+  AuthDemo,
+  CalendarDemo,
+  DropdownDemo,
+} from "./_components/misc-demo";
 import { Demo, Section, Swatch } from "./_components/specimen";
 
 const SEMANTIC = [
@@ -921,6 +926,28 @@ export default function DesignSystemPage() {
 
       {/* ---------------------------------------------------------------- */}
       <Section
+        id="dropdown"
+        title="Dropdown"
+        description="Menu anchored to a trigger. Placement is declared, not computed — fine for toolbars, row actions and the composer. Arrows move, Home/End jump, Escape closes and returns focus to the trigger without also closing a dialog it sits inside."
+      >
+        <Demo title="As a menu, and as a select">
+          <DropdownDemo />
+        </Demo>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="calendar"
+        title="Calendar"
+        description="No date library — onboarding only needs 'pick a day', and Date plus Intl covers it. Everything is computed in local time; a UTC-based Date lands on the wrong day for anyone east of Greenwich, which is most of this product's users."
+      >
+        <Demo title="Calendar and date picker" className="items-start">
+          <CalendarDemo />
+        </Demo>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
         id="dialog"
         title="Dialog"
         description="Hand-rolled rather than pulled from Radix — one behaviour, owned outright. Escape and backdrop close it, Tab is trapped inside, focus moves in on open and back to the trigger on close, and the page behind can't scroll."
@@ -959,6 +986,51 @@ export default function DesignSystemPage() {
             sent to them leaves the tenancy. The composer says which regime
             you&apos;re in rather than burying it in settings, and that rule
             belongs in the API layer too, not just this label.
+          </p>
+        </Callout>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="shell"
+        title="App shell"
+        description="The frame this page already uses, generalised for the product. Both panels collapse and remember it; the toggle for the left one lives in the brand cell so the control sits on the edge it moves. The account chip is fixed bottom-right so it stays put whichever panels are collapsed."
+      >
+        <Demo title="Live" note="collapse the panels — the state persists">
+          <div className="flex flex-col gap-2">
+            <p className="text-base text-text-muted">
+              You&apos;re looking at it. Use the panel toggles in the header:
+              one beside{" "}
+              <span className="font-medium text-text">Craig.</span> for the nav,
+              one at the far right for the details panel.
+            </p>
+            <p className="text-sm text-text-subtle">
+              <code className="font-mono text-xs">AppShell</code> takes{" "}
+              <code className="font-mono text-xs">nav</code>,{" "}
+              <code className="font-mono text-xs">aside</code>,{" "}
+              <code className="font-mono text-xs">account</code> and{" "}
+              <code className="font-mono text-xs">actions</code>.
+            </p>
+          </div>
+        </Demo>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="auth"
+        title="Auth"
+        description="Email and password, or Google. These components render and validate shape — nothing else. Auth belongs on the server; a component that 'signs you in' in the browser is a component that lies."
+      >
+        <Demo title="Sign in" className="items-start">
+          <AuthDemo />
+        </Demo>
+
+        <Callout tone="info" icon={<Info />} title="On the Google mark">
+          <p>
+            Google&apos;s branding guidelines require the official four-colour
+            &ldquo;G&rdquo;, unrecoloured, on a light surface — so it keeps its
+            own colours in dark mode and sits on a white chip rather than being
+            tinted to match the theme.
           </p>
         </Callout>
       </Section>

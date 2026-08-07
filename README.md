@@ -36,13 +36,17 @@ npx tsc --noEmit
 src/
   app/
     globals.css          token layer — palette → semantics → Tailwind theme
-    design-system/       the browsable showcase (nav rail + specimens)
+    design-system/       the browsable showcase, running on AppShell
+    sign-in/             auth screen
   components/ui/         the design system itself
     icons.tsx            generated — do not hand-edit
   lib/cn.ts              clsx + tailwind-merge
 public/fonts/            Google Sans Flex, self-hosted (see README)
 scripts/gen-icons.py     vendors Material Symbols into components/ui/icons.tsx
 ```
+
+Routes: `/design-system` (the showcase), `/sign-in`. `/` redirects to the
+showcase until there's an app to land on.
 
 ## Design system
 
@@ -81,6 +85,24 @@ Notable choices:
 - **`TASK_STATUS`** (`components/ui/badge.tsx`) is the single definition of the
   workflow state machine. Both seats read from it so they can't drift apart.
   It should move to a domain module once one exists.
+- **`AppShell` is the product frame, and the design system runs on it** rather
+  than a bespoke layout — if the frame breaks, it breaks here first. Both
+  panels collapse and persist; the left toggle sits in the brand cell, on the
+  edge it moves. One vertical rule runs from the top of the header to the
+  bottom of the page, so the brand cell and the nav column must stay the same
+  width.
+- **The chat model choice is a data boundary, not a preference.** Craigson
+  Lambda 2.0 is in-house and the default and is the only model that sees
+  company data; Claude and GPT are hosted, so anything sent to them leaves the
+  tenancy. The composer states which regime you're in. **This has to be
+  enforced in the API layer — the label is not the control.**
+- **No date library.** Onboarding only needs "pick a day", so `Calendar` uses
+  `Date` + `Intl`. All maths is local-time: a UTC-based `Date` lands on the
+  wrong day for anyone east of Greenwich, which is most of this product's
+  users. Use `toISODate`, never `toISOString`.
+- **Auth components render and validate shape, nothing else.** Auth belongs on
+  the server; a component that "signs you in" in the browser is a component
+  that lies. `/sign-in` has no backend behind it yet.
 
 ## Fonts and icons
 
