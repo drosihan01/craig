@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   AppShell,
   Badge,
+  buttonVariants,
   Card,
   ChatTranscript,
   CraigMark,
@@ -11,8 +12,10 @@ import {
   type AppNotification,
   type ChatMessage,
 } from "@/components/ui";
+import Link from "next/link";
 import { Campaign, Code, Groups, Schedule } from "@/components/ui/icons";
-import { ACCOUNT } from "@/lib/demo";
+import { ACCOUNT, NEW_HIRE } from "@/lib/demo";
+import { SESSION } from "@/lib/demo-session";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
 /**
@@ -78,15 +81,16 @@ const TEMPLATES = [
   },
 ];
 
-/* Canned, and streamed a word at a time so the interface can be judged on how
-   it behaves rather than how it looks frozen. There's no generation behind it
-   yet, and the copy says so rather than implying a draft exists. */
-const REPLY =
-  "Got it. At three people the useful thing isn't a policy library — it's making sure what only you and Jason know actually gets handed over. I'd start with one workflow for an engineering hire: access, a first-week orient, and a 30-day check-in. Nothing has been created yet — generation isn't wired up, so this is the shape of the answer rather than the answer.";
+/* The reply Craig gives once the scripted session runs out, so a demo that
+   goes off-script degrades honestly instead of repeating itself. */
+const FALLBACK =
+  "Ah — that's past what I've got scripted. There's no model hooked up behind me yet, so I'd only be making something up.";
 
 export default function AdminHomePage() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [busy, setBusy] = React.useState(false);
+  const [turnIndex, setTurnIndex] = React.useState(0);
+  const [offerDraft, setOfferDraft] = React.useState(false);
   const timers = React.useRef<number[]>([]);
 
   const clearTimers = React.useCallback(() => {
@@ -95,58 +99,59 @@ export default function AdminHomePage() {
   }, []);
   React.useEffect(() => clearTimers, [clearTimers]);
 
-  /* The steps an answer is built from, mocked with timers. Sequenced rather
-     than shown all at once — the point of surfacing them is that you can watch
-     where the time goes, which a finished list doesn't tell you. */
-  const PLAN = [
-    { id: "read", label: "Reading what you sent" },
-    { id: "gaps", label: "Checking what isn't written down anywhere" },
-    { id: "draft", label: "Drafting a workflow shape" },
-  ];
-
+  /* Walks the scripted session. Whatever gets typed is *replaced* by Ada's
+     scripted line for that turn — the demo is driven by pressing enter, not by
+     typing her paragraphs out, and it survives anyone typing anything. Once
+     the script runs out the real text is used, so it degrades honestly. */
   function send(text: string) {
+    const turn = SESSION[turnIndex];
     const replyId = crypto.randomUUID();
+
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role: "user", content: text },
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: turn?.ada ?? text,
+        attachment: turn?.attachment,
+      },
       {
         id: replyId,
         role: "assistant",
         content: "",
         streaming: true,
-        steps: [{ ...PLAN[0], state: "running" }],
+        steps: turn ? [{ id: turn.steps[0], label: turn.steps[0], state: "running" }] : [],
       },
     ]);
     setBusy(true);
+    setTurnIndex((i) => i + 1);
 
     const patch = (fn: (m: ChatMessage) => ChatMessage) =>
       setMessages((prev) => prev.map((m) => (m.id === replyId ? fn(m) : m)));
 
-    // Walk the plan: finish the current step, start the next.
-    PLAN.forEach((step, i) => {
+    const steps = turn?.steps ?? [];
+    const reply = turn?.craig ?? FALLBACK;
+
+    // One state at a time — the point of showing them is watching where the
+    // time goes, which a finished list doesn't tell you.
+    steps.forEach((label, i) => {
       const t = window.setTimeout(
         () => {
+          const next = steps[i + 1];
           patch((m) => ({
             ...m,
-            steps: [
-              ...PLAN.slice(0, i + 1).map((p) => ({
-                ...p,
-                state: "done" as const,
-              })),
-              ...(PLAN[i + 1]
-                ? [{ ...PLAN[i + 1], state: "running" as const }]
-                : []),
-            ],
+            steps: next
+              ? [{ id: next, label: next, state: "running" }]
+              : [{ id: label, label, state: "done" }],
           }));
         },
-        700 * (i + 1),
+        800 * (i + 1),
       );
       timers.current.push(t);
     });
 
-    // Then the answer itself.
-    const startAt = 700 * PLAN.length + 200;
-    const words = REPLY.split(" ");
+    const startAt = 800 * steps.length + 200;
+    const words = reply.split(" ");
     words.forEach((_, i) => {
       const t = window.setTimeout(
         () => {
@@ -154,10 +159,14 @@ export default function AdminHomePage() {
             ...m,
             content: words.slice(0, i + 1).join(" "),
             streaming: i < words.length - 1,
+            steps: [],
           }));
-          if (i === words.length - 1) setBusy(false);
+          if (i === words.length - 1) {
+            setBusy(false);
+            if (turn?.offersWorkflow) setOfferDraft(true);
+          }
         },
-        startAt + i * 26,
+        startAt + i * 18,
       );
       timers.current.push(t);
     });
@@ -191,7 +200,9 @@ export default function AdminHomePage() {
           />
 
           <div className="shrink-0 pb-6">
-            <div className="mx-auto w-full max-w-2xl">
+            <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
+              {offerDraft && <DraftHandoff />}
+
               <PromptBar
                 autoFocus
                 placeholder="Ask a follow-up…"
@@ -271,6 +282,41 @@ export default function AdminHomePage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+/**
+ * The hand-off out of the conversation. Deliberately a draft rather than a
+ * published workflow — Craig proposes, Ada edits, and the two unconfigured
+ * steps are the reason she has to look before anything runs.
+ */
+function DraftHandoff() {
+  return (
+    <Card className="flex items-start gap-3 p-3">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-subtle-fg">
+        <Code className="size-4" />
+      </span>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-base font-medium">Engineer — Katalis</span>
+          <Badge tone="warning" size="sm">
+            Draft
+          </Badge>
+        </div>
+        <p className="text-sm text-text-muted">
+          9 steps · 2 unconfigured · for {NEW_HIRE.name}, starts in{" "}
+          {NEW_HIRE.startsIn}
+        </p>
+      </div>
+
+      <Link
+        href="/builder"
+        className={buttonVariants({ size: "sm", className: "shrink-0" })}
+      >
+        Open the draft
+      </Link>
+    </Card>
   );
 }
 

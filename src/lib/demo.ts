@@ -38,5 +38,27 @@ export const PEOPLE = {
   },
 } as const;
 
+/**
+ * The hire the demo is about.
+ *
+ * Deliberately someone from a *larger* company. Nils has always had onboarding
+ * happen to him — a checklist, a buddy, a wiki that was true. At Katalis none
+ * of that exists, and the trait that makes him good at his job is exactly what
+ * makes that dangerous: he won't ask the same question twice. He'll burn half a
+ * day working it out rather than interrupt Jason, and eventually he'll guess.
+ *
+ * The timezone is the other half of it. Jason owns every credential and sits
+ * nine hours behind, so "just ask Jason" is a two-hour window a day.
+ */
+export const NEW_HIRE = {
+  name: "Nils Hoffman",
+  email: "nils@katalis.ai",
+  role: "Engineer",
+  startsIn: "2 weeks",
+  location: "Berlin — 9h ahead of Jason",
+  background: "4 years at a ~400-person payments company",
+  note: "First time somewhere this small. Won't ask twice.",
+} as const;
+
 /** The signed-in admin on every screen. */
 export const ACCOUNT: AccountInfo = PEOPLE.ada;

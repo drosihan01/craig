@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Dialog, DialogClose } from "./dialog";
-import { AutoAwesome, ContentCopy, Refresh } from "./icons";
+import { AutoAwesome, ContentCopy, Description, Refresh } from "./icons";
 import { CraigMark } from "./craig-mark";
 import { DEFAULT_MODEL, type ChatModel } from "./model-picker";
 import { PromptBar } from "./prompt-bar";
@@ -22,6 +22,8 @@ export interface ChatMessage {
   model?: string;
   /** What the agent did to produce this, shown above the answer. */
   steps?: AgentStep[];
+  /** Filename shown as a chip on a user message. */
+  attachment?: string;
 }
 
 /**
@@ -174,8 +176,14 @@ function Message({ message }: { message: ChatMessage }) {
   if (isUser) {
     // User turns are bubbles, right-aligned — they're short and scannable.
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-xl rounded-br-sm bg-accent-subtle px-3.5 py-2.5 text-base leading-relaxed text-accent-subtle-fg">
+      <div className="flex flex-col items-end gap-1.5">
+        {message.attachment && (
+          <span className="flex items-center gap-1.5 rounded-md border border-border bg-surface-sunken py-1 pl-1.5 pr-2 text-xs text-text-muted">
+            <Description className="size-3.5 shrink-0 text-text-subtle" />
+            {message.attachment}
+          </span>
+        )}
+        <div className="max-w-[85%] whitespace-pre-wrap rounded-xl rounded-br-sm bg-accent-subtle px-3.5 py-2.5 text-base leading-relaxed text-accent-subtle-fg">
           {message.content}
         </div>
       </div>
@@ -209,7 +217,7 @@ function Message({ message }: { message: ChatMessage }) {
         )}
       </div>
 
-      <div className="text-base leading-relaxed text-text">
+      <div className="whitespace-pre-wrap text-base leading-relaxed text-text">
         {message.content}
         {message.streaming && (
           <span
