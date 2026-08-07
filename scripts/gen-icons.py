@@ -98,6 +98,8 @@ ICONS = {
     "EventAvailable": "event_available",
     "UploadFile": "upload_file",
     "Link": "link",
+    "Quiz": "quiz",
+    "Chat": "chat",
 }
 
 HEADER = '''import * as React from "react";

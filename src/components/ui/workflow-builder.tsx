@@ -13,7 +13,6 @@ import {
   HowToReg,
   Mail,
   MoreHoriz,
-  Schedule,
   TaskAlt,
   Warning,
 } from "./icons";
@@ -58,7 +57,6 @@ export type BlockKind =
   | "task"
   | "approval"
   | "notify"
-  | "delay"
   | "branch"
   | "document";
 
@@ -99,12 +97,6 @@ export const BLOCK_TYPES: Record<BlockKind, BlockTypeDef> = {
     label: "Notification",
     description: "Email or message someone",
     icon: Mail,
-  },
-  delay: {
-    kind: "delay",
-    label: "Wait",
-    description: "Pause, relative to the start date",
-    icon: Schedule,
   },
   branch: {
     kind: "branch",

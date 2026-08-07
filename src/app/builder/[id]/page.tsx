@@ -34,18 +34,19 @@ import { AdminNav, NavStat } from "@/components/app-nav";
 
 /* Drafted from Ada's handbook, then built out of the block library. It looks
    long because each account is its own step — five admin panels that fail one
-   at a time, not one "access" step that's either done or isn't.
+   at a time, not one "access" step that's either done or isn't. It stops at
+   the 1:1 with Jason; what comes after depends on how the first week goes.
 
    The gaps it surfaces (which right-to-work check applies in Germany, which
-   Slack channels, a handbook nobody has reviewed) are the point: Craig's job
-   is to make the undocumented parts visible, not to invent process a
-   three-person company doesn't want. */
+   Slack channels, and a handbook too stale to write a quiz from) are the
+   point: Craig's job is to make the undocumented parts visible, not to invent
+   process a three-person company doesn't want. */
 const NOTIFICATIONS: AppNotification[] = [
   {
     id: "n1",
-    kind: "approval",
-    title: "Jason needs to sign off on prod access",
-    description: "Blocks the last step of the engineer workflow",
+    kind: "assigned",
+    title: "Jason owns six of the twelve steps",
+    description: "Every account and the 1:1",
     timestamp: new Date(Date.now() - 4 * 60_000),
     actor: PEOPLE.jason.name,
   },
@@ -53,7 +54,7 @@ const NOTIFICATIONS: AppNotification[] = [
     id: "n2",
     kind: "overdue",
     title: "The handbook hasn\u2019t been reviewed since Feb 2026",
-    description: "Two steps point at it",
+    description: "It\u2019s what the pop quiz would read from",
     timestamp: new Date(Date.now() - 90 * 60_000),
   },
   {
@@ -67,7 +68,7 @@ const NOTIFICATIONS: AppNotification[] = [
 ];
 
 /* Everyone a step can fall to. "The new hire" is on the list because plenty of
-   steps are theirs — reading the handbook isn't Ada's job. */
+   steps are theirs — sitting the quiz isn't Ada's job. */
 const ASSIGNEES = [
   PEOPLE.ada.name,
   PEOPLE.jason.name,

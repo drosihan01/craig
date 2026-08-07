@@ -57,8 +57,8 @@ const TEMPLATES = [
     icon: Code,
     title: "Engineer",
     description:
-      "Repo and infra access, a walkthrough of who owns what, and a prod sign-off before anything ships.",
-    steps: 8,
+      "One step per account, a quiz instead of \u201cread the handbook\u201d, and a 1:1 with whoever owns the system.",
+    steps: 12,
     tag: "Most used",
   },
   {

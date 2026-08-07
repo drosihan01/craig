@@ -34,9 +34,9 @@ import { AdminNav, NavStat } from "@/components/app-nav";
 const NOTIFICATIONS: AppNotification[] = [
   {
     id: "w1",
-    kind: "approval",
-    title: "Jason needs to sign off on prod access",
-    description: "Last step of the engineer workflow",
+    kind: "assigned",
+    title: "Jason owns six of the twelve steps",
+    description: "Every account and the 1:1",
     timestamp: new Date(Date.now() - 4 * 60_000),
     actor: "Jason Cho",
   },

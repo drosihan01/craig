@@ -2,27 +2,27 @@ import {
   AltRoute,
   Apps,
   Badge,
-  Cloud,
   Description,
   Draw,
   EventAvailable,
   FactCheck,
-  Forum,
   Groups,
   Handshake,
   HowToReg,
+  Link,
   LaptopMac,
   Lock,
   Mail,
-  MenuBook,
+  Quiz,
   RocketLaunch,
   School,
-  Schedule,
   TaskAlt,
 } from "@/components/ui/icons";
-/* Real marks for the services, generic Material glyphs for everything else.
-   Slack and AWS keep a Material glyph because no freely licensed set carries
-   their logos — see scripts/gen-brand-icons.py. */
+/* Real marks where a freely licensed one exists. Slack and AWS get the same
+   neutral placeholder as each other rather than a semantic guess apiece —
+   `Apps` reads as "no logo available", where a cloud for AWS and a speech
+   bubble for Slack read as two different opinions. See
+   scripts/gen-brand-icons.py for why those two can't be drawn. */
 import {
   Asana,
   Dropbox,
@@ -81,6 +81,13 @@ export interface SetupField {
   /** Placeholder or example — says what a good answer looks like. */
   hint?: string;
   options?: { id: string; label: string }[];
+  /**
+   * Where a multiselect's choices come from when they aren't listed. "people"
+   * offers the team; anything else is a free list the admin types into, because
+   * Craig can't know which documents a quiz should read or which Okta groups
+   * exist.
+   */
+  from?: "people";
   /** The block counts as unconfigured until this has a value. */
   required?: boolean;
 }
@@ -96,6 +103,12 @@ export interface BlockPreset {
   /** Prefilled onto the block. */
   title: string;
   summary?: string;
+  /**
+   * Something this block always does that the admin can't change. Shown in the
+   * inspector next to the fields they can. Fixed behaviour is still behaviour
+   * and hiding it is how a workflow surprises somebody.
+   */
+  note?: string;
   setup: SetupField[];
 }
 
@@ -115,18 +128,28 @@ const WHO_PROVISIONS: SetupField = {
   required: true,
 };
 
+/**
+ * The default vocabulary for a `when` field. Everything is relative to the
+ * start date, never a calendar date — a workflow is a template, and a template
+ * pinned to 3 March is a template used once.
+ *
+ * Exported so a field can declare `kind: "when"` with no options and still
+ * resolve a stored value to a label.
+ */
+export const WHEN_OPTIONS = [
+  { id: "on-signing", label: "As soon as they sign" },
+  { id: "week-before", label: "A week before day one" },
+  { id: "day-before", label: "The day before" },
+  { id: "day-one", label: "Day one" },
+  { id: "first-week", label: "First week" },
+];
+
 const WHEN: SetupField = {
   id: "when",
   label: "When",
   kind: "when",
   hint: "Relative to the start date",
-  options: [
-    { id: "on-signing", label: "As soon as they sign" },
-    { id: "week-before", label: "A week before day one" },
-    { id: "day-before", label: "The day before" },
-    { id: "day-one", label: "Day one" },
-    { id: "first-week", label: "First week" },
-  ],
+  options: WHEN_OPTIONS,
 };
 
 /** An account on a third-party service. */
@@ -428,7 +451,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         "slack",
         "Slack",
         "Workspace invite and the channels they should land in on day one.",
-        Forum,
+        Apps,
         [
           {
             id: "workspace",
@@ -541,7 +564,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         "aws",
         "AWS",
         "SSO or IAM access, scoped to the accounts they actually need.",
-        Cloud,
+        Apps,
         [
           {
             id: "method",
@@ -786,7 +809,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         "custom-app",
         "Another app",
         "Anything the library doesn't name — internal tools, a CRM, a provider console.",
-        Apps,
+        Link,
         [
           {
             id: "app",
@@ -930,21 +953,47 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         ],
       },
       {
-        id: "handbook",
-        label: "Read the handbook",
+        id: "pop-quiz",
+        label: "Pop quiz",
         description:
-          "The company doc — assuming it's been looked at recently enough to be worth reading.",
-        kind: "document",
-        icon: MenuBook,
-        title: "Read the handbook",
+          "A handful of questions pulled from the knowledge base, and a nudge to go and ask Craig the rest.",
+        kind: "task",
+        icon: Quiz,
+        title: "Pop quiz",
+        summary: "Drawn from the knowledge base",
+        note: "Every quiz ends by pointing them at Ask Craig, so the questions they got wrong have somewhere to go. That part isn't configurable — a quiz that only tells someone they were wrong is a worse version of not asking.",
         setup: [
           {
-            id: "doc",
-            label: "Which document",
-            kind: "file",
+            id: "source",
+            label: "Draw questions from",
+            kind: "multiselect",
+            hint: "A quiz is only as current as what it reads",
             required: true,
           },
-          { id: "when", label: "By", kind: "when", required: true },
+          {
+            id: "count",
+            label: "How many questions",
+            kind: "select",
+            options: [
+              { id: "3", label: "Three" },
+              { id: "5", label: "Five" },
+              { id: "10", label: "Ten" },
+            ],
+            required: true,
+          },
+          {
+            id: "outcome",
+            label: "If they get one wrong",
+            kind: "select",
+            hint: "Nobody is failing an onboarding quiz",
+            options: [
+              { id: "explain", label: "Show the answer and move on" },
+              { id: "chat", label: "Open Ask Craig on that topic" },
+              { id: "flag", label: "Tell whoever owns the step" },
+            ],
+            required: true,
+          },
+          { id: "when", label: "When", kind: "when", required: true },
         ],
       },
     ],
@@ -996,6 +1045,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             id: "people",
             label: "Who they should meet",
             kind: "multiselect",
+            from: "people",
             hint: "Name them — this is the step that quietly doesn't happen",
             required: true,
           },
@@ -1085,17 +1135,6 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             required: true,
           },
           { id: "approver", label: "Approver", kind: "person", required: true },
-        ],
-      },
-      {
-        id: "wait",
-        label: "Wait",
-        description: "Pause, relative to the start date.",
-        kind: "delay",
-        icon: Schedule,
-        title: "Wait",
-        setup: [
-          { id: "until", label: "Wait until", kind: "when", required: true },
         ],
       },
       {

@@ -42,7 +42,7 @@ const NOTIFICATIONS: AppNotification[] = [
     id: "r1",
     kind: "overdue",
     title: "The handbook hasn't been reviewed since Feb 2026",
-    description: "Two workflow steps point at it",
+    description: "It\u2019s what the pop quiz would read from",
     timestamp: new Date(Date.now() - 90 * 60_000),
   },
 ];
@@ -74,7 +74,7 @@ const LIBRARY: { category: string; items: Resource[] }[] = [
         name: "Katalis Handbook",
         meta: "PDF · uploaded by Ada · last updated Feb 2026",
         state: "stale",
-        usedBy: 2,
+        usedBy: 1,
       },
       {
         name: "First-week checklist",

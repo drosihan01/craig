@@ -6,7 +6,11 @@ import { Field } from "./field";
 import { Input } from "./input";
 import { SelectMenu } from "./dropdown";
 import { Check, Close, UploadFile, Warning } from "./icons";
-import { findPreset, type SetupField } from "@/lib/workflow/library";
+import {
+  findPreset,
+  WHEN_OPTIONS,
+  type SetupField,
+} from "@/lib/workflow/library";
 import type { WorkflowBlock } from "./workflow-builder";
 import { missingSetup } from "./workflow-builder";
 import { cn } from "@/lib/cn";
@@ -42,6 +46,14 @@ export function BlockSetup({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* What the block does regardless of the fields below it. Stated rather
+          than left to be discovered — fixed behaviour is still behaviour. */}
+      {preset.note && (
+        <p className="rounded-lg border border-dashed border-border-strong px-3 py-2 text-xs leading-relaxed text-text-muted">
+          {preset.note}
+        </p>
+      )}
+
       <div className="flex items-center gap-2">
         <h3 className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Setup
@@ -89,10 +101,13 @@ function SetupControl({
   const label = f.required ? f.label : `${f.label} (optional)`;
 
   if (f.kind === "person" || f.kind === "select" || f.kind === "when") {
+    /* A `when` field with no options still has to resolve a stored value to a
+       label, so it falls back to the shared vocabulary rather than rendering
+       "Not set" over a value that is very much set. */
     const options =
       f.kind === "person"
         ? people.map((p) => ({ id: p, label: p }))
-        : (f.options ?? []);
+        : (f.options ?? (f.kind === "when" ? WHEN_OPTIONS : []));
 
     return (
       <Field label={label} hint={f.hint}>
@@ -194,10 +209,14 @@ function MultiSelect({
 }) {
   const [draft, setDraft] = React.useState("");
 
-  /* A multiselect with no options is a free list — "who they should meet"
-     can't be enumerated in advance. */
-  const options = f.options ?? people.map((p) => ({ id: p, label: p }));
-  const freeform = !f.options && people.length === 0;
+  /* Three cases: a listed set of options, the team, or a free list. The last
+     one is the common one — Craig can't know which documents a quiz should read
+     or which Okta groups exist, and offering the team as a guess is worse than
+     offering nothing. */
+  const options =
+    f.options ??
+    (f.from === "people" ? people.map((p) => ({ id: p, label: p })) : []);
+  const freeform = options.length === 0;
 
   function toggle(id: string) {
     onChange(
@@ -259,7 +278,9 @@ function MultiSelect({
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={freeform ? "Add a name and press enter" : "Add another"}
+          placeholder={
+            freeform ? "Type one and press enter" : "Add another"
+          }
           className="h-7 text-sm"
         />
       </form>

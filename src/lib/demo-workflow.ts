@@ -36,7 +36,11 @@ const TRIGGER: WorkflowBlock = {
  *   1. Nils is in Berlin and nobody has said which right-to-work check applies.
  *   2. The Slack channel list is tribal knowledge — the field is empty because
  *      nobody at Katalis can currently fill it in.
- *   3. The handbook was last looked at in February.
+ *   3. The pop quiz has nothing current to draw questions from.
+ *
+ * It ends at the 1:1 with Jason. Everything after that — prod access, the
+ * thirty-day check-in — depends on how the first week actually goes, and a
+ * draft that guesses at week three is a draft nobody trusts about week one.
  *
  * Everything else carries real config, so "configured" means something.
  */
@@ -162,7 +166,7 @@ export const INITIAL: WorkflowBlock[] = [
     kind: "task",
     preset: "aws",
     title: "AWS",
-    summary: "dev and staging only — prod waits for sign-off",
+    summary: "dev and staging — prod when Jason says so",
     owner: PEOPLE.jason.name,
     config: {
       method: "sso",
@@ -189,59 +193,24 @@ export const INITIAL: WorkflowBlock[] = [
   /* Day one --------------------------------------------------------------- */
   {
     id: "b11",
-    kind: "delay",
-    preset: "wait",
-    title: "Wait until day one",
-    summary: "Resumes 9:00am Berlin — 9h ahead of Jason",
-    config: { until: "day-one" },
+    kind: "task",
+    preset: "pop-quiz",
+    title: "Pop quiz",
+    summary: "Five questions, then go and ask Craig the rest",
+    owner: "The new hire",
+    config: { count: "5", outcome: "chat", when: "day-one" },
+    /* The source field is empty on purpose: the only thing to draw questions
+       from is a handbook nobody has opened since February. */
+    incomplete: "The handbook it would read is from Feb 2026",
   },
   {
     id: "b12",
-    kind: "document",
-    preset: "handbook",
-    title: "Read the handbook",
-    summary: "Katalis Handbook — last updated Feb 2026",
-    owner: PEOPLE.ada.name,
-    config: { doc: "Katalis Handbook.pdf", when: "day-one" },
-    incomplete: "Needs refreshing before he reads it",
-  },
-  {
-    id: "b13",
     kind: "task",
-    preset: "walkthrough",
-    title: "What's live and what's fallback",
-    summary: "Half an hour with Jason — the bit only in his head",
+    preset: "meet-manager",
+    title: "1:1 with Jason",
+    summary: "Half an hour, first week — everything the quiz didn't cover",
     owner: PEOPLE.jason.name,
-    config: {
-      topic: "Routing, the fallback path, and what breaking prod looks like",
-      owner: PEOPLE.jason.name,
-      when: "day-one",
-    },
-  },
-
-  /* Before prod ----------------------------------------------------------- */
-  {
-    id: "b14",
-    kind: "approval",
-    preset: "approval",
-    title: "Jason signs off on prod access",
-    summary: "Nothing touches routing until this clears",
-    owner: PEOPLE.jason.name,
-    config: {
-      what: "Production AWS access",
-      approver: PEOPLE.jason.name,
-    },
-  },
-
-  /* Thirty days ----------------------------------------------------------- */
-  {
-    id: "b15",
-    kind: "task",
-    preset: "check-in",
-    title: "30-day check-in",
-    summary: "What should have been written down and wasn't",
-    owner: PEOPLE.ada.name,
-    config: { owner: PEOPLE.ada.name, when: "30" },
+    config: { manager: PEOPLE.jason.name, when: "first-week", length: "30" },
   },
 ];
 
