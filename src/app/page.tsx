@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   AppShell,
   Badge,
@@ -126,7 +127,7 @@ function AdminNav() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-0.5">
         {items.map((item) => (
-          <a
+          <Link
             key={item.label}
             href={item.href}
             aria-current={item.current ? "page" : undefined}
@@ -137,7 +138,7 @@ function AdminNav() {
             }
           >
             {item.label}
-          </a>
+          </Link>
         ))}
       </div>
 
@@ -159,12 +160,12 @@ function AdminNav() {
 
       <Separator />
 
-      <a
+      <Link
         href="/design-system"
         className="px-2 text-xs text-text-subtle underline-offset-4 hover:text-text hover:underline"
       >
         Design system →
-      </a>
+      </Link>
     </div>
   );
 }

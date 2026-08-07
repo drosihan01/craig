@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Badge, Separator } from "@/components/ui";
 import { SECTIONS } from "../sections";
 
@@ -32,6 +33,27 @@ export function ShellAside() {
           The nav collapses from the one beside the wordmark. Both remember
           their state.
         </p>
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-col gap-1.5">
+        <p className="pb-0.5 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Pages
+        </p>
+        {[
+          { href: "/", label: "Admin home" },
+          { href: "/builder", label: "Workflow builder" },
+          { href: "/sign-in", label: "Sign in" },
+        ].map((r) => (
+          <Link
+            key={r.href}
+            href={r.href}
+            className="-mx-1 rounded-md px-1 py-0.5 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            {r.label} →
+          </Link>
+        ))}
       </div>
 
       <Separator />

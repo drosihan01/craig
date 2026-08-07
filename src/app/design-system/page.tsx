@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import * as Icon from "@/components/ui/icons";
 import {
   Add,
@@ -280,18 +281,24 @@ export default function DesignSystemPage() {
           or the type scale lands everywhere at once.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
-          <a
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-sunken px-2 text-xs font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover"
+          >
+            Admin home →
+          </Link>
+          <Link
             href="/builder"
             className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-sunken px-2 text-xs font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover"
           >
             Workflow builder →
-          </a>
-          <a
+          </Link>
+          <Link
             href="/sign-in"
             className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-sunken px-2 text-xs font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover"
           >
             Sign in →
-          </a>
+          </Link>
           <Badge>Google Sans Flex</Badge>
           <Badge>Material Symbols</Badge>
           <Badge>Charcoal brown</Badge>
@@ -1186,9 +1193,12 @@ export default function DesignSystemPage() {
         <Usage>{`import { WorkflowBuilder, WorkflowCanvas, CanvasPanel, BlockInspector } from "@/components/ui";`}</Usage>
         <Callout tone="info" icon={<Info />} title="The full builder space">
           <p>
-            <a href="/builder" className="font-medium underline underline-offset-4">
+            <Link
+              href="/builder"
+              className="font-medium underline underline-offset-4"
+            >
               Open /builder
-            </a>{" "}
+            </Link>{" "}
             — the canvas inside the app shell, with the selected block&apos;s
             inspector in the right panel. Hover a connector to insert a step.
           </p>

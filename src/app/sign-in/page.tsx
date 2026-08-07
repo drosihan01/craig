@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   AuthDivider,
   AuthShell,
@@ -53,12 +54,12 @@ export default function SignInPage() {
       subtitle="Onboarding workflows for your team"
       footer={
         <>
-          <a
+          <Link
             href="/design-system"
             className="text-accent underline-offset-4 hover:underline"
           >
             ← Back to design system
-          </a>
+          </Link>
           <br />
           <br />
           Trouble signing in?{" "}
