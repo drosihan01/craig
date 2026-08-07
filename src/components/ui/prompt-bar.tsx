@@ -66,12 +66,30 @@ export function PromptBar({
 
   const ref = React.useRef<HTMLTextAreaElement>(null);
 
-  React.useEffect(() => {
+  /* The resting height is the floor, and typing only ever grows from it.
+     A placeholder long enough to wrap makes the empty box two or three lines
+     tall; without a floor the first character you type collapses it to one,
+     which reads as the composer flinching away from you. Re-measured when the
+     placeholder or size changes, since either moves the resting height. */
+  const floorRef = React.useRef(0);
+
+  React.useLayoutEffect(() => {
+    floorRef.current = 0;
+  }, [placeholder, size]);
+
+  React.useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, size === "lg" ? 220 : 160)}px`;
-  }, [value, size]);
+    // Empty on this pass, so scrollHeight is the resting height.
+    if (!floorRef.current && !value) floorRef.current = el.scrollHeight;
+
+    el.style.height = `${Math.max(
+      floorRef.current,
+      Math.min(el.scrollHeight, size === "lg" ? 220 : 160),
+    )}px`;
+  }, [value, size, placeholder]);
 
   // Hand the node up so a parent can focus it.
   React.useEffect(() => {
@@ -173,7 +191,9 @@ export function PromptBar({
           </ul>
         )}
 
-        <div className={cn("flex items-center gap-1", lg ? "p-2.5" : "px-2 pb-2")}>
+        <div
+          className={cn("flex items-center gap-1", lg ? "p-2.5" : "px-2 pb-2")}
+        >
           {/* A real file input, kept out of the layout and driven by the button
               — styling an <input type="file"> directly is not portable, and the
               button needs to look like the rest of the bar. */}
@@ -235,9 +255,7 @@ export function PromptBar({
         </div>
       </div>
 
-      {footnote && (
-        <p className="px-1 text-2xs text-text-subtle">{footnote}</p>
-      )}
+      {footnote && <p className="px-1 text-2xs text-text-subtle">{footnote}</p>}
     </div>
   );
 }

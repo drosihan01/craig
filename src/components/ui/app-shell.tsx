@@ -165,7 +165,7 @@ export function AppShell({
   title,
   nav,
   aside,
-  asideTitle = "Details",
+  asideTitle,
   account,
   actions,
   fill,
@@ -177,6 +177,10 @@ export function AppShell({
   title?: React.ReactNode;
   nav?: React.ReactNode;
   aside?: React.ReactNode;
+  /** Eyebrow above the aside. Omit when the panel's own content already says
+      what it is — a heading that repeats the thing under it is just a line of
+      shouting. The drawer still gets a name, since a sheet with no title is
+      unlabelled to a screen reader. */
   asideTitle?: string;
   account?: AccountInfo;
   actions?: React.ReactNode;
@@ -324,10 +328,19 @@ export function AppShell({
             width={asideW}
             onResize={setAsideW}
           >
-            <div className="craig-panel-aside p-4">
-              <p className="pb-3 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-                {asideTitle}
-              </p>
+            {/* Same py as the nav panel: the two columns read as one frame,
+                and 8px of difference at the top reads as a mistake.
+
+                min-h-full + flex-col so an aside that wants the whole column
+                can have it. Content that doesn't ask still stacks at the top,
+                but a chat can now put its composer against the bottom edge
+                instead of trailing off after the last message. */}
+            <div className="craig-panel-aside flex min-h-full flex-col px-4 py-6">
+              {asideTitle && (
+                <p className="shrink-0 pb-3 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+                  {asideTitle}
+                </p>
+              )}
               {aside}
             </div>
           </Panel>
@@ -355,7 +368,7 @@ export function AppShell({
           side="right"
           open={drawer === "aside"}
           onClose={closeDrawer}
-          title={asideTitle}
+          title={asideTitle ?? "Details"}
         >
           <div className="p-4">{aside}</div>
         </Drawer>
