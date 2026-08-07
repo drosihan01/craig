@@ -1,19 +1,21 @@
 "use client";
 
 import * as React from "react";
+import * as Icon from "@/components/ui/icons";
 import {
-  AlertTriangle,
-  ArrowRight,
-  CalendarDays,
+  Add,
+  ArrowForward,
+  CalendarMonth,
   Check,
-  FileText,
+  Delete,
+  Description,
+  DragIndicator,
   Info,
-  Laptop,
-  Plus,
+  LaptopMac,
+  PersonAdd,
   Search,
-  Trash2,
-  UserPlus,
-} from "lucide-react";
+  Warning,
+} from "@/components/ui/icons";
 import {
   Avatar,
   AvatarStack,
@@ -43,8 +45,10 @@ import {
   Tabs,
   Textarea,
   Tooltip,
+  WorkflowProgress,
   type Step,
   type TaskStatus,
+  type WorkflowStep,
 } from "@/components/ui";
 import { Demo, Section, Swatch } from "./_components/specimen";
 
@@ -150,6 +154,63 @@ const STEPS: Step[] = [
   },
 ];
 
+const WORKFLOW_STEPS: WorkflowStep[] = [
+  {
+    id: "s1",
+    title: "Before you start",
+    description:
+      "Payroll details, right-to-work check and your equipment order. We need these back before your first day so your accounts are live when you walk in.",
+    status: "complete",
+    metrics: [
+      { value: 6, label: "forms signed" },
+      { value: 2, label: "documents uploaded" },
+      { value: 1, label: "equipment order" },
+    ],
+    primaryAction: { label: "Review what you sent", href: "#" },
+    secondaryAction: { label: "Download copies" },
+  },
+  {
+    id: "s2",
+    title: "Day one",
+    description:
+      "Your accounts are provisioned, your buddy is assigned, and the welcome session is booked. Everything here happens on site.",
+    status: "in_progress",
+    metrics: [
+      { value: 4, label: "accounts created" },
+      { value: 3, label: "sessions booked" },
+      { value: 1, label: "buddy assigned" },
+    ],
+    primaryAction: { label: "Open day one", href: "#" },
+    secondaryAction: { label: "Meet your buddy" },
+  },
+  {
+    id: "s3",
+    title: "Role training",
+    description:
+      "Six modules covering the floor, the register and safety. Your manager signs each one off as you finish it.",
+    status: "awaiting",
+    metrics: [
+      { value: 6, label: "modules" },
+      { value: 4, label: "complete" },
+      { value: 2, label: "awaiting sign-off" },
+    ],
+    primaryAction: { label: "Continue training", href: "#" },
+  },
+  {
+    id: "s4",
+    title: "Probation review",
+    description:
+      "A structured conversation with your manager at the 90-day mark. Unlocks once role training is signed off.",
+    status: "not_started",
+  },
+];
+
+/* Everything the module exports, minus the type. Adding an icon to
+   scripts/gen-icons.py makes it show up here automatically. */
+const ICON_SET = Object.fromEntries(
+  Object.entries(Icon).filter(([, v]) => typeof v !== "string"),
+) as Record<string, React.ComponentType<{ className?: string }>>;
+
 const ALL_STATUSES: TaskStatus[] = [
   "not_started",
   "in_progress",
@@ -178,12 +239,48 @@ export default function DesignSystemPage() {
           or the type scale lands everywhere at once.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
-          <Badge>Mori</Badge>
+          <Badge>Google Sans Flex</Badge>
+          <Badge>Material Symbols</Badge>
           <Badge>Charcoal brown</Badge>
           <Badge>14px base</Badge>
           <Badge>Light + dark</Badge>
         </div>
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="brand"
+        title="Brand"
+        description="The wordmark is the mark for now. The full stop is part of it — it sets the tone the rest of the system follows: quiet, deliberate, finished."
+      >
+        <Demo title="Wordmark" className="gap-8">
+          <span className="text-3xl font-semibold tracking-[-0.03em]">
+            Craig.
+          </span>
+          <span className="text-xl font-semibold tracking-[-0.02em]">
+            Craig.
+          </span>
+          <span className="text-base font-semibold tracking-[-0.01em]">
+            Craig.
+          </span>
+        </Demo>
+
+        <Demo title="Logo mark" note="not designed yet">
+          <div className="flex items-center gap-5">
+            <div className="flex size-16 items-center justify-center rounded-lg border border-dashed border-border-strong text-2xs text-text-subtle">
+              64
+            </div>
+            <div className="flex size-8 items-center justify-center rounded-md border border-dashed border-border-strong text-2xs text-text-subtle">
+              32
+            </div>
+            <div className="flex size-5 items-center justify-center rounded border border-dashed border-border-strong" />
+            <p className="max-w-xs text-sm text-text-subtle">
+              Placeholder slots. Until there&apos;s a mark, the header runs the
+              wordmark alone rather than a stand-in glyph.
+            </p>
+          </div>
+        </Demo>
+      </Section>
 
       {/* ---------------------------------------------------------------- */}
       <Section
@@ -259,7 +356,7 @@ export default function DesignSystemPage() {
       <Section
         id="typography"
         title="Typography"
-        description="Mori across the board. The scale is app-density: base is 14px, not 16px, and steps are tight so a dense workflow table and a page title still feel related."
+        description="Google Sans Flex across the board — one variable file covering 100–1000, self-hosted. The scale is app-density: base is 14px, not 16px, and steps are tight so a dense workflow table and a page title still feel related."
       >
         <Demo className="flex-col items-stretch gap-0 divide-y divide-border p-0">
           {TYPE_SCALE.map((t) => (
@@ -283,7 +380,7 @@ export default function DesignSystemPage() {
           ))}
         </Demo>
 
-        <Demo title="Weights" note="three only — 200 / 400 / 600">
+        <Demo title="Weights" note="use three — 200 / 400 / 600">
           <div className="flex w-full flex-col gap-2">
             <p className="text-xl font-extralight">
               Extralight 200 — display sizes only
@@ -295,13 +392,13 @@ export default function DesignSystemPage() {
           </div>
         </Demo>
 
-        <Callout tone="warning" icon={<AlertTriangle />} title="Font files needed">
+        <Callout tone="info" icon={<Info />} title="It's a variable font">
           <p>
-            Mori is a licensed typeface, so the <code className="font-mono text-xs">.woff2</code>{" "}
-            files aren&apos;t in the repo. Drop them into{" "}
-            <code className="font-mono text-xs">/public/fonts</code> — see the
-            README there for exact filenames. Until then the stack falls through
-            to system-ui and nothing breaks.
+            Every weight from 100 to 1000 is available from a single 51KB file,
+            so adding one costs nothing at runtime. Stick to the three above
+            anyway — the constraint is what keeps the UI legible, not the file
+            size. The font is self-hosted rather than linked from Google, so
+            there&apos;s no third-party connection and no extra round trip.
           </p>
         </Callout>
       </Section>
@@ -392,6 +489,41 @@ export default function DesignSystemPage() {
 
       {/* ---------------------------------------------------------------- */}
       <Section
+        id="icons"
+        title="Icons"
+        description="Material Symbols (Rounded), vendored as inline SVG — no runtime dependency and no thousand-file package. They fill with currentColor and take their size from a class, so they inherit whatever they sit inside."
+      >
+        <Demo title="Set" note="add one via scripts/gen-icons.py">
+          <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
+            {Object.entries(ICON_SET).map(([name, Ico]) => (
+              <div
+                key={name}
+                className="flex flex-col items-center gap-1.5 rounded-md border border-border bg-surface-sunken/40 px-2 py-3"
+              >
+                <Ico className="size-5 text-text" />
+                <span className="w-full truncate text-center text-2xs text-text-subtle">
+                  {name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Demo>
+
+        <Demo title="Sizes" note="16 is the default in buttons and badges">
+          <Check className="size-3 text-text" />
+          <Check className="size-4 text-text" />
+          <Check className="size-5 text-text" />
+          <Check className="size-6 text-text" />
+          <Separator orientation="vertical" className="mx-2 h-6" />
+          <Check className="size-5 text-accent" />
+          <Check className="size-5 text-success" />
+          <Check className="size-5 text-danger" />
+          <Check className="size-5 text-text-subtle" />
+        </Demo>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
         id="button"
         title="Button"
         description="One primary action per view. Secondary carries everything else; ghost is for toolbars and table rows where a border would add noise."
@@ -410,21 +542,21 @@ export default function DesignSystemPage() {
           <Button size="md">Medium</Button>
           <Button size="lg">Large</Button>
           <Button size="icon" variant="secondary" aria-label="Add step">
-            <Plus />
+            <Add />
           </Button>
           <Button size="icon-sm" variant="ghost" aria-label="Delete step">
-            <Trash2 />
+            <Delete />
           </Button>
         </Demo>
 
         <Demo title="With icons, loading, disabled">
           <Button>
-            <UserPlus />
+            <PersonAdd />
             Invite new starter
           </Button>
           <Button variant="secondary">
             Continue
-            <ArrowRight />
+            <ArrowForward />
           </Button>
           <Button loading>Saving</Button>
           <Button variant="secondary" loading>
@@ -558,7 +690,7 @@ export default function DesignSystemPage() {
           <Badge size="md">Medium</Badge>
           <StatusPill status="in_progress" size="sm" />
           <Badge tone="accent">
-            <FileText />
+            <Description />
             Document
           </Badge>
         </Demo>
@@ -609,7 +741,7 @@ export default function DesignSystemPage() {
               </CardHeader>
               <CardContent className="flex items-center gap-2">
                 <Badge tone="neutral">
-                  <Laptop />
+                  <LaptopMac />
                   IT
                 </Badge>
                 <Separator orientation="vertical" className="h-4" />
@@ -711,6 +843,18 @@ export default function DesignSystemPage() {
         <Demo title="Stepper — vertical" className="items-start">
           <Stepper steps={STEPS} />
         </Demo>
+
+        <Demo
+          title="Workflow progress"
+          note="each step is a card — room for what it produced"
+          className="items-stretch bg-canvas"
+        >
+          <WorkflowProgress
+            className="w-full"
+            title="Workflow progress"
+            steps={WORKFLOW_STEPS}
+          />
+        </Demo>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -726,7 +870,7 @@ export default function DesignSystemPage() {
               assigned to it until you publish.
             </p>
           </Callout>
-          <Callout tone="warning" icon={<AlertTriangle />} title="Unassigned steps">
+          <Callout tone="warning" icon={<Warning />} title="Unassigned steps">
             <p>3 steps have no owner. They&apos;ll fall to People &amp; Culture.</p>
           </Callout>
           <Callout tone="success" icon={<Check />} title="All checks passed" />
@@ -735,12 +879,12 @@ export default function DesignSystemPage() {
         <Demo title="Empty state" className="items-stretch">
           <EmptyState
             className="w-full"
-            icon={<CalendarDays />}
+            icon={<CalendarMonth />}
             title="No workflows yet"
             description="Build your first onboarding workflow and every new starter in this role will be assigned it automatically."
             action={
               <Button>
-                <Plus />
+                <Add />
                 New workflow
               </Button>
             }
@@ -763,7 +907,7 @@ export default function DesignSystemPage() {
           </Tooltip>
           <Tooltip content="Delete this step" side="bottom">
             <Button variant="ghost" size="icon" aria-label="Delete step">
-              <Trash2 />
+              <Delete />
             </Button>
           </Tooltip>
         </Demo>
@@ -788,9 +932,7 @@ export default function DesignSystemPage() {
                   key={row.title}
                   className="group flex items-center gap-3 px-3.5 py-2.5"
                 >
-                  <span className="cursor-grab text-text-subtle opacity-0 transition-opacity group-hover:opacity-100">
-                    ⠿
-                  </span>
+                  <DragIndicator className="size-4 cursor-grab text-text-subtle opacity-0 transition-opacity group-hover:opacity-100" />
                   <span className="flex-1 truncate text-base font-medium">
                     {row.title}
                   </span>
@@ -802,13 +944,13 @@ export default function DesignSystemPage() {
                     aria-label="Remove step"
                     className="opacity-0 transition-opacity group-hover:opacity-100"
                   >
-                    <Trash2 />
+                    <Delete />
                   </Button>
                 </div>
               ))}
               <div className="p-2">
                 <Button variant="ghost" size="sm" className="w-full justify-start">
-                  <Plus />
+                  <Add />
                   Add step
                 </Button>
               </div>
@@ -845,7 +987,7 @@ export default function DesignSystemPage() {
               <CardFooter>
                 <Button size="sm">
                   Continue
-                  <ArrowRight />
+                  <ArrowForward />
                 </Button>
                 <span className="text-xs text-text-subtle">
                   Next: meet your buddy

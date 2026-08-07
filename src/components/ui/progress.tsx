@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check } from "lucide-react";
+import { Check } from "./icons";
 import { cn } from "@/lib/cn";
 
 export function Progress({

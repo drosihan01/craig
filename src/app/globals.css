@@ -189,7 +189,7 @@
   --color-accent-950: var(--pp-accent-950);
 
   /* Type — app-density scale. Base is 14px, not 16px. */
-  --font-sans: "PP Mori", "Mori", ui-sans-serif, system-ui, -apple-system,
+  --font-sans: "Google Sans Flex", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
@@ -234,30 +234,34 @@
 }
 
 /* --- Fonts ---------------------------------------------------------------- */
-/* Drop the licensed .woff2 files into /public/fonts — see the README there.
-   Until then these @font-face rules fail silently and the stack falls through
-   to system-ui, so nothing breaks. */
+/* Google Sans Flex, self-hosted. One variable file covers 100–1000, so every
+   weight is a single 51KB request and there's no FOUT between weights.
+   Self-hosted rather than linked from fonts.googleapis.com: no third-party
+   connection, no extra DNS/TLS round trip, and it survives a strict CSP. */
 
 @font-face {
-  font-family: "PP Mori";
-  src: url("/fonts/PPMori-Extralight.woff2") format("woff2");
-  font-weight: 200;
+  font-family: "Google Sans Flex";
+  src: url("/fonts/GoogleSansFlex-latin.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-stretch: 100%;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+
 @font-face {
-  font-family: "PP Mori";
-  src: url("/fonts/PPMori-Regular.woff2") format("woff2");
-  font-weight: 400;
+  font-family: "Google Sans Flex";
+  src: url("/fonts/GoogleSansFlex-latin-ext.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-stretch: 100%;
   font-style: normal;
   font-display: swap;
-}
-@font-face {
-  font-family: "PP Mori";
-  src: url("/fonts/PPMori-SemiBold.woff2") format("woff2");
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
 }
 
 /* --- Base ----------------------------------------------------------------- */
@@ -279,7 +283,6 @@
     line-height: var(--text-base--line-height);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "cv02", "cv03", "cv04";
   }
 
   /* One focus treatment for the whole system. */

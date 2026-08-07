@@ -40,9 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# licensed fonts — see public/fonts/README.md
-# the repo is public; PP Mori is not redistributable
+# fonts — Google Sans Flex is open source (Google Fonts, isOpenSource) and IS
+# committed. Block other font binaries so a licensed face can't land in this
+# public repo by accident. Add an explicit negation if you vendor another one.
 /public/fonts/*.woff2
 /public/fonts/*.woff
 /public/fonts/*.otf
 /public/fonts/*.ttf
+!/public/fonts/GoogleSansFlex-*.woff2

@@ -38,8 +38,10 @@ src/
     globals.css          token layer — palette → semantics → Tailwind theme
     design-system/       the browsable showcase (nav rail + specimens)
   components/ui/         the design system itself
+    icons.tsx            generated — do not hand-edit
   lib/cn.ts              clsx + tailwind-merge
-public/fonts/            drop licensed PP Mori files here (see README)
+public/fonts/            Google Sans Flex, self-hosted (see README)
+scripts/gen-icons.py     vendors Material Symbols into components/ui/icons.tsx
 ```
 
 ## Design system
@@ -63,6 +65,16 @@ Notable choices:
   tan end of the ramp and flips the foreground, keeping the accent's role and
   warmth at both ends.
 - **Base type is 14px**, not 16. App density.
+- **One variable font.** Google Sans Flex, self-hosted, covering 100–1000 from
+  a single 51KB file. Stick to three weights (200/400/600) anyway — the
+  constraint is what keeps the UI legible.
+- **Icons are vendored, not installed.** ~16 Material Symbols (Rounded) inlined
+  as SVG by `scripts/gen-icons.py`, so there's no runtime dependency and no
+  thousand-file package. Add one by editing the `ICONS` map and re-running it.
+- **`WorkflowProgress`** renders each stage as a card rather than a row, with a
+  metrics line and an action footer. The connector is dashed inside a card and
+  solid across the gap between cards, so the thread reads as continuous without
+  cutting through content.
 - **Selection controls are native inputs** under the hood — keyboard, form
   submission and screen-reader behaviour come free; visuals are drawn by a
   sibling driven off `peer`.
@@ -70,9 +82,21 @@ Notable choices:
   workflow state machine. Both seats read from it so they can't drift apart.
   It should move to a domain module once one exists.
 
-## Fonts
+## Fonts and icons
 
-PP Mori is licensed and deliberately not committed — `.gitignore` blocks font
-binaries because this repo is public. See
-[`public/fonts/README.md`](public/fonts/README.md). Without the files the app
-falls back to `system-ui` and still renders correctly.
+**Google Sans Flex** is self-hosted in [`public/fonts/`](public/fonts/) and
+committed — it's flagged open source in the Google Fonts catalogue. `.gitignore`
+still blocks font binaries by default and allow-lists only this family, so a
+licensed face can't land in this public repo by accident.
+
+**Material Symbols (Rounded)** are vendored into `src/components/ui/icons.tsx`
+by `scripts/gen-icons.py`. To add an icon, add it to the `ICONS` map and run:
+
+```bash
+python3 scripts/gen-icons.py
+```
+
+Facebook's [astryx](https://github.com/facebook/astryx) was evaluated first —
+it ships an `Icon` component and registry, but its own icons are explicitly
+minimal fallbacks, and its docs point you at a real icon library. Hence
+Material.

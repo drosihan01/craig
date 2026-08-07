@@ -1,23 +1,41 @@
 # Fonts
 
-Craig uses **PP Mori** (Pangram Pangram). It's a licensed typeface, so the files
-are deliberately not committed. Buy/obtain the webfont licence, then drop these
-three `.woff2` files into this directory:
+Craig uses **Google Sans Flex**, self-hosted. The files here are committed.
 
 ```
-public/fonts/
-  PPMori-Extralight.woff2   → font-weight 200
-  PPMori-Regular.woff2      → font-weight 400  (sold as "Book")
-  PPMori-SemiBold.woff2     → font-weight 600
+GoogleSansFlex-latin.woff2       51KB  — preloaded in src/app/layout.tsx
+GoogleSansFlex-latin-ext.woff2   25KB  — loaded on demand via unicode-range
 ```
 
-The `@font-face` rules already point at these exact paths — see the Fonts block
-in `src/app/globals.css`. Until the files exist the rules fail silently and the
-stack falls through to `system-ui`, so the app still renders correctly.
+One variable file covers **weight 100–1000**, so every weight in the system
+comes from a single request and there's no FOUT switching between them. The
+`@font-face` rules live in the Fonts block of `src/app/globals.css`.
 
-If the filenames you receive differ, rename them rather than editing the CSS.
+## Why self-hosted rather than `fonts.googleapis.com`
 
-## Adding a weight
+- No third-party connection, so no extra DNS + TLS round trip on first paint.
+- Survives a strict `Content-Security-Policy` without a `font-src` exception.
+- The font can't change under us.
 
-Only add a weight if a component genuinely needs it. The system uses three:
-200 for display sizes, 400 for body and UI, 600 for titles and emphasis.
+## Licence
+
+Google Sans Flex is flagged `isOpenSource: true` in the Google Fonts catalogue,
+which is why these files are committed to a public repo.
+
+**`.gitignore` blocks font binaries by default** and allow-lists only
+`GoogleSansFlex-*.woff2`. That's deliberate — it stops a licensed face landing
+in a public repo by accident. If you vendor another font, confirm its licence
+permits redistribution, then add an explicit negation.
+
+## Updating
+
+Re-fetch from the Google Fonts CSS API with a modern browser User-Agent (an old
+one gets static `.ttf` instances instead of the variable `.woff2`):
+
+```bash
+curl -A "Mozilla/5.0 ... Chrome/131.0.0.0 ..." \
+  "https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@100..1000&display=swap"
+```
+
+Pull the `latin` and `latin-ext` URLs from the response. If the `unicode-range`
+values changed, update them in `globals.css` to match.

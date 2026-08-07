@@ -27,4 +27,12 @@ export {
   type StepState,
 } from "./progress";
 export { Callout, EmptyState, Tooltip, Skeleton } from "./feedback";
+export {
+  WorkflowProgress,
+  type WorkflowStep,
+  type StepMetric,
+  type StepAction,
+} from "./step-card";
 export { ThemeToggle } from "./theme-toggle";
+export * as Icons from "./icons";
+export { type IconProps } from "./icons";

@@ -1,7 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Moon, Sun } from "lucide-react";
+import {
+  DarkMode,
+  LightMode,
+} from "./icons";
 import { cn } from "@/lib/cn";
 
 /** Inlined in <head> so the theme is applied before first paint. */
@@ -33,7 +36,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         className,
       )}
     >
-      {dark ? <Moon className="size-4" /> : <Sun className="size-4" />}
+      {dark ? <DarkMode className="size-4" /> : <LightMode className="size-4" />}
     </button>
   );
 }

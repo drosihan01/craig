@@ -13,6 +13,7 @@ export const SECTIONS: NavGroup[] = [
   {
     group: "Foundations",
     items: [
+      { id: "brand", label: "Brand" },
       { id: "colour", label: "Colour" },
       { id: "typography", label: "Typography" },
       { id: "space", label: "Space & radius" },
@@ -23,6 +24,7 @@ export const SECTIONS: NavGroup[] = [
   {
     group: "Components",
     items: [
+      { id: "icons", label: "Icons" },
       { id: "button", label: "Button" },
       { id: "inputs", label: "Inputs" },
       { id: "selection", label: "Selection" },

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Loader2 } from "lucide-react";
+import { ProgressActivity } from "./icons";
 import { cn } from "@/lib/cn";
 
 const button = cva(
@@ -58,7 +58,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         {...props}
       >
-        {loading && <Loader2 className="animate-spin" aria-hidden />}
+        {loading && <ProgressActivity className="animate-spin" aria-hidden />}
         {children}
       </button>
     );
