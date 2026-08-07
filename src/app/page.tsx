@@ -8,9 +8,10 @@ import {
   Avatar,
   Badge,
   Button,
+  buttonVariants,
+  CraigMark,
   EmptyState,
   List,
-  ListIcon,
   ListItem,
   Progress,
   PromptBar,
@@ -19,9 +20,10 @@ import {
   setupWarning,
   type AppNotification,
 } from "@/components/ui";
-import { PersonAdd, Warning } from "@/components/ui/icons";
+import { PersonAdd } from "@/components/ui/icons";
 import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { WORKFLOW, WORKFLOWS, stepCount } from "@/lib/demo-workflow";
+import { ACTIVITY, ACTIVITY_VERB, outstanding } from "@/lib/craig-activity";
 import { AddSeat, SeatState } from "@/components/add-seat";
 import { DraftSession } from "@/components/draft-session";
 import { type Onboarding } from "@/lib/onboarding";
@@ -106,31 +108,22 @@ function Home({ fresh }: { fresh: boolean }) {
         <DraftSession onStart={() => setDrafting(true)} />
       ) : (
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 py-10">
-          {/* The ask stays prominent rather than being demoted to a corner.
-              It's the thing that's useful on the days when there's nothing to
-              report, which for a three-person company is most days. */}
+          {/* Craig speaks first. A dashboard renders state and waits; an
+              agent tells you what it did, what it's stuck on, and what it
+              needs from you. The counters still exist — in the panel, where a
+              number belongs. */}
+          <CraigBrief items={todo} fresh={fresh} />
+
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-2xl font-semibold tracking-[-0.02em]">
-                {fresh ? `${COMPANY.name} is set up` : COMPANY.name}
-              </h1>
-              {/* The third step of setup, finished on the screen it leads to
-                  rather than announced on the one before it. */}
-              {fresh && (
-                <p className="text-md text-text-muted">
-                  Your workflow is written. Close the gaps below and you can put
-                  somebody through it.
-                </p>
-              )}
-            </div>
+            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+              Ask me anything
+            </p>
             <PromptBar
               placeholder="Ask Craig anything — a policy, a step, who's waiting on what…"
               onSubmit={() => {}}
               footnote="Craig knows your workflows, your people and whatever you've uploaded."
             />
           </div>
-
-          <NeedsYou items={todo} />
 
           <Onboardings seats={seats} onAdd={() => setAdding(true)} />
         </div>
@@ -152,6 +145,8 @@ function Home({ fresh }: { fresh: boolean }) {
 interface OpenItem {
   id: string;
   title: string;
+  /** The same thing phrased as Craig asking, rather than as a chore. */
+  ask?: string;
   detail: string;
   href: string;
   urgent?: boolean;
@@ -162,6 +157,18 @@ interface OpenItem {
  * page it points at reads, so Home can't claim three unconfigured steps while
  * the builder shows two.
  */
+/* Craig asking, in his own words. "Configure Slack" is a task assigned to
+   somebody; "which Slack channels does a new engineer need?" is a question
+   only Ada can answer, which is the actual situation. */
+function askFor(step: string, missing: string | null) {
+  const m = (missing ?? "").toLowerCase();
+  if (m.includes("channel"))
+    return "Which Slack channels does a new engineer actually need?";
+  if (m.includes("check"))
+    return "Which right-to-work check applies to somebody employed in Germany?";
+  return `What should I use for “${step}”?`;
+}
+
 function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
   const items: OpenItem[] = [];
 
@@ -176,7 +183,8 @@ function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
       items.push({
         id: `${w.id}-${b.id}`,
         title: `Configure “${b.title}” in ${w.name}`,
-        detail: setupWarning(b) ?? "Something is missing",
+        ask: askFor(b.title, setupWarning(b)),
+        detail: `${w.name} · ${setupWarning(b) ?? "something is missing"}`,
         href: `/builder/${w.id}?step=${b.id}`,
         urgent: true,
       });
@@ -200,40 +208,6 @@ function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
   }
 
   return items;
-}
-
-function NeedsYou({ items }: { items: OpenItem[] }) {
-  if (items.length === 0) {
-    return (
-      <div className="flex flex-col gap-2">
-        <SectionHead title="Needs you" />
-        <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-base text-text-subtle">
-          Nothing. Genuinely — everything that could be waiting on you isn&apos;t.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <SectionHead title="Needs you" count={items.length} />
-      <List>
-        {items.map((i) => (
-          <ListItem
-            key={i.id}
-            href={i.href}
-            leading={
-              <ListIcon tone={i.urgent ? "accent" : "default"}>
-                <Warning />
-              </ListIcon>
-            }
-            title={i.title}
-            description={i.detail}
-          />
-        ))}
-      </List>
-    </div>
-  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -442,5 +416,115 @@ function HomeNav({
           : `${WORKFLOW.name} is still a draft, so nothing is running against anyone yet.`}
       </p>
     </AdminNav>
+  );
+}
+
+/**
+ * Craig's report, and the only thing at the top of Home.
+ *
+ * This is the screen that most decided whether Craig read as an agent or as a
+ * tracker, and it used to be counters and a list of chores. A dashboard puts
+ * state on screen and waits for you to interpret it; an agent tells you what
+ * it did, what it's waiting on, and what it needs — and only the last of those
+ * is your problem.
+ *
+ * Three parts, in the order Ada cares about them: what he's already handled,
+ * what he's stuck on and chasing, and what only she can answer.
+ */
+function CraigBrief({ items, fresh }: { items: OpenItem[]; fresh: boolean }) {
+  const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
+  const asks = items.filter((i) => !dismissed.has(i.id));
+  const waiting = outstanding;
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
+      <div className="flex items-start gap-3">
+        <CraigMark className="mt-0.5 size-6 shrink-0 text-accent" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="text-md font-semibold tracking-[-0.01em]">
+            {fresh
+              ? `Right — ${COMPANY.name} is set up.`
+              : `Morning. Here's where ${NEW_HIRE.name.split(" ")[0]} is up to.`}
+          </p>
+          <p className="text-sm leading-relaxed text-text-muted">
+            {fresh ? (
+              <>
+                I&apos;ve written your first workflow. There{" "}
+                {asks.length === 1 ? "is" : "are"} {asks.length} thing
+                {asks.length === 1 ? "" : "s"} only you can answer, and then you
+                can put somebody through it.
+              </>
+            ) : (
+              <>
+                I&apos;ve handled what I can. {waiting.length}{" "}
+                {waiting.length === 1 ? "thing is" : "things are"} with someone
+                else and I&apos;m chasing {waiting.length === 1 ? "it" : "them"}
+                . {asks.length === 0 ? "Nothing needs you." : ""}
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* What he did on his own. Small, because it's reassurance rather than
+          work — but present, because it's the proof he does anything. */}
+      {!fresh && (
+        <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+          {ACTIVITY.slice(0, 3).map((a) => (
+            <div key={a.id} className="flex items-baseline gap-2 text-xs">
+              <span className="shrink-0 text-text-subtle">
+                {ACTIVITY_VERB[a.kind]}
+              </span>
+              <span className="min-w-0 flex-1 text-text-muted">
+                {a.what.replace(/^\w+ /, "")}
+              </span>
+              <span className="shrink-0 text-2xs text-text-subtle">
+                {a.when}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {asks.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            I need you for {asks.length === 1 ? "one thing" : `${asks.length} things`}
+          </p>
+
+          {/* One row per question, phrased as him asking rather than as a
+              chore assigned to her. Dismissing is allowed — an agent that
+              can't be told "not now" is a nag. */}
+          {asks.map((i) => (
+            <div
+              key={i.id}
+              className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2.5"
+            >
+              <span className="min-w-0 flex-1 text-base">
+                {i.ask ?? i.title}
+                <span className="block text-xs text-text-subtle">
+                  {i.detail}
+                </span>
+              </span>
+              <Link
+                href={i.href}
+                className={buttonVariants({ size: "sm", variant: "secondary" })}
+              >
+                Answer
+              </Link>
+              <button
+                type="button"
+                onClick={() =>
+                  setDismissed((prev) => new Set(prev).add(i.id))
+                }
+                className="rounded-md px-2 py-1 text-xs text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                Not now
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

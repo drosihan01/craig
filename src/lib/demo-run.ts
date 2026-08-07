@@ -18,12 +18,53 @@ import { NEW_HIRE, PEOPLE } from "@/lib/demo";
  * Fixture data. Goes when WorkflowInstance is a real type.
  */
 
+/**
+ * How much Craig actually knows about a completed step.
+ *
+ * The difference between a checklist and an agent is whether "done" means
+ * somebody said so or somebody checked. Showing which is which is more honest
+ * than a column of identical ticks, and it's the thing that tells Ada where
+ * her risk actually is.
+ */
+export type Certainty =
+  /** Craig checked the service and can see it. */
+  | "verified"
+  /** A person said so. Craig has no way to look. */
+  | "confirmed"
+  /** Nobody has said anything either way. */
+  | "assumed";
+
+export const CERTAINTY: Record<
+  Certainty,
+  { label: string; note: string; tone: "success" | "neutral" | "warning" }
+> = {
+  verified: {
+    label: "Verified",
+    note: "I checked this one myself",
+    tone: "success",
+  },
+  confirmed: {
+    label: "Confirmed",
+    note: "Somebody told me. I can't check it",
+    tone: "neutral",
+  },
+  assumed: {
+    label: "Not checked",
+    note: "Nobody has said either way",
+    tone: "warning",
+  },
+};
+
 export interface RunStep extends WorkflowStep {
   /** Who has to do it. The new starter's own steps say so. */
   owner: string;
   mine: boolean;
   /** Shown when it isn't theirs and isn't done. */
   waitingOn?: string;
+  /** How Craig knows, for steps that are done. */
+  certainty?: Certainty;
+  /** What Craig did about this step, unprompted. */
+  craigNote?: string;
 }
 
 export const RUN = {
@@ -42,6 +83,7 @@ const me = "You";
 export const RUN_STEPS: RunStep[] = [
   {
     id: "r1",
+    certainty: "confirmed",
     title: "Sign your contract",
     description:
       "Employment agreement, IP assignment and an NDA. Ada has already countersigned — signing it is also what got you this page.",
@@ -51,6 +93,7 @@ export const RUN_STEPS: RunStep[] = [
   },
   {
     id: "r2",
+    certainty: "confirmed",
     title: "Personal and payroll details",
     description:
       "Legal name, address, bank and tax details, emergency contact. Goes straight to payroll — nobody at Katalis reads it.",
@@ -60,6 +103,7 @@ export const RUN_STEPS: RunStep[] = [
   },
   {
     id: "r3",
+    certainty: "confirmed",
     title: "Right to work",
     description:
       "German residence and work permit. Ada checks it, but you upload it.",
@@ -69,6 +113,7 @@ export const RUN_STEPS: RunStep[] = [
   },
   {
     id: "r4",
+    certainty: "assumed",
     title: "Collect your laptop",
     description:
       "MacBook Pro 14, in the office. Tick it when you have it — nobody else needs to.",
@@ -78,6 +123,8 @@ export const RUN_STEPS: RunStep[] = [
   },
   {
     id: "r5",
+    certainty: "verified",
+    craigNote: "I can see the account and all three groups.",
     title: "Google Workspace",
     description:
       "nils@katalis.ai, plus the everyone@ and engineering@ groups. Everything below is addressed to it, so this one comes first.",
@@ -87,6 +134,8 @@ export const RUN_STEPS: RunStep[] = [
   },
   {
     id: "r6",
+    certainty: "verified",
+    craigNote: "Passkey is on. I checked.",
     title: "MFA on Google Workspace",
     description:
       "A passkey on nils@katalis.ai. Two minutes, and nothing below unlocks until it's done.",
@@ -96,6 +145,7 @@ export const RUN_STEPS: RunStep[] = [
   },
   {
     id: "r7",
+    craigNote: "I've asked Ada twice. Nothing yet — I'll keep going.",
     title: "Slack",
     description:
       "Your invite is waiting. Nobody has decided which channels you should be in yet — Ada is on that.",
@@ -106,6 +156,8 @@ export const RUN_STEPS: RunStep[] = [
   },
   {
     id: "r8",
+    certainty: "verified",
+    craigNote: "You accepted the invitation on Tuesday.",
     title: "GitHub",
     description: "Write access on the engineering and infra teams.",
     status: "complete",
