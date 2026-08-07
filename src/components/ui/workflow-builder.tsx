@@ -32,6 +32,17 @@ import { cn } from "@/lib/cn";
  * happens *between* blocks via the connector rather than from a palette.
  */
 
+/* The thread runs down the block icons, not down the middle of the column.
+   Measured from the card's border box: 1px border + 16px padding (px-4) +
+   20px (half of the size-10 icon) = 37. Inside a card the line is positioned
+   against the *padding* box, which excludes that border — so it sits at 36.
+   Miss this and the dashed and solid segments render a pixel apart. */
+const THREAD_X = 37;
+const THREAD_X_IN_CARD = THREAD_X - 1;
+/* Where the dashed run starts: py-3.5 (14) + the icon (40), so it leaves the
+   icon block's bottom edge rather than floating below it. */
+const THREAD_TOP_IN_CARD = 54;
+
 /* -------------------------------------------------------------------------- */
 /*  Block types                                                               */
 /* -------------------------------------------------------------------------- */
@@ -186,33 +197,41 @@ function Connector({
   last?: boolean;
 }) {
   return (
-    <div className="group/conn relative flex h-9 items-center justify-center">
+    <div className="group/conn relative h-14">
+      {/* Solid across the gap; dashed inside the cards above and below. Same
+          thread, two treatments — see THREAD_X for why the offset is 33 here
+          and 32 inside a card. */}
       <span
         aria-hidden
-        className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border-strong"
+        className="absolute inset-y-0 w-px bg-border-strong"
+        style={{ left: THREAD_X }}
       />
 
       {onInsert && (
+        <span
+          className="absolute top-1/2 z-10 -translate-y-1/2"
+          style={{ left: THREAD_X - 14 }}
+        >
         <DropdownMenu
           label={last ? "Add a step" : "Insert a step here"}
           align="start"
           width="w-64"
-          className={cn(
-            "relative z-10 transition-opacity duration-150",
-            // Always visible at the end of the chain; between blocks it only
-            // appears on hover or focus, so the column stays quiet.
-            last
-              ? "opacity-100"
-              : "opacity-0 group-hover/conn:opacity-100 focus-within:opacity-100",
-          )}
           trigger={
+            /* Always visible — a hover-only affordance hides the single most
+               important action in the builder. It stays small and quiet at
+               rest and grows a label on hover. */
             <span
               className={cn(
-                "flex size-6 items-center justify-center rounded-full border border-border bg-surface text-text-muted shadow-e1",
-                "transition-colors hover:border-accent hover:bg-accent hover:text-accent-fg",
+                "flex h-7 items-center gap-1 rounded-full border border-dashed border-border-strong bg-surface px-1.5 text-2xs font-medium text-text-subtle shadow-e1",
+                "transition-[background-color,border-color,color,padding] duration-150 ease-out-quart",
+                "hover:border-solid hover:border-accent hover:bg-accent hover:pl-2 hover:pr-2.5 hover:text-accent-fg",
+                "group-focus-within/conn:border-solid group-focus-within/conn:border-accent",
               )}
             >
-              <Add className="size-3.5" />
+              <Add className="size-4 shrink-0" />
+              <span className="hidden whitespace-nowrap group-hover/conn:inline">
+                {last ? "Add step" : "Insert step"}
+              </span>
             </span>
           }
           items={INSERTABLE.map((t) => ({
@@ -223,6 +242,7 @@ function Connector({
           }))}
           onSelect={(kind) => onInsert(kind as BlockKind, index)}
         />
+        </span>
       )}
     </div>
   );
@@ -272,23 +292,31 @@ function BlockCard({
         }
       }}
       className={cn(
-        "group/card relative flex cursor-pointer items-start gap-3 rounded-xl border bg-surface px-3.5 py-3 text-left shadow-e1",
+        "group/card relative flex cursor-pointer items-start gap-3.5 rounded-xl border bg-surface px-4 py-3.5 text-left shadow-e1",
         "transition-[border-color,box-shadow] duration-150 ease-out-quart",
         selected
           ? "border-accent ring-[3px] ring-accent-ring/25"
           : "border-border hover:border-border-strong hover:shadow-e2",
       )}
     >
+      {/* Dashed from just under the icon to the card's bottom edge, where the
+          solid gap segment picks it up. Absolute rather than a flex child so
+          it reaches the edge itself, not just where the content stops. */}
+      <span
+        aria-hidden
+        className="absolute bottom-0 w-px border-l border-dashed border-border-strong"
+        style={{ left: THREAD_X_IN_CARD, top: THREAD_TOP_IN_CARD }}
+      />
       <span
         aria-hidden
         className={cn(
-          "flex size-9 shrink-0 items-center justify-center rounded-lg",
+          "flex size-10 shrink-0 items-center justify-center rounded-lg",
           isTrigger
             ? "bg-accent text-accent-fg"
             : "bg-accent-subtle text-accent-subtle-fg",
         )}
       >
-        <Icon className="size-4.5" />
+        <Icon className="size-5" />
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">

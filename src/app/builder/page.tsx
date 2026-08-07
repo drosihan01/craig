@@ -12,6 +12,8 @@ import {
   Separator,
   Textarea,
   WorkflowBuilder,
+  WorkflowCanvas,
+  CanvasPanel,
   type BlockKind,
   type WorkflowBlock,
 } from "@/components/ui";
@@ -201,20 +203,38 @@ export default function BuilderPage() {
             <Badge tone="warning">Draft</Badge>
           </div>
           <p className="max-w-xl text-md text-text-muted">
-            One column, top to bottom, in the order it runs. Hover a connector
-            to insert a step; select a block to configure it in the panel.
+            One column, top to bottom, in the order it runs. Drag the canvas to
+            pan, ⌘-scroll to zoom, and use the connector between blocks to
+            insert a step.
           </p>
         </header>
 
-        <WorkflowBuilder
-          blocks={blocks}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onInsert={insert}
-          onRemove={remove}
-          onDuplicate={duplicate}
-          onMove={move}
-        />
+        <WorkflowCanvas className="h-[calc(100vh-15rem)] min-h-[32rem]">
+          <CanvasPanel side="top-left">
+            <div className="flex items-center gap-1 px-1">
+              <Badge tone="neutral" size="sm">
+                {steps} steps
+              </Badge>
+              {unconfigured > 0 && (
+                <Badge tone="warning" size="sm">
+                  {unconfigured} unconfigured
+                </Badge>
+              )}
+            </div>
+          </CanvasPanel>
+
+          <div className="px-10 py-12">
+            <WorkflowBuilder
+              blocks={blocks}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onInsert={insert}
+              onRemove={remove}
+              onDuplicate={duplicate}
+              onMove={move}
+            />
+          </div>
+        </WorkflowCanvas>
       </div>
     </AppShell>
   );

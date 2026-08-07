@@ -81,6 +81,7 @@ export {
   type BlockTypeDef,
   type WorkflowBlock,
 } from "./workflow-builder";
+export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";
 export { ThemeToggle } from "./theme-toggle";
 export * as Icons from "./icons";
 export { type IconProps } from "./icons";
