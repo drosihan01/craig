@@ -25,6 +25,12 @@ export interface PromptBarProps {
   onAttach?: (files: File[]) => void;
   /** Passed straight to the file input. */
   accept?: string;
+  /** Shows a numbered chip in the composer, continuing a list of quick replies
+      above it — so "type your own" reads as the last option rather than a
+      separate mechanism. */
+  numberHint?: number;
+  /** Lets a parent focus the composer, e.g. when its number is pressed. */
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
   /** Larger padding and radius for standalone page-level use. */
   size?: "sm" | "lg";
   /** Line under the bar — disclaimer, hint, character count. */
@@ -41,6 +47,8 @@ export function PromptBar({
   busy,
   onStop,
   dictation = true,
+  numberHint,
+  inputRef,
   onAttach,
   accept = ".pdf,.doc,.docx,.md,.txt,.rtf",
   size = "lg",
@@ -64,6 +72,11 @@ export function PromptBar({
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, size === "lg" ? 220 : 160)}px`;
   }, [value, size]);
+
+  // Hand the node up so a parent can focus it.
+  React.useEffect(() => {
+    if (inputRef) inputRef.current = ref.current;
+  }, [inputRef]);
 
   function submit() {
     const text = value.trim();
@@ -96,29 +109,42 @@ export function PromptBar({
           lg ? "rounded-2xl" : "rounded-xl",
         )}
       >
-        <textarea
-          ref={ref}
-          // Two lines at page level — a single-line box reads as a search
-          // field, and this is asking for a paragraph.
-          rows={lg ? 2 : 1}
-          value={value}
-          autoFocus={autoFocus}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          placeholder={placeholder}
-          aria-label="Message"
+        <div
           className={cn(
-            "scrollbar-thin w-full resize-none bg-transparent text-text outline-none placeholder:text-text-subtle",
-            lg
-              ? "px-4 pt-3.5 text-md leading-relaxed"
-              : "px-3.5 pt-3 text-base leading-relaxed",
+            "flex items-start gap-2.5",
+            lg ? "px-4 pt-3.5" : "px-3.5 pt-3",
           )}
-        />
+        >
+          {numberHint !== undefined && (
+            <span
+              aria-hidden
+              className="mt-px flex size-5 shrink-0 items-center justify-center rounded bg-surface-sunken text-2xs font-semibold tabular-nums text-text-subtle"
+            >
+              {numberHint}
+            </span>
+          )}
+          <textarea
+            ref={ref}
+            // Two lines at page level — a single-line box reads as a search
+            // field, and this is asking for a paragraph.
+            rows={lg ? 2 : 1}
+            value={value}
+            autoFocus={autoFocus}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            placeholder={placeholder}
+            aria-label="Message"
+            className={cn(
+              "scrollbar-thin w-full flex-1 resize-none bg-transparent text-text outline-none placeholder:text-text-subtle",
+              lg ? "text-md leading-relaxed" : "text-base leading-relaxed",
+            )}
+          />
+        </div>
 
         {files.length > 0 && (
           <ul

@@ -92,6 +92,7 @@ export default function AdminHomePage() {
   const [turnIndex, setTurnIndex] = React.useState(0);
   const [offerDraft, setOfferDraft] = React.useState(false);
   const [replies, setReplies] = React.useState<string[]>([]);
+  const composerRef = React.useRef<HTMLTextAreaElement | null>(null);
   const timers = React.useRef<number[]>([]);
 
   const clearTimers = React.useCallback(() => {
@@ -213,11 +214,14 @@ export default function AdminHomePage() {
                 <ReplyOptions
                   replies={replies}
                   onPick={(r) => send(r, true)}
+                  onCompose={() => composerRef.current?.focus()}
                 />
               )}
 
               <PromptBar
                 autoFocus
+                inputRef={composerRef}
+                numberHint={replies.length > 0 ? replies.length + 1 : undefined}
                 placeholder="Ask a follow-up…"
                 onSubmit={send}
                 onStop={stop}
@@ -312,9 +316,12 @@ export default function AdminHomePage() {
 function ReplyOptions({
   replies,
   onPick,
+  onCompose,
 }: {
   replies: string[];
   onPick: (text: string) => void;
+  /** The last option is "write your own" — focuses the composer. */
+  onCompose: () => void;
 }) {
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -327,11 +334,14 @@ function ReplyOptions({
       if (n >= 1 && n <= replies.length) {
         e.preventDefault();
         onPick(replies[n - 1]);
+      } else if (n === replies.length + 1) {
+        e.preventDefault();
+        onCompose();
       }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [replies, onPick]);
+  }, [replies, onPick, onCompose]);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -350,9 +360,6 @@ function ReplyOptions({
           </span>
         </button>
       ))}
-      <p className="px-1 text-2xs text-text-subtle">
-        Press 1–{replies.length}, or just type your own below.
-      </p>
     </div>
   );
 }

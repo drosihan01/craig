@@ -12,6 +12,11 @@
  * all is. Heads-down building, not managing HR, and not certain of her own
  * headcount.
  *
+ * Her *predicted* replies are the exception — those are written for her, not
+ * by her, so they're in proper sentences. Someone picking a suggested answer
+ * is putting their name to it; it should read like something they'd be happy
+ * to have said.
+ *
  * Craig: a friendly neighbour who happens to be good at this, and pleased to
  * be helping. Warm, a bit enthusiastic, plain sentences, contractions, says
  * "honestly" and "ah". He notices things and mentions them; he doesn't analyse
@@ -63,9 +68,9 @@ export const SESSION: SessionTurn[] = [
     question:
       "Two quick ones and I'll have plenty. Is Jason still the only one who can hand out GitHub and AWS? And what actually happens if someone pushes to prod in their first week?",
     replies: [
-      "yeah jason owns all of it — github, aws, the provider keys. and prod, realistically they'd break routing for someone",
-      "all jason. and honestly prod's the scary one, it'd be pretty easy to knock routing over without realising",
-      "jason has every key. prod we've broken ourselves before, it's recoverable but not something you want on day 3",
+      "Jason owns all of it — GitHub, AWS, the provider keys. And realistically, they could take routing down for a customer.",
+      "All Jason. Prod's the real risk — it would be easy to knock routing over without realising.",
+      "Jason holds every key. We've broken prod ourselves before; it's recoverable, but not something you want happening on day three.",
     ],
   },
   {
@@ -79,9 +84,9 @@ export const SESSION: SessionTurn[] = [
     question:
       "One more and then I'll put something together — who's the first person Nils talks to who isn't you or Jason?",
     replies: [
-      "...nobody lol. matty i guess but he's part time and remote",
-      "honestly no one. matty's around 2 days a week but they'd barely overlap",
-      "there isn't one. that's bad isn't it",
+      "Nobody, realistically. Matty's part-time and remote — they'd barely overlap.",
+      "There isn't one. Matty's around two days a week, and that's it.",
+      "No one. Which is a problem, isn't it.",
     ],
   },
   {

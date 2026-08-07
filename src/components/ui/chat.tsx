@@ -231,9 +231,14 @@ function Message({ message }: { message: ChatMessage }) {
 
       {/* The question sits apart from the prose. Buried at the end of four
           paragraphs it gets skimmed past, and then the reply options below
-          look like they belong to nothing. */}
+          look like they belong to nothing.
+
+          Dotted outline, no fill — it's an aside asking something, not a card
+          announcing something, and dotted is already the system's language for
+          "this line is provisional". A filled block read as heavier than the
+          answer above it. */}
       {message.question && !message.streaming && (
-        <p className="mt-1 rounded-lg border-l-2 border-accent bg-accent-subtle/40 px-3 py-2 text-base font-medium leading-relaxed text-text">
+        <p className="mt-1.5 rounded-lg border border-dotted border-accent px-3.5 py-2.5 text-base leading-relaxed text-text">
           {message.question}
         </p>
       )}
