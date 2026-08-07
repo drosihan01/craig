@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 /**
  * Which model answers, and how hard it thinks.
  *
- * Craigson Lambda is the in-house one and the *intended* default — it's the
+ * Craigopilot is the in-house one and the *intended* default — it's the
  * only model that can see company data, so anything touching a real new hire's
  * record has to run on it. It isn't trained yet, so it's listed and disabled
  * rather than hidden: hiding it would suggest the in-house option was never
@@ -31,8 +31,8 @@ export interface ChatModel {
 
 export const CHAT_MODELS: ChatModel[] = [
   {
-    id: "craigson-lambda-2",
-    name: "Craigson Lambda 2.0",
+    id: "craigopilot",
+    name: "Craigopilot",
     vendor: "In-house",
     description: "Knows your workflows and policies. Data stays internal.",
     internal: true,
@@ -53,7 +53,7 @@ export const CHAT_MODELS: ChatModel[] = [
   },
 ];
 
-/* The first *available* model, not simply the first. Craigson is the intended
+/* The first *available* model, not simply the first. Craigopilot is the intended
    default and the only one that can see company data, but it isn't running
    yet — defaulting to it would mean every request silently failed. */
 export const DEFAULT_MODEL =

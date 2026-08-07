@@ -91,10 +91,9 @@ Notable choices:
   edge it moves. One vertical rule runs from the top of the header to the
   bottom of the page, so the brand cell and the nav column must stay the same
   width.
-- **The chat model choice is a data boundary, not a preference.** Craigson
-  Lambda 2.0 is in-house and the default and is the only model that sees
-  company data; Claude and GPT are hosted, so anything sent to them leaves the
-  tenancy. The composer states which regime you're in. **This has to be
+- **The chat model choice is a data boundary, not a preference.** Craigopilot
+  is in-house and the default and is the only model that sees company data;
+  Claude and GPT are hosted, so anything sent to them leaves the tenancy. The composer states which regime you're in. **This has to be
   enforced in the API layer — the label is not the control.**
 - **No date library.** Onboarding only needs "pick a day", so `Calendar` uses
   `Date` + `Intl`. All maths is local-time: a UTC-based `Date` lands on the

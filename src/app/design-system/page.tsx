@@ -1246,7 +1246,7 @@ export default function DesignSystemPage() {
 
         <Callout tone="warning" icon={<Warning />} title="The model choice is a data boundary">
           <p>
-            Craigson Lambda 2.0 is in-house and the default — it&apos;s the only
+            Craigopilot is in-house and the default — it&apos;s the only
             one that sees company data. Claude and GPT are hosted, so anything
             sent to them leaves the tenancy. The composer says which regime
             you&apos;re in rather than burying it in settings, and that rule

@@ -143,7 +143,7 @@ const TODOS: TodoGroup[] = [
       {
         id: "b3",
         title: "Enforce the model data boundary in the API layer",
-        note: "internal: true on Craigson Lambda is a label. Nothing currently stops a request routed to a hosted model from carrying tenant data.",
+        note: "internal: true on Craigopilot is a label. Nothing currently stops a request routed to a hosted model from carrying tenant data.",
         where: "src/components/ui/model-picker.tsx",
         tag: { label: "Security", tone: "danger" },
       },
@@ -665,7 +665,7 @@ function BackendTab() {
   return (
     <div className="flex flex-col gap-5">
       <Callout tone="warning" title="The model choice is a data boundary">
-        Craigson Lambda 2.0 is in-house and the only model that sees company
+        Craigopilot is in-house and the only model that sees company
         data. Claude and GPT are hosted, so anything sent to them leaves the
         tenancy. The composer says which regime you&apos;re in — that has to be
         enforced in the API layer, because a label is not a control.

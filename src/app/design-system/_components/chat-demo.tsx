@@ -17,7 +17,7 @@ import { AutoAwesome, Forum } from "@/components/ui/icons";
    real endpoint so the modal's streaming, stop and scroll behaviour can be
    exercised without a backend. */
 const REPLIES: Record<string, string> = {
-  "craigson-lambda-2":
+  craigopilot:
     "Six of nine steps are outstanding, and five of them are owned by Jason. The Slack channel list still has no owner at all — it's the only step nobody can action. The handbook step points at a doc last updated in Feb 2026, which two other steps also reference. Want me to flag both to Jason?",
   claude:
     "The critical path runs through Jason: keys, the who-owns-what walkthrough and the prod sign-off are all his, and the last one blocks day one. With three people that's a single point of failure rather than a queue — worth deciding now what happens if he's away that week.",

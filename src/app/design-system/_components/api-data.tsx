@@ -186,7 +186,7 @@ export const CHAT_PROPS: PropDoc[] = [
     name: "model / onModelChange",
     type: "ChatModel · (m) => void",
     description:
-      "Optional. Left uncontrolled it manages its own, defaulting to Craigson Lambda 2.0.",
+      "Optional. Left uncontrolled it manages its own, defaulting to Craigopilot.",
   },
   {
     name: "suggestions",
@@ -212,7 +212,7 @@ export const PROMPTBAR_PROPS: PropDoc[] = [
     name: "model / onModelChange",
     type: "ChatModel · (m) => void",
     description:
-      "Optional. Left uncontrolled it manages its own, defaulting to Craigson Lambda 2.0.",
+      "Optional. Left uncontrolled it manages its own, defaulting to Craigopilot.",
   },
   {
     name: "busy / onStop",
