@@ -16,6 +16,7 @@ import Link from "next/link";
 import { Campaign, Code, Groups, Schedule } from "@/components/ui/icons";
 import { ACCOUNT, NEW_HIRE } from "@/lib/demo";
 import { SESSION } from "@/lib/demo-session";
+import { WORKFLOW } from "@/lib/demo-workflow";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
 /**
@@ -390,7 +391,7 @@ function DraftHandoff() {
       </div>
 
       <Link
-        href="/builder"
+        href={`/builder/${WORKFLOW.id}`}
         className={buttonVariants({ size: "sm", className: "shrink-0" })}
       >
         Open the draft

@@ -1190,10 +1190,10 @@ export default function DesignSystemPage() {
         <Callout tone="info" icon={<Info />} title="The full builder space">
           <p>
             <Link
-              href="/builder"
+              href="/builder/engineer"
               className="font-medium underline underline-offset-4"
             >
-              Open /builder
+              Open the builder
             </Link>{" "}
             — the canvas inside the app shell, with the selected block&apos;s
             inspector in the right panel. Hover a connector to insert a step.
