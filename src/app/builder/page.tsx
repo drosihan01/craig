@@ -21,6 +21,7 @@ import {
   unconfiguredCount,
 } from "@/lib/demo-workflow";
 import { AdminNav, NavStat } from "@/components/app-nav";
+import { cn } from "@/lib/cn";
 
 /**
  * Pick a workflow, then build it.
@@ -87,21 +88,37 @@ export default function WorkflowsPage() {
                     {empty ? <Add /> : <Code />}
                   </ListIcon>
                 }
+                /* One badge in the title, not two. A second one wraps to its
+                   own line the moment the column narrows and then reads as a
+                   stray element floating above the description. The count is a
+                   count, so it goes in the meta slot on the right, which is
+                   shrink-0 and never wraps. */
                 title={
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className={empty ? "text-text-muted" : undefined}>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "truncate",
+                        empty && "text-text-muted",
+                      )}
+                    >
                       {w.name}
                     </span>
-                    <Badge tone={empty ? "neutral" : "warning"} size="sm">
+                    <Badge
+                      tone={empty ? "neutral" : "warning"}
+                      size="sm"
+                      className="shrink-0"
+                    >
                       {empty ? "Empty" : "Draft"}
                     </Badge>
-                    {gaps > 0 && (
-                      <Badge tone="warning" size="sm">
-                        <Warning />
-                        {gaps} unconfigured
-                      </Badge>
-                    )}
                   </span>
+                }
+                meta={
+                  gaps > 0 ? (
+                    <Badge tone="warning" size="sm">
+                      <Warning />
+                      {gaps} unconfigured
+                    </Badge>
+                  ) : undefined
                 }
                 description={
                   empty
