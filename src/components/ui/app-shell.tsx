@@ -140,6 +140,7 @@ export function AppShell({
   asideTitle = "Details",
   account,
   actions,
+  fill,
   notifications,
   onNotificationSelect,
   onMarkAllRead,
@@ -153,6 +154,11 @@ export function AppShell({
   actions?: React.ReactNode;
   /** Omit entirely to hide the bell — an empty array still shows it, correctly
       reading as "you have none" rather than "this app has no notifications". */
+  /** For pages that manage their own full-height layout — a chat with a pinned
+      composer, or a canvas. Drops the content column's bottom padding, which
+      would otherwise make the document taller than the viewport and let the
+      whole page scroll under a supposedly fixed element. */
+  fill?: boolean;
   notifications?: AppNotification[];
   onNotificationSelect?: (id: string) => void;
   onMarkAllRead?: () => void;
@@ -253,7 +259,14 @@ export function AppShell({
           </Panel>
         )}
 
-        <main className="min-w-0 flex-1 px-4 pb-24 lg:px-8">{children}</main>
+        <main
+          className={cn(
+            "min-w-0 flex-1 px-4 lg:px-8",
+            fill ? "pb-0" : "pb-24",
+          )}
+        >
+          {children}
+        </main>
 
         {aside && (
           <Panel

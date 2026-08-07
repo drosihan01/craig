@@ -95,33 +95,69 @@ export default function AdminHomePage() {
   }, []);
   React.useEffect(() => clearTimers, [clearTimers]);
 
+  /* The steps an answer is built from, mocked with timers. Sequenced rather
+     than shown all at once — the point of surfacing them is that you can watch
+     where the time goes, which a finished list doesn't tell you. */
+  const PLAN = [
+    { id: "read", label: "Reading what you sent" },
+    { id: "gaps", label: "Checking what isn't written down anywhere" },
+    { id: "draft", label: "Drafting a workflow shape" },
+  ];
+
   function send(text: string) {
     const replyId = crypto.randomUUID();
     setMessages((prev) => [
       ...prev,
       { id: crypto.randomUUID(), role: "user", content: text },
-      { id: replyId, role: "assistant", content: "", streaming: true },
+      {
+        id: replyId,
+        role: "assistant",
+        content: "",
+        streaming: true,
+        steps: [{ ...PLAN[0], state: "running" }],
+      },
     ]);
     setBusy(true);
 
+    const patch = (fn: (m: ChatMessage) => ChatMessage) =>
+      setMessages((prev) => prev.map((m) => (m.id === replyId ? fn(m) : m)));
+
+    // Walk the plan: finish the current step, start the next.
+    PLAN.forEach((step, i) => {
+      const t = window.setTimeout(
+        () => {
+          patch((m) => ({
+            ...m,
+            steps: [
+              ...PLAN.slice(0, i + 1).map((p) => ({
+                ...p,
+                state: "done" as const,
+              })),
+              ...(PLAN[i + 1]
+                ? [{ ...PLAN[i + 1], state: "running" as const }]
+                : []),
+            ],
+          }));
+        },
+        700 * (i + 1),
+      );
+      timers.current.push(t);
+    });
+
+    // Then the answer itself.
+    const startAt = 700 * PLAN.length + 200;
     const words = REPLY.split(" ");
     words.forEach((_, i) => {
       const t = window.setTimeout(
         () => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === replyId
-                ? {
-                    ...m,
-                    content: words.slice(0, i + 1).join(" "),
-                    streaming: i < words.length - 1,
-                  }
-                : m,
-            ),
-          );
+          patch((m) => ({
+            ...m,
+            content: words.slice(0, i + 1).join(" "),
+            streaming: i < words.length - 1,
+          }));
           if (i === words.length - 1) setBusy(false);
         },
-        220 + i * 26,
+        startAt + i * 26,
       );
       timers.current.push(t);
     });
@@ -143,6 +179,7 @@ export default function AdminHomePage() {
       nav={<HomeNav started={started} />}
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
+      fill={started}
     >
       {started ? (
         /* Pinned to the viewport so only the transcript scrolls. A composer

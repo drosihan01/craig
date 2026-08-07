@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { Dialog, DialogClose } from "./dialog";
-import { AutoAwesome, ContentCopy, Refresh } from "./icons";
+import { AutoAwesome, Check, ContentCopy, ProgressActivity, Refresh } from "./icons";
+import { CraigMark } from "./craig-mark";
 import { DEFAULT_MODEL, type ChatModel } from "./model-picker";
 import { PromptBar } from "./prompt-bar";
 import { cn } from "@/lib/cn";
@@ -19,6 +20,23 @@ export interface ChatMessage {
   streaming?: boolean;
   /** Which model produced it. Answers outlive the picker's current value. */
   model?: string;
+  /** What the agent did to produce this, shown above the answer. */
+  steps?: AgentStep[];
+}
+
+/**
+ * A thing the agent did on the way to an answer — reading an attachment,
+ * drafting, checking something.
+ *
+ * These are shown because an agent that goes quiet for ten seconds reads as
+ * broken, and because "which of my documents did it actually open" is a fair
+ * question to be able to answer after the fact. They stay visible once done
+ * rather than collapsing.
+ */
+export interface AgentStep {
+  id: string;
+  label: string;
+  state: "running" | "done";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -162,9 +180,21 @@ function Message({ message }: { message: ChatMessage }) {
   }
 
   // Assistant turns run full width with no bubble, so long answers read as
-  // prose rather than as a wall inside a box.
+  // prose rather than as a wall inside a box. The mark attributes it without
+  // an avatar-sized block of chrome per message.
   return (
     <div className="group/msg flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <CraigMark className="size-4 text-accent" />
+        <span className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Craig
+        </span>
+      </div>
+
+      {message.steps && message.steps.length > 0 && (
+        <AgentSteps steps={message.steps} />
+      )}
+
       <div className="text-base leading-relaxed text-text">
         {message.content}
         {message.streaming && (
@@ -191,6 +221,29 @@ function Message({ message }: { message: ChatMessage }) {
         </div>
       )}
     </div>
+  );
+}
+
+function AgentSteps({ steps }: { steps: AgentStep[] }) {
+  return (
+    <ul className="flex flex-col gap-1 py-0.5">
+      {steps.map((s) => (
+        <li key={s.id} className="flex items-center gap-1.5 text-sm">
+          {s.state === "running" ? (
+            <ProgressActivity className="size-3.5 shrink-0 animate-spin text-accent" />
+          ) : (
+            <Check className="size-3.5 shrink-0 text-success" />
+          )}
+          <span
+            className={
+              s.state === "running" ? "text-text-muted" : "text-text-subtle"
+            }
+          >
+            {s.label}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

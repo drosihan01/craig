@@ -270,6 +270,13 @@ export const APPSHELL_PROPS: PropDoc[] = [
     description: "Page title, in the centre header cell.",
   },
   {
+    name: "fill",
+    type: "boolean",
+    default: "false",
+    description:
+      "For pages that manage their own full-height layout. Drops the content column's bottom padding, which otherwise makes the document taller than the viewport and lets the page scroll under a pinned composer.",
+  },
+  {
     name: "actions",
     type: "ReactNode",
     description:

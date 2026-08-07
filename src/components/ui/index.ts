@@ -73,7 +73,12 @@ export {
   type Effort,
 } from "./model-picker";
 export { PromptBar, type PromptBarProps } from "./prompt-bar";
-export { ChatModal, ChatTranscript, type ChatMessage } from "./chat";
+export {
+  ChatModal,
+  ChatTranscript,
+  type ChatMessage,
+  type AgentStep,
+} from "./chat";
 export {
   WorkflowBuilder,
   BlockInspector,
