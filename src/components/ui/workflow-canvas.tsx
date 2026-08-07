@@ -17,8 +17,10 @@ import { cn } from "@/lib/cn";
  * interacting with the card.
  */
 
-const MIN_ZOOM = 0.4;
-const MAX_ZOOM = 1.6;
+const MIN_ZOOM = 0.6;
+const MAX_ZOOM = 1.4;
+/** How far past its own edges the content can be dragged before it stops. */
+const OVERSCROLL = 96;
 const ZOOM_STEP = 0.1;
 /** Dot spacing. Wide, so the grid reads as texture rather than as a ruler. */
 const GRID = 56;
@@ -37,6 +39,34 @@ export function WorkflowCanvas({
   const [pan, setPan] = React.useState({ x: 0, y: 0 });
   const [panning, setPanning] = React.useState(false);
   const viewportRef = React.useRef<HTMLDivElement>(null);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  /**
+   * Keeps the workflow findable. Without this the surface is infinite and it's
+   * possible to drag the content entirely off-screen with no way back except
+   * the reset button — which you have to know exists.
+   *
+   * The content can travel until its far edge reaches the opposite viewport
+   * edge, plus a little overscroll so it doesn't feel like it hits a wall.
+   */
+  const clampPan = React.useCallback(
+    (p: { x: number; y: number }, z: number) => {
+      const vp = viewportRef.current;
+      const ct = contentRef.current;
+      if (!vp || !ct) return p;
+
+      const axis = (v: number, viewport: number, content: number) => {
+        const span = Math.max(0, content * z - viewport);
+        return Math.min(OVERSCROLL, Math.max(-span - OVERSCROLL, v));
+      };
+
+      return {
+        x: axis(p.x, vp.clientWidth, ct.offsetWidth),
+        y: axis(p.y, vp.clientHeight, ct.offsetHeight),
+      };
+    },
+    [],
+  );
 
   const reset = React.useCallback(() => {
     setZoom(1);
@@ -60,14 +90,19 @@ export function WorkflowCanvas({
         const rect = el.getBoundingClientRect();
         const px = clientX - rect.left;
         const py = clientY - rect.top;
-        setPan((p) => ({
-          x: px - ((px - p.x) / prev) * z,
-          y: py - ((py - p.y) / prev) * z,
-        }));
+        setPan((p) =>
+          clampPan(
+            {
+              x: px - ((px - p.x) / prev) * z,
+              y: py - ((py - p.y) / prev) * z,
+            },
+            z,
+          ),
+        );
         return z;
       });
     },
-    [],
+    [clampPan],
   );
 
   React.useEffect(() => {
@@ -82,13 +117,13 @@ export function WorkflowCanvas({
         zoomAt(-e.deltaY * 0.01, e.clientX, e.clientY);
       } else {
         e.preventDefault();
-        setPan((p) => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
+        setPan((p) => clampPan({ x: p.x - e.deltaX, y: p.y - e.deltaY }, zoom));
       }
     }
 
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [zoomAt]);
+  }, [zoomAt, clampPan, zoom]);
 
   function onPointerDown(e: React.PointerEvent) {
     // Only the background pans — never a card or a control.
@@ -101,10 +136,15 @@ export function WorkflowCanvas({
     setPanning(true);
 
     function onMove(ev: PointerEvent) {
-      setPan({
-        x: origin.x + (ev.clientX - startX),
-        y: origin.y + (ev.clientY - startY),
-      });
+      setPan(
+        clampPan(
+          {
+            x: origin.x + (ev.clientX - startX),
+            y: origin.y + (ev.clientY - startY),
+          },
+          zoom,
+        ),
+      );
     }
     function onUp() {
       setPanning(false);
@@ -136,6 +176,7 @@ export function WorkflowCanvas({
       }}
     >
       <div
+        ref={contentRef}
         className="origin-top-left"
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
