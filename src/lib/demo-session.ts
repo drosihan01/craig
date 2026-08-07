@@ -99,24 +99,22 @@ export const SESSION: SessionTurn[] = [
 ];
 
 /**
- * Demo v2 — the same product, a solo founder.
+ * Demo v2 — the same company, but Ada is the only one in Craig.
  *
- * Ada is on her own here. No Jason, no Matty. That isn't a smaller version of
- * the same story, it's a different and harder one: with a cofounder, a step
- * nobody has written down is at least in *somebody's* head. On your own,
- * everything Craig finds is a thing that exists only in yours, and the hire is
- * the first person who has ever needed it out of there.
+ * Katalis is still three people. Jason and Matty exist, get talked about, and
+ * own real work — they just don't have accounts. That's the honest v1 scope:
+ * one admin, and everybody else is somebody she chases.
  *
- * It also removes a distraction. In v1 half the interesting tension is Jason
- * being a single point of failure, which is a good story and a different one
- * to the product's actual argument. Alone, there's nowhere for the argument to
- * hide.
+ * It's also the more interesting version. A step that belongs to Jason but is
+ * tracked against Ada is exactly the situation Craig is for — she's the one
+ * who'll be asked why Nils can't log in, whether or not she's the one who was
+ * supposed to fix it.
  *
  * Same voice rules as above.
  */
 export const SESSION_V2: SessionTurn[] = [
   {
-    ada: "ok so katalis — ai infra. model routing, fallback, cost and latency monitoring for teams running a few providers in prod. basically the boring plumbing so nobody has to hand-roll their own inference layer. it's just me right now. attached the handbook, fair warning i wrote it at 11pm before a fundraise call in feb and haven't opened it since. first hire starts in 2 weeks — nils, infra guy, coming from a much bigger place, like 400 people",
+    ada: "ok so katalis — ai infra. model routing, fallback, cost and latency monitoring for teams running a few providers in prod. basically the boring plumbing so nobody has to hand-roll their own inference layer. team is me, jason (cofounder, technical, owns basically all the infra) and matty who does frontend on contract, maybe 2 days a week. attached the handbook, fair warning i wrote it at 11pm before a fundraise call in feb and haven't opened it since. first hire starts in 2 weeks — nils, infra guy, coming from a much bigger place, like 400 people",
     attachment: "Katalis_Handbook_OLD.pdf",
     steps: [
       "Reading the handbook",
@@ -124,32 +122,31 @@ export const SESSION_V2: SessionTurn[] = [
       "Working out what's missing",
     ],
     craig:
-      "Right, got it. Read the handbook — it's four bullets long under “first week”, which honestly is four more than most people have.\n\nHere's the thing I'd flag, and it's not the handbook. You're on your own, so every single thing Nils needs to know is in your head and nowhere else. That's completely fine at one person. It stops being fine the day there are two, because he's coming from somewhere with four hundred people and a wiki — his instinct when he's stuck won't be to ask, it'll be to go and look. And there's nothing to look at.\n\nSo I'd rather write some of it down as we go than pretend the handbook covers it.",
-    question:
-      "What's the thing you'd be most annoyed to have to explain twice?",
+      "Right, got it. Read the handbook — it's four bullets long under “first week”, which honestly is four more than most people have.\n\nHere's what I'd flag, and it isn't the handbook. Almost everything Nils will need on day one runs through Jason: the keys, the accounts, and whatever he knows about the routing layer that nobody has written down. That's completely normal at three people. It stops being fine when the new person is coming from somewhere with four hundred people and a wiki — his instinct when he's stuck won't be to ask, it'll be to go and look. And there's nothing to look at.\n\nSo I'd rather get some of it out of Jason's head before day one than hope it comes up.",
+    question: "How much of the infra side is only in Jason's head?",
     replies: [
-      "How the routing and fallback layer actually works — it's all in my head.",
-      "Which parts are live and which are still stubbed. Nobody could guess it.",
+      "Most of it. The routing and fallback layer especially — it's never been written down.",
+      "All of the interesting parts. He'd have to draw it on a whiteboard.",
       "Honestly, all of it. That's the problem.",
     ],
   },
   {
-    ada: "the routing layer. what's actually live vs what's a stub, and why. it's the only genuinely weird part of the codebase and i'd have to draw it on a whiteboard, which i can't do because he's in berlin",
+    ada: "most of it. the routing layer especially — what's actually live vs what's a stub, and why. he'd have to draw it on a whiteboard, which he can't do because nils is in berlin",
     steps: ["Noting that", "Checking the time difference"],
     craig:
-      "Berlin — so you're nine hours apart. That's about a two-hour overlap on a good day, and you'll be at the end of yours when he's starting his.\n\nThat changes what I'd build. If it were the same timezone I'd just book you a call and be done. It isn't, so anything that only exists in your head has to get out of it before day one, or he'll spend his first week guessing and you'll spend yours answering the same question at 7pm.",
-    question: "Are you the only person who'd own any of this?",
+      "Berlin — so Nils is nine hours ahead of Jason. That's about a two-hour overlap on a good day, and Jason will be starting his morning as Nils is finishing.\n\n“Just ask Jason” is really a two-hour window, and someone who won't ask twice will have a guess instead. So anything that only exists in Jason's head has to come out of it before day one, or Nils spends week one guessing and Jason spends it answering the same question at 7am.",
+    question: "Is anyone else going to be in Craig with you?",
     replies: [
-      "Yes — there's nobody else to assign anything to.",
-      "Just me. That's the whole company at the moment.",
-      "Me, until Nils starts. Then hopefully some of it becomes his.",
+      "No — just me. Jason would never log into another tool.",
+      "Only me for now. I'll pass things on to Jason myself.",
+      "Just me. Matty's contract and Jason lives in his terminal.",
     ],
   },
   {
-    ada: "yep just me. everything's mine until he starts",
+    ada: "just me. jason would never log into another tool and matty's only here two days a week",
     steps: ["Putting a workflow together"],
     craig:
-      "Fine — that actually makes this simpler. One person to chase, and it's you.\n\nHere's what I'd put together. Everything before he starts is yours: contract, payroll, the laptop, and his accounts — one step each, because they're five different admin panels and they fail one at a time.\n\nThen day one is his. A short quiz instead of “read the handbook”, because reading a doc and having read a doc aren't the same thing. Whatever he gets wrong opens straight into a chat with me, so you're not the only place answers come from at 7pm.\n\nAnd then half an hour with you, first week. That's where the routing layer gets out of your head.\n\nA few bits I've left open rather than guessing: which right-to-work check applies in Germany, and which Slack channels he actually needs. I'd only be making those up.\n\nGive me a second and I'll write it.",
+      "Fair enough — plenty of people do it that way, and it's simpler. Everything lands on you, and you pass on what's Jason's. I'll keep track of which is which so you're not holding it in your head.\n\nHere's what I'd put together. Before he starts: contract, payroll, the laptop, and his accounts — one step each, because they're five different admin panels and they fail one at a time. Most of those are really Jason's; they'll show up as yours to chase.\n\nDay one is Nils's. A short quiz instead of “read the handbook”, because reading a doc and having read a doc aren't the same thing. Whatever he gets wrong opens straight into a chat with me, so Jason isn't the only place answers come from at 7am.\n\nThen half an hour with Jason, first week. That's where the routing layer gets out of his head.\n\nA few bits I've left open rather than guessing: which right-to-work check applies in Germany, and which Slack channels he actually needs. I'd only be making those up.\n\nGive me a second and I'll write it.",
     offersWorkflow: true,
   },
 ];

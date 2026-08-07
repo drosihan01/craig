@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AppShell,
   Avatar,
@@ -63,6 +64,25 @@ const NOTIFICATIONS: AppNotification[] = [
 ];
 
 export default function AdminHomePage() {
+  return (
+    /* useSearchParams needs a boundary; the fallback is the same page in its
+       established state, which is the correct thing to show if the param never
+       resolves. */
+    <React.Suspense fallback={<Home fresh={false} />}>
+      <HomeWithParams />
+    </React.Suspense>
+  );
+}
+
+function HomeWithParams() {
+  /* ?fresh=1 is how the setup flow arrives. An account that is ninety seconds
+     old shouldn't be shown a stale handbook, a hire who already has a seat, or
+     colleagues who haven't been invited — that's somebody else's Katalis. */
+  const fresh = useSearchParams().get("fresh") === "1";
+  return <Home fresh={fresh} />;
+}
+
+function Home({ fresh }: { fresh: boolean }) {
   const [seats, setSeats] = React.useState<Onboarding[]>([]);
   const [adding, setAdding] = React.useState(false);
   /* Local to this page: it only decides whether the hero collapses. */
@@ -73,17 +93,17 @@ export default function AdminHomePage() {
   const hasWorkflows = WORKFLOWS.some((w) => stepCount(w.blocks) > 0);
   const empty = !hasWorkflows && seats.length === 0;
 
-  const todo = openItems(seats);
+  const todo = openItems(seats, fresh);
 
   return (
     <AppShell
       title="Home"
-      nav={<HomeNav seats={seats} open={todo.length} />}
+      nav={<HomeNav seats={seats} open={todo.length} fresh={fresh} />}
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
       fill={empty && drafting}
       asideTitle="Katalis"
-      aside={<HomeAside />}
+      aside={<HomeAside fresh={fresh} />}
       actions={
         empty ? undefined : (
           <Button size="sm" onClick={() => setAdding(true)}>
@@ -101,9 +121,19 @@ export default function AdminHomePage() {
               It's the thing that's useful on the days when there's nothing to
               report, which for a three-person company is most days. */}
           <div className="flex flex-col gap-3">
-            <h1 className="text-2xl font-semibold tracking-[-0.02em]">
-              {COMPANY.name}
-            </h1>
+            <div className="flex flex-col gap-1">
+              <h1 className="text-2xl font-semibold tracking-[-0.02em]">
+                {fresh ? `${COMPANY.name} is set up` : COMPANY.name}
+              </h1>
+              {/* The third step of setup, finished on the screen it leads to
+                  rather than announced on the one before it. */}
+              {fresh && (
+                <p className="text-md text-text-muted">
+                  Your workflow is written. Close the gaps below and you can put
+                  somebody through it.
+                </p>
+              )}
+            </div>
             <PromptBar
               placeholder="Ask Craig anything — a policy, a step, who's waiting on what…"
               onSubmit={() => {}}
@@ -143,7 +173,7 @@ interface OpenItem {
  * page it points at reads, so Home can't claim three unconfigured steps while
  * the builder shows two.
  */
-function openItems(seats: Onboarding[]): OpenItem[] {
+function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
   const items: OpenItem[] = [];
 
   for (const w of WORKFLOWS) {
@@ -160,11 +190,12 @@ function openItems(seats: Onboarding[]): OpenItem[] {
   }
 
   /* Matched on his own seat, not on "any seat exists" — onboarding someone
-     else doesn't make Nils any less unstarted. */
+     else doesn't make Nils any less unstarted. Skipped entirely on a fresh
+     account: Craig has heard about Nils, he doesn't have a seat yet. */
   const nilsStarted = seats.some(
     (s) => s.email === NEW_HIRE.email || s.name === NEW_HIRE.name,
   );
-  if (!nilsStarted) {
+  if (!fresh && !nilsStarted) {
     items.push({
       id: "nils",
       title: `${NEW_HIRE.name} starts in ${NEW_HIRE.startsIn}`,
@@ -177,7 +208,9 @@ function openItems(seats: Onboarding[]): OpenItem[] {
   items.push({
     id: "handbook",
     title: "The handbook hasn't been reviewed since Feb 2026",
-    detail: "It's what the pop quiz would read from",
+    detail: fresh
+      ? "It's the only thing the quiz has to draw questions from"
+      : "It's what the pop quiz would read from",
     href: "/resources",
   });
 
@@ -308,7 +341,7 @@ function SectionHead({ title, count }: { title: string; count?: number }) {
  * answers are worth anything, and a panel that only showed what's on file
  * would flatter a company with three people and a stale handbook.
  */
-function HomeAside() {
+function HomeAside({ fresh }: { fresh: boolean }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
@@ -340,22 +373,27 @@ function HomeAside() {
               title={
                 <span className="font-normal text-text-muted">{p.name}</span>
               }
-              meta={p.role}
+              /* On a fresh account they're people Ada mentioned, not people
+                 with accounts. Saying so is the difference between a roster
+                 and a guess. */
+              meta={fresh && p.email !== ACCOUNT.email ? "Not invited" : p.role}
             />
           ))}
-          <ListItem
-            leading={<Avatar name={NEW_HIRE.name} size="xs" />}
-            title={
-              <span className="font-normal text-text-muted">
-                {NEW_HIRE.name}
-              </span>
-            }
-            trailing={
-              <Badge tone="warning" size="sm">
-                In {NEW_HIRE.startsIn}
-              </Badge>
-            }
-          />
+          {!fresh && (
+            <ListItem
+              leading={<Avatar name={NEW_HIRE.name} size="xs" />}
+              title={
+                <span className="font-normal text-text-muted">
+                  {NEW_HIRE.name}
+                </span>
+              }
+              trailing={
+                <Badge tone="warning" size="sm">
+                  In {NEW_HIRE.startsIn}
+                </Badge>
+              }
+            />
+          )}
         </List>
       </div>
 
@@ -372,8 +410,9 @@ function HomeAside() {
           </Badge>
         </div>
         <p className="text-xs leading-relaxed text-text-subtle">
-          Five other things the workflow needs aren&apos;t written down
-          anywhere.{" "}
+          {fresh
+            ? "It's the only thing you've given me. Five other things the workflow needs aren't written down anywhere. "
+            : "Five other things the workflow needs aren't written down anywhere. "}
           <Link
             href="/resources"
             className="text-accent underline-offset-4 hover:underline"
@@ -386,7 +425,15 @@ function HomeAside() {
   );
 }
 
-function HomeNav({ seats, open }: { seats: Onboarding[]; open: number }) {
+function HomeNav({
+  seats,
+  open,
+  fresh,
+}: {
+  seats: Onboarding[];
+  open: number;
+  fresh: boolean;
+}) {
   return (
     <AdminNav>
       <div className="flex flex-col gap-2 px-2">
@@ -405,8 +452,9 @@ function HomeNav({ seats, open }: { seats: Onboarding[]; open: number }) {
       <Separator />
 
       <p className="px-2 text-xs leading-relaxed text-text-subtle">
-        {WORKFLOW.name} is still a draft, so nothing is running against anyone
-        yet.
+        {fresh
+          ? `${WORKFLOW.name} is written but not finished. Close the gaps and you can put somebody through it.`
+          : `${WORKFLOW.name} is still a draft, so nothing is running against anyone yet.`}
       </p>
     </AdminNav>
   );

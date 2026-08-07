@@ -49,10 +49,18 @@ export interface Step {
 export function Stepper({
   steps,
   orientation = "vertical",
+  compact = false,
   className,
 }: {
   steps: Step[];
   orientation?: "vertical" | "horizontal";
+  /**
+   * Dots instead of numbered discs, one small line of copy, no descriptions.
+   * For a stepper that sits beside the work rather than being the work —
+   * where it's orientation, not instruction, and numbering three things you
+   * can already see in order is just more to read.
+   */
+  compact?: boolean;
   className?: string;
 }) {
   if (orientation === "horizontal") {
@@ -79,6 +87,48 @@ export function Stepper({
                 )}
               />
             )}
+          </li>
+        ))}
+      </ol>
+    );
+  }
+
+  if (compact) {
+    return (
+      <ol className={cn("flex flex-col", className)}>
+        {steps.map((step, i) => (
+          <li key={step.id} className="relative flex gap-2.5 pb-3.5 last:pb-0">
+            {i < steps.length - 1 && (
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute left-[3.5px] top-3.5 h-[calc(100%-0.625rem)] w-px",
+                  step.state === "complete" ? "bg-accent" : "bg-border",
+                )}
+              />
+            )}
+            <span
+              aria-hidden
+              className={cn(
+                "relative z-10 mt-1.5 size-2 shrink-0 rounded-full transition-colors",
+                step.state === "complete" && "bg-accent",
+                step.state === "current" &&
+                  "bg-accent ring-[3px] ring-accent-ring/25",
+                step.state === "upcoming" && "bg-border-strong",
+              )}
+            />
+            <span
+              className={cn(
+                "text-sm leading-snug",
+                step.state === "current"
+                  ? "font-medium text-text"
+                  : step.state === "complete"
+                    ? "text-text-muted"
+                    : "text-text-subtle",
+              )}
+            >
+              {step.title}
+            </span>
           </li>
         ))}
       </ol>

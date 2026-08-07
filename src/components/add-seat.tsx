@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Badge,
   Button,
+  buttonVariants,
   Dialog,
   Field,
   Input,
@@ -136,12 +138,15 @@ export function AddSeat({
           </Field>
         </div>
 
+        {/* Labelled with the company rather than "Workflow". Ada doesn't think
+            of it as picking a workflow, she thinks of it as putting somebody
+            through Katalis's onboarding. */}
         <Field
-          label="Workflow"
+          label={`${COMPANY.name} onboarding`}
           hint="One per kind of hire. This is what actually runs."
         >
           <SelectMenu
-            label="Workflow"
+            label={`${COMPANY.name} onboarding`}
             value={workflowId}
             onChange={setWorkflowId}
             options={WORKFLOWS.map((w) => ({
@@ -183,17 +188,25 @@ export function AddSeat({
         ) : (
           /* A workflow that can't run is a workflow that can't be assigned.
              Saying so here beats letting someone add a seat and then wondering
-             for a week why nothing happened. */
+             for a week why nothing happened — and the way out is a button, not
+             an instruction to go and find the builder. */
           <div className="flex items-start gap-2.5 rounded-lg bg-warning-subtle p-3 text-warning">
             <Warning className="mt-0.5 size-4 shrink-0" />
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <p className="text-base font-medium">
-                This one can&apos;t run yet
-              </p>
-              <p className="text-sm opacity-90">
-                {check.reason}. Finish it in the builder and nothing else here
-                changes.
-              </p>
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-base font-medium">
+                  This one can&apos;t run yet
+                </p>
+                <p className="text-sm opacity-90">
+                  {check.reason}. Nothing else here changes while you fix it.
+                </p>
+              </div>
+              <Link
+                href={`/builder/${workflowId}`}
+                className={buttonVariants({ size: "sm", variant: "secondary" })}
+              >
+                Finish the workflow
+              </Link>
             </div>
           </div>
         )}

@@ -10,7 +10,7 @@ import {
   type Step,
 } from "@/components/ui";
 import { Check } from "@/components/ui/icons";
-import { ACCOUNT, COMPANY } from "@/lib/demo";
+import { ACCOUNT } from "@/lib/demo";
 import { SESSION_V2 } from "@/lib/demo-session";
 import { DraftSession } from "@/components/draft-session";
 import { cn } from "@/lib/cn";
@@ -60,21 +60,14 @@ export default function WelcomePage() {
     {
       id: "1",
       title: "Tell Craig about the company",
-      description: "However scrappy it is",
       state: phase === "talk" ? "current" : "complete",
     },
     {
       id: "2",
       title: "Craig writes your workflow",
-      description: "You change anything you don't like",
       state: phase === "build" ? "current" : "upcoming",
     },
-    {
-      id: "3",
-      title: "Add your first person",
-      description: "Nothing runs until you do",
-      state: "upcoming",
-    },
+    { id: "3", title: "Add your first person", state: "upcoming" },
   ];
 
   return (
@@ -85,7 +78,7 @@ export default function WelcomePage() {
       nav={<SetupNav steps={steps} />}
     >
       {phase === "build" ? (
-        <BuildScreen onDone={() => router.push("/")} />
+        <BuildScreen onDone={() => router.push("/?fresh=1")} />
       ) : (
         <DraftSession
           session={SESSION_V2}
@@ -109,14 +102,7 @@ export default function WelcomePage() {
 function SetupNav({ steps }: { steps: Step[] }) {
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1 px-2">
-        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Setting up
-        </p>
-        <p className="text-sm font-medium">{COMPANY.name}</p>
-      </div>
-
-      <Stepper steps={steps} />
+      <Stepper steps={steps} compact />
 
       <Separator />
 
