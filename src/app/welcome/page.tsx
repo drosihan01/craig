@@ -9,11 +9,10 @@ import {
   Stepper,
   type Step,
 } from "@/components/ui";
-import { Check } from "@/components/ui/icons";
+import { ProgressActivity } from "@/components/ui/icons";
 import { ACCOUNT } from "@/lib/demo";
 import { SESSION_V2 } from "@/lib/demo-session";
 import { DraftSession } from "@/components/draft-session";
-import { cn } from "@/lib/cn";
 
 /**
  * The first thing after signing up.
@@ -126,13 +125,17 @@ function SetupNav({ steps }: { steps: Step[] }) {
  * progress bar that isn't measuring anything is a lie told with a shape.
  */
 function BuildScreen({ onDone }: { onDone: () => void }) {
-  const [done, setDone] = React.useState(0);
+  const [at, setAt] = React.useState(0);
 
   React.useEffect(() => {
+    /* The conversation above was scrolled; the build screen isn't a
+       continuation of it. Without this you land halfway down an empty page. */
+    window.scrollTo(0, 0);
+
     const timers = BUILD_STEPS.map((_, i) =>
-      window.setTimeout(() => setDone(i + 1), 900 * (i + 1)),
+      window.setTimeout(() => setAt(i), 1000 * i),
     );
-    const finish = window.setTimeout(onDone, 900 * BUILD_STEPS.length + 1200);
+    const finish = window.setTimeout(onDone, 1000 * BUILD_STEPS.length + 900);
     return () => {
       timers.forEach(clearTimeout);
       clearTimeout(finish);
@@ -140,52 +143,28 @@ function BuildScreen({ onDone }: { onDone: () => void }) {
   }, [onDone]);
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col justify-center py-16">
-      <div className="flex flex-col items-center gap-4 text-center">
-        <CraigMark className="size-14 text-accent motion-safe:animate-[soft-pulse_2.4s_ease-in-out_infinite]" />
-        <h1 className="text-3xl font-semibold tracking-[-0.03em]">
-          Give me a second
-        </h1>
-        <p className="max-w-sm text-md leading-relaxed text-text-muted">
-          Writing it now. You&apos;ll be able to change every bit of it, and
-          nothing runs until you say so.
-        </p>
-      </div>
+    <div className="flex h-[calc(100vh-3rem)] flex-col items-center justify-center gap-4 text-center">
+      <CraigMark className="size-14 text-accent motion-safe:animate-[soft-pulse_2.4s_ease-in-out_infinite]" />
+      <h1 className="text-3xl font-semibold tracking-[-0.03em]">
+        Give me a second
+      </h1>
+      <p className="max-w-sm text-md leading-relaxed text-text-muted">
+        Writing it now. You&apos;ll be able to change every bit of it, and
+        nothing runs until you say so.
+      </p>
 
-      <ol className="mx-auto flex w-full max-w-sm flex-col gap-2.5 pt-10">
-        {BUILD_STEPS.map((label, i) => {
-          const complete = i < done;
-          const current = i === done;
-          return (
-            <li
-              key={label}
-              className={cn(
-                "flex items-center gap-2.5 text-base transition-colors duration-300",
-                complete
-                  ? "text-text-muted"
-                  : current
-                    ? "text-text"
-                    : "text-text-subtle",
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
-                  complete
-                    ? "border-transparent bg-success-subtle text-success"
-                    : current
-                      ? "border-accent"
-                      : "border-border",
-                )}
-              >
-                {complete && <Check className="size-3" />}
-              </span>
-              {label}
-            </li>
-          );
-        })}
-      </ol>
+      {/* One line at a time rather than a checklist. A list of ticks invites
+          you to read ahead and count how much is left; a single changing line
+          is just something happening. Keyed so each one re-enters. */}
+      <div className="flex h-6 items-center gap-2 pt-4 text-base text-text-muted">
+        <ProgressActivity className="size-4 shrink-0 animate-spin text-text-subtle" />
+        <span
+          key={BUILD_STEPS[at]}
+          className="motion-safe:animate-[step-phase_260ms_ease-out]"
+        >
+          {BUILD_STEPS[at]}
+        </span>
+      </div>
     </div>
   );
 }
