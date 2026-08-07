@@ -3,10 +3,12 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CraigMark } from "@/components/ui";
+import { CraigMark, PromptBar } from "@/components/ui";
+import { Close } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { ACTIVITY, outstanding } from "@/lib/craig-activity";
+import { logActivity } from "@/lib/activity-store";
 import { RUN_STEPS } from "@/lib/demo-run";
 import { findResource } from "@/lib/demo-resources";
 import { findPreset } from "@/lib/workflow/library";
@@ -147,6 +149,14 @@ export function useAskCraig(chat: HomeChat, workflows: DemoWorkflow[]) {
             answered.field,
             answered.value,
           );
+          /* The durable half. The sentence below is scaffolding and goes when
+             she closes the panel; this is what's left, and it's what makes
+             closing it safe. */
+          logActivity({
+            kind: "set",
+            what: `Set ${answered.gap.block.title} from what you told me`,
+            step: answered.gap.block.title,
+          });
           add("craig", answered.reply, [
             {
               label: `${answered.gap.block.title} in ${answered.gap.workflow.name}`,
@@ -327,61 +337,146 @@ function statusReport(open: Gap[]) {
 }
 
 /* ---------------------------------------------------------------------- */
-/*  The transcript                                                        */
+/*  The dock                                                              */
 /* ---------------------------------------------------------------------- */
 
-export function Transcript({ chat }: { chat: HomeChat }) {
-  const { lines, thinking } = chat;
-  if (lines.length === 0 && !thinking) return null;
+/**
+ * The composer, and what grows out of it.
+ *
+ * Idle it's a prompt bar. Say something and it becomes a bounded surface with
+ * the exchange inside it, the composer still at the bottom of the same object.
+ *
+ * The shape is the argument. An appending transcript reads as page content —
+ * permanent, yours, lost if you navigate. A panel that grows out of the box
+ * and has a close button reads as a working surface, which is what this is:
+ * she asks one or two things, Craig changes something, and the change lives in
+ * the workflow and the activity log rather than in what he said about it.
+ * Closing it is meant to feel like closing a drawer, not deleting a document.
+ *
+ * Bounded height on purpose. If an exchange here ever needed more room than
+ * this, it wanted the builder.
+ */
+export function CraigDock({
+  chat,
+  onSubmit,
+  placeholder,
+  footnote,
+}: {
+  chat: HomeChat;
+  onSubmit: (text: string) => void;
+  placeholder?: string;
+  footnote?: React.ReactNode;
+}) {
+  const { lines, thinking, setLines, setThinking, timersRef } = chat;
+  const open = lines.length > 0 || Boolean(thinking);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  /* Craig's reply lands below the fold the moment there's more than one turn.
+     Layout effect so it's scrolled before the frame paints — doing it in a
+     passive effect shows the old position for a beat first. */
+  React.useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lines, thinking]);
+
+  function close() {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setThinking(null);
+    setLines([]);
+  }
+
+  if (!open) {
+    return (
+      <PromptBar
+        placeholder={placeholder}
+        onSubmit={onSubmit}
+        footnote={footnote}
+      />
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-5 pt-8">
-      {lines.map((l) =>
-        l.from === "craig" ? (
-          <div key={l.id} className="flex flex-col gap-1.5">
-            <CraigMark className="size-6 text-accent" />
-            <p className="text-md leading-relaxed text-text-muted">{l.text}</p>
-            {l.refs && l.refs.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {/* Link, not <a>. A hard navigation reloads the app, and the
-                    workflow store lives in memory — the change Craig just made
-                    would be gone by the time you arrived to look at it. */}
-                {l.refs.map((r) => (
-                  <Link
-                    key={r.href + r.label}
-                    href={r.href}
-                    className="rounded-md border border-border px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-                  >
-                    {r.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <p
-            key={l.id}
-            className={cn(
-              "ml-auto max-w-[85%] rounded-xl rounded-br-sm px-3.5 py-2.5",
-              "bg-accent-subtle text-base text-accent-subtle-fg",
-            )}
-          >
-            {l.text}
-          </p>
-        ),
-      )}
-
-      {thinking && (
-        <div className="flex items-center gap-2">
-          <CraigMark className="size-6 shrink-0 text-accent" />
-          <span
-            key={thinking}
-            className="text-sm text-text-muted motion-safe:animate-[step-phase_260ms_cubic-bezier(0.25,1,0.5,1),soft-pulse_2.2s_ease-in-out_260ms_infinite]"
-          >
-            {thinking}
+    <div className="flex flex-col gap-1.5">
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface-sunken shadow-e1 motion-safe:animate-[toast-in_200ms_cubic-bezier(0.25,1,0.5,1)]">
+        <header className="flex items-center gap-2 px-3.5 pb-1 pt-2.5">
+          <CraigMark className="size-4 text-accent" />
+          <span className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            Craig
           </span>
+          <button
+            type="button"
+            onClick={close}
+            className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Close className="size-3.5" />
+            Close
+          </button>
+        </header>
+
+        <div
+          ref={scrollRef}
+          className="scrollbar-thin flex max-h-[45vh] flex-col gap-4 overflow-y-auto px-3.5 py-3"
+        >
+          {lines.map((l) =>
+            l.from === "craig" ? (
+              <div key={l.id} className="flex flex-col gap-1.5">
+                <p className="text-base leading-relaxed text-text">{l.text}</p>
+                {l.refs && l.refs.length > 0 && (
+                  /* Link, not <a>. A hard navigation reloads the app, and the
+                     workflow store lives in memory — the change Craig just
+                     made would be gone by the time you arrived to look. */
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    {l.refs.map((r) => (
+                      <Link
+                        key={r.href + r.label}
+                        href={r.href}
+                        className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text-muted transition-colors hover:border-border-strong hover:text-text"
+                      >
+                        {r.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p
+                key={l.id}
+                className={cn(
+                  "ml-auto max-w-[85%] rounded-xl rounded-br-sm px-3 py-2",
+                  "bg-accent-subtle text-base text-accent-subtle-fg",
+                )}
+              >
+                {l.text}
+              </p>
+            ),
+          )}
+
+          {thinking && (
+            <span
+              key={thinking}
+              className="text-sm text-text-muted motion-safe:animate-[step-phase_260ms_cubic-bezier(0.25,1,0.5,1),soft-pulse_2.2s_ease-in-out_260ms_infinite]"
+            >
+              {thinking}
+            </span>
+          )}
         </div>
-      )}
+
+        {/* Same composer, still at the bottom of the same object. */}
+        <div className="p-1.5">
+          <PromptBar
+            size="sm"
+            placeholder={placeholder}
+            onSubmit={onSubmit}
+            busy={Boolean(thinking)}
+          />
+        </div>
+      </div>
+
+      <p className="px-1 text-xs leading-relaxed text-text-subtle">
+        Anything I change is in your workflows, and in what I&apos;ve done on
+        the right. Closing this only clears the chat.
+      </p>
     </div>
   );
 }

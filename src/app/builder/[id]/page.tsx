@@ -76,10 +76,8 @@ const nextId = () => `b${Date.now()}-${seq++}`;
 
 export default function BuilderPage() {
   return (
-    /* useSearchParams needs a boundary. The fallback is the same page with
-       nothing selected, which is the correct thing to show if ?step never
-       resolves. */
-    <React.Suspense fallback={<Builder step={null} />}>
+    /* Nothing, not a second copy of the builder — see Home. */
+    <React.Suspense fallback={null}>
       <BuilderWithParams />
     </React.Suspense>
   );

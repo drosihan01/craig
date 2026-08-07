@@ -12,20 +12,21 @@ import {
   CraigMark,
   List,
   ListItem,
-  PromptBar,
   Separator,
   type AppNotification,
 } from "@/components/ui";
 import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { WORKFLOW, stepCount } from "@/lib/demo-workflow";
 import { gaps, useWorkflows } from "@/lib/workflow-store";
-import { ACTIVITY, ACTIVITY_VERB, outstanding } from "@/lib/craig-activity";
+import { ACTIVITY_VERB, outstanding } from "@/lib/craig-activity";
+import { MISSING_COUNT } from "@/lib/demo-resources";
+import { useActivity } from "@/lib/activity-store";
 import { AddSeat } from "@/components/add-seat";
 import { DraftSession } from "@/components/draft-session";
 import { type Onboarding } from "@/lib/onboarding";
 import { type DemoWorkflow } from "@/lib/demo-workflow";
 import { AdminNav, NavStat } from "@/components/app-nav";
-import { Transcript, useAskCraig, useHomeChat } from "@/components/home-chat";
+import { CraigDock, useAskCraig, useHomeChat } from "@/components/home-chat";
 import { Add, Description, PersonAdd } from "@/components/ui/icons";
 
 /**
@@ -63,10 +64,12 @@ const NOTIFICATIONS: AppNotification[] = [
 
 export default function AdminHomePage() {
   return (
-    /* useSearchParams needs a boundary; the fallback is the same page in its
-       established state, which is the correct thing to show if the param never
-       resolves. */
-    <React.Suspense fallback={<Home fresh={false} />}>
+    /* useSearchParams needs a boundary. The fallback is nothing, not a copy
+       of the page: rendering a second whole Home meant the prerender shipped
+       two of everything, and the client had to reconcile a tree it had
+       already drawn against a different one. It didn't — the boundary never
+       resolved and neither copy was ever interactive. */
+    <React.Suspense fallback={null}>
       <HomeWithParams />
     </React.Suspense>
   );
@@ -127,14 +130,17 @@ function Home({ fresh }: { fresh: boolean }) {
               fresh={fresh}
               onAddSeat={() => setAdding(true)}
             />
-
-            <Transcript chat={chat} />
           </div>
 
+          {/* The composer grows into the conversation rather than pushing it
+              up the page. The brief above stays put and stays current — it's
+              what's true now, not a message, and it shouldn't scroll away
+              while she's using the thing that changes it. */}
           <div className="shrink-0 pb-6 pt-2">
-            <PromptBar
-              placeholder="Ask Craig anything — a policy, a step, who's waiting on what…"
+            <CraigDock
+              chat={chat}
               onSubmit={ask}
+              placeholder="Ask Craig anything — a policy, a step, who's waiting on what…"
               footnote="Craig knows your workflows, your people and whatever you've uploaded."
             />
           </div>
@@ -249,23 +255,46 @@ function openItems(
  * would flatter a company with three people and a stale handbook.
  */
 function HomeAside({ fresh }: { fresh: boolean }) {
+  /* Live, not the fixture. What Craig did in the panel a minute ago is the
+     top line here — which is the whole reason closing the panel is safe. */
+  const activity = useActivity();
+
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        {/* No name and no "Company" heading — the panel is already titled
-            Katalis, and three ways of saying so in 200px is two too many. */}
-        <p className="text-sm leading-relaxed text-text-muted">
-          {COMPANY.pitch}
-        </p>
-      </div>
+      {/* First, because it's the answer to "what has this thing actually
+          done". It was inside the brief, where it competed with the questions
+          she has to answer; here it sits beside them and stays put while she
+          works through them. */}
+      {!fresh && (
+        <>
+          <div className="flex flex-col gap-2">
+            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+              What I&apos;ve done
+            </p>
+            <div className="flex flex-col gap-2">
+              {activity.slice(0, 6).map((a) => (
+                <div key={a.id} className="flex flex-col gap-0.5">
+                  <span className="text-xs leading-relaxed text-text-muted">
+                    <span className="text-text-subtle">
+                      {ACTIVITY_VERB[a.kind]}
+                    </span>{" "}
+                    {a.what.replace(/^\w+ /, "")}
+                  </span>
+                  <span className="text-2xs text-text-subtle">{a.when}</span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-      <Separator />
+          <Separator />
+        </>
+      )}
 
       <div className="flex flex-col gap-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           People
         </p>
-        {/* Dense and undivided — a four-row summary in a 260px panel. The rules
+        {/* Dense and undivided — a short summary in a 260px panel. The rules
             and the gutter are what make a list read as a surface, and this
             isn't one; it's the roster, sitting next to the work. */}
         <List dense divided={false} bordered={false}>
@@ -302,27 +331,24 @@ function HomeAside({ fresh }: { fresh: boolean }) {
 
       <Separator />
 
+      {/* No paragraph. The count is the point and the link is the action —
+          a sentence explaining both was the panel talking to itself. */}
       <div className="flex flex-col gap-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           What Craig has
         </p>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-text-muted">Katalis Handbook</span>
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="truncate text-text-muted">Katalis Handbook</span>
           <Badge tone="warning" size="sm">
             Feb 2026
           </Badge>
         </div>
-        <p className="text-xs leading-relaxed text-text-subtle">
-          {fresh
-            ? "It's the only thing you've given me. Five other things the workflow needs aren't written down anywhere. "
-            : "Five other things the workflow needs aren't written down anywhere. "}
-          <Link
-            href="/resources"
-            className="text-accent underline-offset-4 hover:underline"
-          >
-            Resources
-          </Link>
-        </p>
+        <Link
+          href="/resources"
+          className="text-xs text-accent underline-offset-4 hover:underline"
+        >
+          {MISSING_COUNT} more it needs, missing
+        </Link>
       </div>
     </div>
   );
@@ -418,26 +444,6 @@ function CraigBrief({
           </p>
         </div>
       </div>
-
-      {/* What he did on his own. Small, because it's reassurance rather than
-          work — but present, because it's the proof he does anything. */}
-      {!fresh && (
-        <div className="flex flex-col gap-1.5">
-          {ACTIVITY.slice(0, 3).map((a) => (
-            <div key={a.id} className="flex items-baseline gap-2 text-xs">
-              <span className="shrink-0 text-text-subtle">
-                {ACTIVITY_VERB[a.kind]}
-              </span>
-              <span className="min-w-0 flex-1 text-text-muted">
-                {a.what.replace(/^\w+ /, "")}
-              </span>
-              <span className="shrink-0 text-2xs text-text-subtle">
-                {a.when}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {asks.length > 0 && (
         <div className="flex flex-col gap-2">
