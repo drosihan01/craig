@@ -8,6 +8,8 @@ import {
   Button,
   Field,
   Input,
+  isUnconfigured,
+  setupWarning,
   Separator,
   Textarea,
   WorkflowBuilder,
@@ -18,7 +20,11 @@ import {
 import { ChevronLeft } from "@/components/ui/icons";
 import { useParams, useSearchParams } from "next/navigation";
 import { ACCOUNT, PEOPLE } from "@/lib/demo";
-import { stepCount, unconfiguredCount } from "@/lib/demo-workflow";
+import {
+  stepCount,
+  unconfiguredCount,
+  type DemoWorkflow,
+} from "@/lib/demo-workflow";
 import { setBlocks as commitBlocks, useWorkflow } from "@/lib/workflow-store";
 import { blockFromPreset, type BlockPreset } from "@/lib/workflow/library";
 import { AdminNav, NavStat } from "@/components/app-nav";
@@ -162,7 +168,15 @@ function Builder({ step }: { step: string | null }) {
   return (
     <AppShell
       title={workflow.name}
-      nav={<BuilderNav steps={steps} unconfigured={unconfigured} />}
+      nav={
+        <BuilderNav
+          workflow={workflow}
+          blocks={blocks}
+          steps={steps}
+          unconfigured={unconfigured}
+          onSelect={setSelectedId}
+        />
+      }
       aside={
         /* One thing at a time, and no heading over it. With nothing selected
            the panel is just Craig — he's the reason to look right, and the
@@ -303,26 +317,84 @@ function Builder({ step }: { step: string | null }) {
   );
 }
 
+/**
+ * The menu, then everything true about the workflow you're in.
+ *
+ * This lived in the right panel until Craig took that over, and the right
+ * panel was the wrong home for it anyway: it competed with the block you were
+ * editing for the same column, so the settings you wanted were always under
+ * something you didn't. Here it's beside the canvas rather than in front of
+ * it, and it stays put while you work.
+ *
+ * The list of open steps is the useful part. Two unresolved steps out of
+ * eleven is the actual state of the draft, and each row jumps to its block, so
+ * it's a worklist rather than a summary you read and then go hunting from.
+ */
 function BuilderNav({
+  workflow,
+  blocks,
   steps,
   unconfigured,
+  onSelect,
 }: {
+  workflow: DemoWorkflow;
+  blocks: WorkflowBlock[];
   steps: number;
   unconfigured: number;
+  onSelect: (id: string) => void;
 }) {
+  const open = blocks.filter(isUnconfigured);
+
   return (
     <AdminNav>
-      <div className="flex flex-col gap-2 px-2">
+      <div className="flex flex-col gap-3 px-2">
+        {/* No name and no "for whom" — the header carries the name, and the
+            trigger is the first block on the canvas. A column that repeats
+            what's already on screen twice over is a column you stop reading. */}
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          This workflow
+          Overview
         </p>
-        <NavStat label="Steps" value={steps} />
-        <NavStat
-          label="Unconfigured"
-          value={unconfigured}
-          tone={unconfigured > 0 ? "warning" : "neutral"}
-        />
+
+        <div className="flex flex-col gap-2">
+          <NavStat label="Steps" value={steps} />
+          <NavStat
+            label="Unconfigured"
+            value={unconfigured}
+            tone={unconfigured > 0 ? "warning" : "neutral"}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1 pt-1">
+          <NavFact label="Created by" value={workflow.createdBy} />
+          <NavFact label="Updated" value={workflow.updated} />
+        </div>
       </div>
+
+      {open.length > 0 && (
+        <>
+          <Separator />
+          <div className="flex flex-col gap-1.5 px-2">
+            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+              Still open
+            </p>
+            {open.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => onSelect(b.id)}
+                className="-mx-1.5 flex flex-col gap-0.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover"
+              >
+                <span className="text-sm leading-snug text-text-muted">
+                  {b.title}
+                </span>
+                <span className="text-2xs leading-relaxed text-text-subtle">
+                  {setupWarning(b)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <Separator />
 
@@ -330,5 +402,24 @@ function BuilderNav({
         A workflow cannot be published while any step is unconfigured.
       </p>
     </AdminNav>
+  );
+}
+
+/** A label and a value on one line. Not a NavStat — these aren't counts, and
+    a badge around "Craig, from your handbook" is a badge around a sentence. */
+function NavFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 text-xs">
+      <span className="shrink-0 text-text-subtle">{label}</span>
+      {/* min-w-0 or truncate does nothing: a flex item's default min-width is
+          auto, which floors it at its content and pushes past the panel when
+          you drag it narrow. */}
+      <span
+        className="min-w-0 truncate text-right text-text-muted"
+        title={value}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
