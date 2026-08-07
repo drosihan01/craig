@@ -102,7 +102,7 @@ export default function WelcomePage() {
 function SetupNav({ steps }: { steps: Step[] }) {
   return (
     <div className="flex flex-col gap-5">
-      <Stepper steps={steps} compact />
+      <Stepper steps={steps} compact className="px-2" />
 
       <Separator />
 

@@ -98,25 +98,34 @@ export function Stepper({
       <ol className={cn("flex flex-col", className)}>
         {steps.map((step, i) => (
           <li key={step.id} className="relative flex gap-2.5 pb-3.5 last:pb-0">
+            {/* Runs from under the dot to the next one. 13px is the dot's
+                bottom edge: half the 18px line box the dot is centred in,
+                plus half the dot. */}
             {i < steps.length - 1 && (
               <span
                 aria-hidden
                 className={cn(
-                  "absolute left-[3.5px] top-3.5 h-[calc(100%-0.625rem)] w-px",
+                  "absolute left-[3.5px] top-[13px] h-[calc(100%-13px)] w-px",
                   step.state === "complete" ? "bg-accent" : "bg-border",
                 )}
               />
             )}
+            {/* Centred against the first line of text rather than nudged with
+                a margin, so it stays put if the type scale changes. */}
             <span
               aria-hidden
-              className={cn(
-                "relative z-10 mt-1.5 size-2 shrink-0 rounded-full transition-colors",
-                step.state === "complete" && "bg-accent",
-                step.state === "current" &&
-                  "bg-accent ring-[3px] ring-accent-ring/25",
-                step.state === "upcoming" && "bg-border-strong",
-              )}
-            />
+              className="relative z-10 flex h-[1.125rem] shrink-0 items-center"
+            >
+              <span
+                className={cn(
+                  "size-2 rounded-full transition-colors",
+                  step.state === "complete" && "bg-accent",
+                  step.state === "current" &&
+                    "bg-accent ring-[3px] ring-accent-ring/25",
+                  step.state === "upcoming" && "bg-border-strong",
+                )}
+              />
+            </span>
             <span
               className={cn(
                 "text-sm leading-snug",
