@@ -317,6 +317,23 @@
   }
 }
 
+/* One agent state replacing another. Keyed on the step id so React swaps the
+   element and the animation replays — the label shouldn't snap. */
+@keyframes step-phase {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+/* The active agent state breathes rather than spins — enough motion to read
+   as working, not enough to pull the eye off the answer arriving below it. */
+@keyframes soft-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
 @keyframes caret-blink {
   50% {
     opacity: 0;

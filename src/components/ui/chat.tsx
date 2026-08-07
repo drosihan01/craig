@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Dialog, DialogClose } from "./dialog";
-import { AutoAwesome, Check, ContentCopy, ProgressActivity, Refresh } from "./icons";
+import { AutoAwesome, ContentCopy, Refresh } from "./icons";
 import { CraigMark } from "./craig-mark";
 import { DEFAULT_MODEL, type ChatModel } from "./model-picker";
 import { PromptBar } from "./prompt-bar";
@@ -28,10 +28,13 @@ export interface ChatMessage {
  * A thing the agent did on the way to an answer — reading an attachment,
  * drafting, checking something.
  *
- * These are shown because an agent that goes quiet for ten seconds reads as
- * broken, and because "which of my documents did it actually open" is a fair
- * question to be able to answer after the fact. They stay visible once done
- * rather than collapsing.
+ * Only the running one is shown, beside the mark — an agent that goes quiet
+ * for several seconds reads as broken, so it says what it's doing. Once the
+ * answer lands the row clears: a finished checklist above every response is
+ * noise, and the answer is the thing being read.
+ *
+ * The full list is still on the message, so a "what did this actually use"
+ * affordance can be added later without changing the shape of the data.
  */
 export interface AgentStep {
   id: string;
@@ -180,20 +183,31 @@ function Message({ message }: { message: ChatMessage }) {
   }
 
   // Assistant turns run full width with no bubble, so long answers read as
-  // prose rather than as a wall inside a box. The mark attributes it without
-  // an avatar-sized block of chrome per message.
+  // prose rather than as a wall inside a box.
+  const running = message.steps?.find((s) => s.state === "running");
+
   return (
     <div className="group/msg flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5">
-        <CraigMark className="size-4 text-accent" />
-        <span className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Craig
-        </span>
+      {/* The mark alone attributes it — a name label beside every answer is
+          chrome repeating something obvious. While the agent is working, the
+          step it's on sits next to the mark; when it finishes, the row goes
+          back to just the mark and the answer stands on its own. */}
+      <div className="flex items-center gap-2">
+        <CraigMark className="size-5 shrink-0 text-accent" />
+        {running && (
+          /* Keyed on the step id so swapping states remounts this and the
+             phase animation replays, rather than the label snapping. */
+          /* No spinner. The mark is already beside it and the label already
+             changes as it works — a spinning circle on top of both is a third
+             thing saying the same thing. */
+          <span
+            key={running.id}
+            className="text-sm text-text-muted motion-safe:animate-[step-phase_260ms_cubic-bezier(0.25,1,0.5,1),soft-pulse_2.2s_ease-in-out_260ms_infinite]"
+          >
+            {running.label}
+          </span>
+        )}
       </div>
-
-      {message.steps && message.steps.length > 0 && (
-        <AgentSteps steps={message.steps} />
-      )}
 
       <div className="text-base leading-relaxed text-text">
         {message.content}
@@ -221,29 +235,6 @@ function Message({ message }: { message: ChatMessage }) {
         </div>
       )}
     </div>
-  );
-}
-
-function AgentSteps({ steps }: { steps: AgentStep[] }) {
-  return (
-    <ul className="flex flex-col gap-1 py-0.5">
-      {steps.map((s) => (
-        <li key={s.id} className="flex items-center gap-1.5 text-sm">
-          {s.state === "running" ? (
-            <ProgressActivity className="size-3.5 shrink-0 animate-spin text-accent" />
-          ) : (
-            <Check className="size-3.5 shrink-0 text-success" />
-          )}
-          <span
-            className={
-              s.state === "running" ? "text-text-muted" : "text-text-subtle"
-            }
-          >
-            {s.label}
-          </span>
-        </li>
-      ))}
-    </ul>
   );
 }
 
