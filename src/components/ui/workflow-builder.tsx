@@ -220,10 +220,17 @@ function Connector({
     <div className="group/conn relative h-14">
       {/* Solid across the gap; dashed inside the cards above and below. Same
           thread, two treatments — see THREAD_X for why the offset is 33 here
-          and 32 inside a card. */}
+          and 32 inside a card.
+
+          On the last connector the thread stops at the add button instead of
+          running past it. A line that continues into nothing reads as "more
+          below", and there isn't any. */}
       <span
         aria-hidden
-        className="absolute inset-y-0 w-px bg-border-strong"
+        className={cn(
+          "absolute top-0 w-px bg-border-strong",
+          last ? "h-1/2" : "bottom-0",
+        )}
         style={{ left: THREAD_X }}
       />
 
