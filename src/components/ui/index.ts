@@ -110,6 +110,7 @@ export {
 } from "./workflow-builder";
 export { BlockPicker } from "./block-picker";
 export { BlockSetup } from "./block-setup";
+export { TestRun } from "./test-run";
 export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";
 export {
   CraigMark,

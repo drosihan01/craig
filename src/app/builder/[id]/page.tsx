@@ -12,6 +12,7 @@ import {
   List,
   ListItem,
   Separator,
+  TestRun,
   isUnconfigured,
   setupWarning,
   Textarea,
@@ -20,9 +21,9 @@ import {
   type AppNotification,
   type WorkflowBlock,
 } from "@/components/ui";
-import { AutoAwesome, ChevronLeft } from "@/components/ui/icons";
+import { AutoAwesome, ChevronLeft, PlayArrow } from "@/components/ui/icons";
 import { useParams } from "next/navigation";
-import { ACCOUNT, PEOPLE } from "@/lib/demo";
+import { ACCOUNT, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import {
   findWorkflow,
   stepCount,
@@ -87,6 +88,7 @@ export default function BuilderPage() {
   /* Opens on the workflow rather than on a block. Landing inside one step's
      settings before you've seen the shape of the thing is backwards. */
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [testing, setTesting] = React.useState(false);
 
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
 
@@ -243,6 +245,18 @@ export default function BuilderPage() {
             <AutoAwesome />
             Ask Craig
           </Button>
+          {/* Sits before Publish deliberately. The order on screen is the
+              order you should do them in, and testing a draft you can't
+              publish yet is the whole point of having a test. */}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={steps === 0}
+            onClick={() => setTesting(true)}
+          >
+            <PlayArrow />
+            Test run
+          </Button>
           {/* A trigger on its own is valid but pointless, so an empty workflow
               is unpublishable for a different reason to an unconfigured one. */}
           <Button size="sm" disabled={unconfigured > 0 || steps === 0}>
@@ -272,6 +286,15 @@ export default function BuilderPage() {
           </div>
         </WorkflowCanvas>
       </div>
+
+      <TestRun
+        open={testing}
+        onClose={() => setTesting(false)}
+        workflowName={workflow.name}
+        blocks={blocks}
+        candidates={[NEW_HIRE.name, "Someone new", PEOPLE.matty.name]}
+        defaultCandidate={workflow.forWho ?? NEW_HIRE.name}
+      />
     </AppShell>
   );
 }

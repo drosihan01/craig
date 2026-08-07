@@ -1224,3 +1224,50 @@ export function blockFromPreset(
     config: {},
   };
 }
+
+/**
+ * A block's setup, resolved for reading rather than editing.
+ *
+ * Stored values are ids — "week-before", ["eng", "infra"] — which are the right
+ * thing to persist and the wrong thing to show anyone. This turns them back
+ * into the words the admin picked, so a dry run can say "Write on engineering,
+ * infra" instead of a row of slugs.
+ */
+export function describeSetup(
+  presetId: string | undefined,
+  config: Record<string, string | string[]> | undefined,
+): { field: SetupField; value: string }[] {
+  const preset = presetId ? findPreset(presetId) : undefined;
+  if (!preset) return [];
+
+  const labelFor = (f: SetupField, id: string) => {
+    const options =
+      f.options ?? (f.kind === "when" ? WHEN_OPTIONS : undefined);
+    // Free-list values and person names are already their own label.
+    return options?.find((o) => o.id === id)?.label ?? id;
+  };
+
+  return preset.setup.flatMap((f) => {
+    const raw = config?.[f.id];
+    if (!raw || (Array.isArray(raw) && raw.length === 0)) return [];
+    const value = Array.isArray(raw)
+      ? raw.map((v) => labelFor(f, v)).join(", ")
+      : labelFor(f, raw);
+    return [{ field: f, value }];
+  });
+}
+
+/** When a block would happen, in the admin's own words. */
+export function timingOf(
+  presetId: string | undefined,
+  config: Record<string, string | string[]> | undefined,
+): string | null {
+  const preset = presetId ? findPreset(presetId) : undefined;
+  if (!preset) return null;
+  const field = preset.setup.find((f) => f.kind === "when");
+  if (!field) return null;
+  const raw = config?.[field.id];
+  if (typeof raw !== "string" || !raw) return null;
+  const options = field.options ?? WHEN_OPTIONS;
+  return options.find((o) => o.id === raw)?.label ?? raw;
+}
