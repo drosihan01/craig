@@ -34,6 +34,17 @@ export interface SessionTurn {
   steps: string[];
   /** Craig's reply. Blank lines separate paragraphs. */
   craig: string;
+  /** Pulled out of the prose and highlighted, so the ask doesn't get lost in it. */
+  question?: string;
+  /**
+   * Predicted replies for that question.
+   *
+   * They're phrasings of the same answer, not different answers. The script is
+   * linear, so an option that changed what Ada actually said would make Craig's
+   * next turn incoherent — and a demo that contradicts itself is worse than one
+   * with fewer choices.
+   */
+  replies?: string[];
   /** Offers the draft workflow at the end of the reply. */
   offersWorkflow?: boolean;
 }
@@ -48,7 +59,14 @@ export const SESSION: SessionTurn[] = [
       "Looking for what isn't written down",
     ],
     craig:
-      "Ah brilliant, thanks — had a proper read. Genuinely more than enough to work with, don't worry about the state of it.\n\nCouple of things jumped straight out. Your handbook tells the new person to “figure out who owns what — honestly it's just the three of us right now so ask”. That's the bit that'll trip Nils up. It isn't really a step, it's just Jason.\n\nAnd of the four things on your first-week list, three of them land on Jason too — GitHub, the infra tooling, and whoever knows the answer.\n\nThat matters a bit more than usual coming from a 400-person place. He's used to someone handing him a checklist, and here the checklist says “ask”.\n\nTwo quick ones and I'll have plenty. Is Jason still the only one who can hand out GitHub and AWS? And what actually happens if someone pushes to prod in their first week?",
+      "Ah brilliant, thanks — had a proper read. Genuinely more than enough to work with, don't worry about the state of it.\n\nCouple of things jumped straight out. Your handbook tells the new person to “figure out who owns what — honestly it's just the three of us right now so ask”. That's the bit that'll trip Nils up. It isn't really a step, it's just Jason.\n\nAnd of the four things on your first-week list, three of them land on Jason too — GitHub, the infra tooling, and whoever knows the answer.\n\nThat matters a bit more than usual coming from a 400-person place. He's used to someone handing him a checklist, and here the checklist says “ask”.",
+    question:
+      "Two quick ones and I'll have plenty. Is Jason still the only one who can hand out GitHub and AWS? And what actually happens if someone pushes to prod in their first week?",
+    replies: [
+      "yeah jason owns all of it — github, aws, the provider keys. and prod, realistically they'd break routing for someone",
+      "all jason. and honestly prod's the scary one, it'd be pretty easy to knock routing over without realising",
+      "jason has every key. prod we've broken ourselves before, it's recoverable but not something you want on day 3",
+    ],
   },
   {
     ada: "yeah jason owns all of it, github aws the provider keys all of it. i could probably do github at a push but i'd have to ask him where things are which kind of proves your point lol. prod — realistically they'd break routing for someone. we've done it, it's recoverable, but i'd rather they didn't do it on day 3 without knowing what's live and what's fallback",
@@ -57,7 +75,14 @@ export const SESSION: SessionTurn[] = [
       "Checking what's stuck behind what",
     ],
     craig:
-      "Ah that's really useful, thank you. So you've got two things going on, and the good news is they're not the same problem.\n\nAccess is just a queue. It all goes through Jason, there's no backup, and four later things are sat waiting behind it. That one's easy enough to sort.\n\nProd's the more interesting one. Nothing's actually stopping a new person poking at routing, and the only place “what's safe to touch” lives is in Jason's head.\n\nOne more and then I'll put something together — who's the first person Nils talks to who isn't you or Jason?",
+      "Ah that's really useful, thank you. So you've got two things going on, and the good news is they're not the same problem.\n\nAccess is just a queue. It all goes through Jason, there's no backup, and four later things are sat waiting behind it. That one's easy enough to sort.\n\nProd's the more interesting one. Nothing's actually stopping a new person poking at routing, and the only place “what's safe to touch” lives is in Jason's head.",
+    question:
+      "One more and then I'll put something together — who's the first person Nils talks to who isn't you or Jason?",
+    replies: [
+      "...nobody lol. matty i guess but he's part time and remote",
+      "honestly no one. matty's around 2 days a week but they'd barely overlap",
+      "there isn't one. that's bad isn't it",
+    ],
   },
   {
     ada: "...nobody lol. matty i guess but he's part time and remote and i don't think they'd overlap much. that's bad isn't it",

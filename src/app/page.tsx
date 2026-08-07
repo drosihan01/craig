@@ -91,6 +91,7 @@ export default function AdminHomePage() {
   const [busy, setBusy] = React.useState(false);
   const [turnIndex, setTurnIndex] = React.useState(0);
   const [offerDraft, setOfferDraft] = React.useState(false);
+  const [replies, setReplies] = React.useState<string[]>([]);
   const timers = React.useRef<number[]>([]);
 
   const clearTimers = React.useCallback(() => {
@@ -99,11 +100,13 @@ export default function AdminHomePage() {
   }, []);
   React.useEffect(() => clearTimers, [clearTimers]);
 
-  /* Walks the scripted session. Whatever gets typed is *replaced* by Ada's
-     scripted line for that turn — the demo is driven by pressing enter, not by
-     typing her paragraphs out, and it survives anyone typing anything. Once
-     the script runs out the real text is used, so it degrades honestly. */
-  function send(text: string) {
+  /* Walks the scripted session.
+     Typed text is *replaced* by Ada's line for that turn — the demo is driven
+     by pressing enter, not by typing her paragraphs out in front of people,
+     and it survives any input. A picked reply is sent verbatim, because she
+     chose those words and showing her different ones would be a lie about
+     what she just said. Past the script, typed text is used as-is. */
+  function send(text: string, verbatim = false) {
     const turn = SESSION[turnIndex];
     const replyId = crypto.randomUUID();
 
@@ -112,7 +115,7 @@ export default function AdminHomePage() {
       {
         id: crypto.randomUUID(),
         role: "user",
-        content: turn?.ada ?? text,
+        content: verbatim ? text : (turn?.ada ?? text),
         attachment: turn?.attachment,
       },
       {
@@ -120,11 +123,13 @@ export default function AdminHomePage() {
         role: "assistant",
         content: "",
         streaming: true,
+        question: turn?.question,
         steps: turn ? [{ id: turn.steps[0], label: turn.steps[0], state: "running" }] : [],
       },
     ]);
     setBusy(true);
     setTurnIndex((i) => i + 1);
+    setReplies([]);
 
     const patch = (fn: (m: ChatMessage) => ChatMessage) =>
       setMessages((prev) => prev.map((m) => (m.id === replyId ? fn(m) : m)));
@@ -163,6 +168,7 @@ export default function AdminHomePage() {
           }));
           if (i === words.length - 1) {
             setBusy(false);
+            setReplies(turn?.replies ?? []);
             if (turn?.offersWorkflow) setOfferDraft(true);
           }
         },
@@ -202,6 +208,13 @@ export default function AdminHomePage() {
           <div className="shrink-0 pb-6">
             <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
               {offerDraft && <DraftHandoff />}
+
+              {replies.length > 0 && (
+                <ReplyOptions
+                  replies={replies}
+                  onPick={(r) => send(r, true)}
+                />
+              )}
 
               <PromptBar
                 autoFocus
@@ -282,6 +295,65 @@ export default function AdminHomePage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+/**
+ * Predicted replies to Craig's question.
+ *
+ * Numbered, and pickable with the number keys — Ada types fast and shouldn't
+ * have to reach for the mouse to answer a yes/no. The options are phrasings of
+ * one answer rather than genuinely different answers; the script is linear, and
+ * an option that changed what she said would make Craig's next turn incoherent.
+ *
+ * "Or just type" stays visible because a predicted reply that isn't quite right
+ * is worse than no prediction, and the composer is right underneath.
+ */
+function ReplyOptions({
+  replies,
+  onPick,
+}: {
+  replies: string[];
+  onPick: (text: string) => void;
+}) {
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // Not while they're typing their own answer.
+      const el = document.activeElement;
+      if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+        return;
+      }
+      const n = Number(e.key);
+      if (n >= 1 && n <= replies.length) {
+        e.preventDefault();
+        onPick(replies[n - 1]);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [replies, onPick]);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {replies.map((r, i) => (
+        <button
+          key={r}
+          type="button"
+          onClick={() => onPick(r)}
+          className="group flex w-full items-start gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-accent hover:bg-surface-hover"
+        >
+          <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded bg-surface-sunken text-2xs font-semibold tabular-nums text-text-subtle transition-colors group-hover:bg-accent group-hover:text-accent-fg">
+            {i + 1}
+          </span>
+          <span className="text-sm leading-relaxed text-text-muted transition-colors group-hover:text-text">
+            {r}
+          </span>
+        </button>
+      ))}
+      <p className="px-1 text-2xs text-text-subtle">
+        Press 1–{replies.length}, or just type your own below.
+      </p>
+    </div>
   );
 }
 
