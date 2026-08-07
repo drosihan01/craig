@@ -5,7 +5,6 @@ import {
   AppShell,
   Badge,
   Button,
-  CraigMark,
   EmptyState,
   FilterBar,
   FilterChip,
@@ -13,7 +12,6 @@ import {
   ListIcon,
   ListItem,
   ListSection,
-  PromptBar,
   SearchInput,
   Separator,
   SortControl,
@@ -22,6 +20,14 @@ import {
 } from "@/components/ui";
 import { Add, Description, Search, Warning } from "@/components/ui/icons";
 import { ACCOUNT } from "@/lib/demo";
+import {
+  ALL_RESOURCES,
+  LIBRARY,
+  MISSING_COUNT,
+  STATE,
+  type Resource,
+  type ResourceState,
+} from "@/lib/demo-resources";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
 /**
@@ -47,101 +53,8 @@ const NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-type ResourceState = "current" | "stale" | "missing";
-
-const STATE: Record<
-  ResourceState,
-  { label: string; tone: "success" | "warning" | "danger" }
-> = {
-  current: { label: "Current", tone: "success" },
-  stale: { label: "Out of date", tone: "warning" },
-  missing: { label: "Doesn't exist", tone: "danger" },
-};
-
-interface Resource {
-  name: string;
-  meta: string;
-  state: ResourceState;
-  /** How many workflow steps depend on it. */
-  usedBy?: number;
-}
-
-const LIBRARY: { category: string; items: Resource[] }[] = [
-  {
-    category: "Onboarding",
-    items: [
-      {
-        name: "Katalis Handbook",
-        meta: "PDF · uploaded by Ada · last updated Feb 2026",
-        state: "stale",
-        usedBy: 1,
-      },
-      {
-        name: "First-week checklist",
-        meta: "Four bullets, inside the handbook — not its own doc",
-        state: "stale",
-      },
-    ],
-  },
-  {
-    category: "Legal and payroll",
-    items: [
-      {
-        name: "Employment contract",
-        meta: "Template · one per hire",
-        state: "current",
-        usedBy: 1,
-      },
-      {
-        name: "Payroll and tax details",
-        meta: "Form · collected per hire",
-        state: "current",
-        usedBy: 1,
-      },
-      {
-        name: "Right to work — Germany",
-        meta: "Nobody has said which check applies to a Berlin hire",
-        state: "missing",
-        usedBy: 1,
-      },
-    ],
-  },
-  {
-    category: "Engineering",
-    items: [
-      {
-        name: "What's live and what's fallback",
-        meta: "Only in Jason's head",
-        state: "missing",
-        usedBy: 1,
-      },
-      {
-        name: "Slack channel list",
-        meta: "Which channels a new engineer actually needs",
-        state: "missing",
-        usedBy: 1,
-      },
-      {
-        name: "Access and key ownership",
-        meta: "Jason, entirely",
-        state: "missing",
-      },
-    ],
-  },
-  {
-    category: "Policies",
-    items: [
-      {
-        name: "Security policy",
-        meta: "None yet",
-        state: "missing",
-      },
-    ],
-  },
-];
-
-const ALL = LIBRARY.flatMap((g) => g.items);
-const MISSING = ALL.filter((r) => r.state === "missing").length;
+const ALL = ALL_RESOURCES;
+const MISSING = MISSING_COUNT;
 const STALE = ALL.filter((r) => r.state === "stale").length;
 
 const STATE_OPTIONS = (Object.keys(STATE) as ResourceState[]).map((id) => ({
@@ -215,7 +128,8 @@ export default function ResourcesPage() {
                 return ((a.usedBy ?? 0) - (b.usedBy ?? 0)) * dir;
               case "state":
                 return (
-                  (STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state)) *
+                  (STATE_ORDER.indexOf(a.state) -
+                    STATE_ORDER.indexOf(b.state)) *
                   dir
                 );
               default:
@@ -240,22 +154,20 @@ export default function ResourcesPage() {
       }
     >
       <div className="mx-auto w-full max-w-2xl py-10">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <CraigMark className="size-10 text-accent" />
-          <h1 className="text-3xl font-semibold tracking-[-0.02em]">
-            Ask Craig
+        {/* No composer here. There's one on Home and it answers from the same
+            documents — two boxes that ask Craig things is one box too many,
+            and this page's job is the shelf, not the conversation. */}
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">
+            Resources
           </h1>
-        </div>
+          <p className="text-md text-text-muted">
+            What Craig can answer from. Anything marked as missing, he
+            can&apos;t.
+          </p>
+        </header>
 
-        <div className="pt-6">
-          <PromptBar
-            placeholder="Ask about a policy, a document, anything you've uploaded…"
-            onSubmit={() => {}}
-            footnote="Craig only knows what's below. Anything marked as missing, he can't answer on."
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3 pb-3 pt-12">
+        <div className="flex items-center justify-between gap-3 pb-3 pt-8">
           <h2 className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
             Documents
           </h2>

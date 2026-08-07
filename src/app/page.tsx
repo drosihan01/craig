@@ -14,17 +14,19 @@ import {
   ListItem,
   PromptBar,
   Separator,
-  isUnconfigured,
-  setupWarning,
   type AppNotification,
 } from "@/components/ui";
 import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
-import { WORKFLOW, WORKFLOWS, stepCount } from "@/lib/demo-workflow";
+import { WORKFLOW, stepCount } from "@/lib/demo-workflow";
+import { gaps, useWorkflows } from "@/lib/workflow-store";
 import { ACTIVITY, ACTIVITY_VERB, outstanding } from "@/lib/craig-activity";
 import { AddSeat } from "@/components/add-seat";
 import { DraftSession } from "@/components/draft-session";
 import { type Onboarding } from "@/lib/onboarding";
+import { type DemoWorkflow } from "@/lib/demo-workflow";
 import { AdminNav, NavStat } from "@/components/app-nav";
+import { Transcript, useAskCraig, useHomeChat } from "@/components/home-chat";
+import { Add, Description, PersonAdd } from "@/components/ui/icons";
 
 /**
  * The admin's home.
@@ -84,12 +86,16 @@ function Home({ fresh }: { fresh: boolean }) {
   /* Local to this page: it only decides whether the hero collapses. */
   const [drafting, setDrafting] = React.useState(false);
 
+  const workflows = useWorkflows();
+  const chat = useHomeChat();
+  const ask = useAskCraig(chat, workflows);
+
   /* Katalis has a draft, so Home is past its empty state from the first load.
      If that ever stops being true the hero comes back on its own. */
-  const hasWorkflows = WORKFLOWS.some((w) => stepCount(w.blocks) > 0);
+  const hasWorkflows = workflows.some((w) => stepCount(w.blocks) > 0);
   const empty = !hasWorkflows && seats.length === 0;
 
-  const todo = openItems(seats, fresh);
+  const todo = openItems(workflows, seats, fresh);
 
   return (
     <AppShell
@@ -121,12 +127,14 @@ function Home({ fresh }: { fresh: boolean }) {
               fresh={fresh}
               onAddSeat={() => setAdding(true)}
             />
+
+            <Transcript chat={chat} />
           </div>
 
           <div className="shrink-0 pb-6 pt-2">
             <PromptBar
               placeholder="Ask Craig anything — a policy, a step, who's waiting on what…"
-              onSubmit={() => {}}
+              onSubmit={ask}
               footnote="Craig knows your workflows, your people and whatever you've uploaded."
             />
           </div>
@@ -176,7 +184,11 @@ function askFor(step: string, missing: string | null) {
   return `What should I use for “${step}”?`;
 }
 
-function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
+function openItems(
+  workflows: DemoWorkflow[],
+  seats: Onboarding[],
+  fresh: boolean,
+): OpenItem[] {
   const items: OpenItem[] = [];
 
   /* One row per unconfigured step, not one per workflow. "3 steps need setting
@@ -184,18 +196,15 @@ function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
      needs channels to add them to" is a thing you can finish. Each row links
      straight to its block, so clearing the list is three clicks rather than
      three hunts. */
-  for (const w of WORKFLOWS) {
-    for (const b of w.blocks) {
-      if (!isUnconfigured(b)) continue;
-      items.push({
-        id: `${w.id}-${b.id}`,
-        title: `Configure “${b.title}” in ${w.name}`,
-        ask: askFor(b.title, setupWarning(b)),
-        detail: `${w.name} · ${setupWarning(b) ?? "something is missing"}`,
-        href: `/builder/${w.id}?step=${b.id}`,
-        cta: "Answer",
-      });
-    }
+  for (const { workflow, block, missing } of gaps(workflows)) {
+    items.push({
+      id: `${workflow.id}-${block.id}`,
+      title: `Configure “${block.title}” in ${workflow.name}`,
+      ask: askFor(block.title, missing),
+      detail: `${workflow.name} · ${missing ?? "something is missing"}`,
+      href: `/builder/${workflow.id}?step=${block.id}`,
+      cta: "Answer",
+    });
   }
 
   /* The last thing on the list, and the only one that isn't a gap. Everything
@@ -209,7 +218,7 @@ function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
   const nilsStarted = seats.some(
     (s) => s.email === NEW_HIRE.email || s.name === NEW_HIRE.name,
   );
-  const gaps = items.length;
+  const unanswered = items.length;
   items.push({
     id: "seat",
     title: "Add a person",
@@ -218,8 +227,8 @@ function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
         ? `Shall I start ${NEW_HIRE.name.split(" ")[0]}? He's in ${NEW_HIRE.startsIn}.`
         : "Ready to put somebody through this?",
     detail:
-      gaps > 0
-        ? `${WORKFLOW.name} can't run until those ${gaps === 1 ? "is" : "are"} answered`
+      unanswered > 0
+        ? `${WORKFLOW.name} can't run until ${unanswered === 1 ? "that is" : "those are"} answered`
         : `${WORKFLOW.name} is ready — the first email goes out immediately`,
     cta: "Add someone",
     seat: true,
@@ -477,6 +486,51 @@ function CraigBrief({
           ))}
         </div>
       )}
+
+      {/* The three nouns Craig works on. Not navigation — the nav is
+          permanently on the left and already has Workflows, People and
+          Resources. These are "start one", which is a different verb and the
+          only one that isn't already one click away. */}
+      <div className="flex flex-wrap gap-2">
+        <QuickAdd
+          icon={<PersonAdd />}
+          label="Add a person"
+          onClick={onAddSeat}
+        />
+        <QuickAdd icon={<Add />} label="New workflow" href="/builder/blank" />
+        <QuickAdd
+          icon={<Description />}
+          label="Add a document"
+          href="/resources"
+        />
+      </div>
     </div>
+  );
+}
+
+function QuickAdd({
+  icon,
+  label,
+  href,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  href?: string;
+  onClick?: () => void;
+}) {
+  const className =
+    "inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text [&_svg]:size-3.5 [&_svg]:text-text-subtle";
+
+  return href ? (
+    <Link href={href} className={className}>
+      {icon}
+      {label}
+    </Link>
+  ) : (
+    <button type="button" onClick={onClick} className={className}>
+      {icon}
+      {label}
+    </button>
   );
 }

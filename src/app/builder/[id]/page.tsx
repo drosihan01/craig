@@ -19,11 +19,8 @@ import {
 import { ChevronLeft } from "@/components/ui/icons";
 import { useParams, useSearchParams } from "next/navigation";
 import { ACCOUNT, PEOPLE } from "@/lib/demo";
-import {
-  findWorkflow,
-  stepCount,
-  unconfiguredCount,
-} from "@/lib/demo-workflow";
+import { stepCount, unconfiguredCount } from "@/lib/demo-workflow";
+import { setBlocks as commitBlocks, useWorkflow } from "@/lib/workflow-store";
 import { blockFromPreset, type BlockPreset } from "@/lib/workflow/library";
 import { AdminNav, NavStat } from "@/components/app-nav";
 import {
@@ -98,9 +95,20 @@ function BuilderWithParams() {
 
 function Builder({ step }: { step: string | null }) {
   const params = useParams<{ id: string }>();
-  const workflow = findWorkflow(params.id);
+  const workflow = useWorkflow(params.id);
 
-  const [blocks, setBlocks] = React.useState<WorkflowBlock[]>(workflow.blocks);
+  /* Straight from the store rather than copied into local state. The builder
+     used to hold its own copy, which meant an edit here never reached Home and
+     an answer Craig took on Home never reached here. */
+  const blocks = workflow.blocks;
+  const setBlocks = React.useCallback(
+    (next: WorkflowBlock[] | ((prev: WorkflowBlock[]) => WorkflowBlock[])) =>
+      commitBlocks(
+        workflow.id,
+        typeof next === "function" ? next(workflow.blocks) : next,
+      ),
+    [workflow.id, workflow.blocks],
+  );
   /* Opens on the workflow rather than on a block — landing inside one step's
      settings before you've seen the shape of the thing is backwards — unless
      something linked here asking for a specific one. */

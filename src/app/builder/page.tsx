@@ -12,16 +12,15 @@ import {
   buttonVariants,
   type AppNotification,
 } from "@/components/ui";
-import { Add, AltRoute, AutoAwesome, Warning } from "@/components/ui/icons";
+import { Add, AltRoute, Warning } from "@/components/ui/icons";
 import { ACCOUNT } from "@/lib/demo";
 import {
   BLANK_WORKFLOW,
-  WORKFLOWS,
   stepCount,
   unconfiguredCount,
 } from "@/lib/demo-workflow";
+import { useWorkflows } from "@/lib/workflow-store";
 import { AdminNav, NavStat } from "@/components/app-nav";
-import { cn } from "@/lib/cn";
 
 /**
  * Pick a workflow, then build it.
@@ -32,26 +31,27 @@ import { cn } from "@/lib/cn";
  * busier and the customer look further along than they are.
  */
 
-/* Derived, so the counter can't claim something the list contradicts. */
-const READY = WORKFLOWS.filter(
-  (w) => stepCount(w.blocks) > 0 && unconfiguredCount(w.blocks) === 0,
-).length;
-
 const NOTIFICATIONS: AppNotification[] = [
   {
     id: "w1",
     kind: "assigned",
     title: "Two steps still need configuring",
-    description: "The Katalis employee workflow can't be assigned until they are",
+    description:
+      "The Katalis employee workflow can't be assigned until they are",
     timestamp: new Date(Date.now() - 4 * 60_000),
   },
 ];
 
 export default function WorkflowsPage() {
+  const workflows = useWorkflows();
+  /* Built ones only. The empty one isn't a workflow yet, it's the button. */
+  const built = workflows.filter((w) => stepCount(w.blocks) > 0);
+  const ready = built.filter((w) => unconfiguredCount(w.blocks) === 0).length;
+
   return (
     <AppShell
       title="Workflows"
-      nav={<WorkflowsNav />}
+      nav={<WorkflowsNav total={built.length} ready={ready} />}
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
       actions={
@@ -76,16 +76,14 @@ export default function WorkflowsPage() {
         </header>
 
         <List>
-          {WORKFLOWS.map((w) => {
+          {built.map((w) => {
             const count = stepCount(w.blocks);
             const gaps = unconfiguredCount(w.blocks);
-            const empty = count === 0;
-            /* Three states, not two. "Ready" is the one that matters — it's
-               the difference between a workflow you can assign to someone and
-               one that only looks finished. */
-            const state = empty
-              ? { label: "Empty", tone: "neutral" as const }
-              : gaps > 0
+            /* Two states. "Ready" is the one that matters — it's the
+               difference between a workflow you can assign to someone and one
+               that only looks finished. */
+            const state =
+              gaps > 0
                 ? { label: "Draft", tone: "warning" as const }
                 : { label: "Ready", tone: "success" as const };
 
@@ -94,10 +92,8 @@ export default function WorkflowsPage() {
                 key={w.id}
                 href={`/builder/${w.id}`}
                 leading={
-                  /* Dashed tile for the empty one — the same signal the canvas
-                     uses for a block that isn't configured yet. */
-                  <ListIcon tone={empty ? "muted" : "accent"}>
-                    {empty ? <Add /> : <AltRoute />}
+                  <ListIcon tone="accent">
+                    <AltRoute />
                   </ListIcon>
                 }
                 /* One badge in the title, not two. A second one wraps to its
@@ -107,14 +103,7 @@ export default function WorkflowsPage() {
                    shrink-0 and never wraps. */
                 title={
                   <span className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "truncate",
-                        empty && "text-text-muted",
-                      )}
-                    >
-                      {w.name}
-                    </span>
+                    <span className="truncate">{w.name}</span>
                     <Badge tone={state.tone} size="sm" className="shrink-0">
                       {state.label}
                     </Badge>
@@ -132,68 +121,50 @@ export default function WorkflowsPage() {
                    reusable template isn't for anyone in particular, and
                    "drafted for undefined" is how you find that out late. */
                 description={
-                  empty
-                    ? "A trigger and nothing else. Build it from the block library."
-                    : w.forWho
-                      ? `${count} steps · drafted for ${w.forWho}, starts in ${w.startsIn}`
-                      : `${count} steps · ${w.role}`
+                  w.forWho
+                    ? `${count} steps · drafted for ${w.forWho}, starts in ${w.startsIn}`
+                    : `${count} steps · ${w.role}`
                 }
                 footnote={`${w.createdBy} · ${w.updated}`}
               />
             );
           })}
-        </List>
 
-        {/* Three ways in, stated rather than hidden behind one button. The
-            middle one is the good one and it used to be the whole of Home. */}
-        <div className="flex flex-col gap-2 pt-8">
-          <h2 className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-            Start another
-          </h2>
-          <List>
-            <ListItem
-              href="/builder/new"
-              leading={
-                <ListIcon tone="accent">
-                  <AutoAwesome />
-                </ListIcon>
-              }
-              title="Describe it to Craig"
-              description="Tell Craig who you're hiring and what they need. He produces a draft for you to review."
-            />
-            <ListItem
-              href={`/builder/${BLANK_WORKFLOW.id}`}
-              leading={
-                <ListIcon tone="muted">
-                  <Add />
-                </ListIcon>
-              }
-              title="Start blank"
-              description="A trigger and nothing else. Built from the block library."
-            />
-          </List>
-          <p className="pt-1 text-xs leading-relaxed text-text-subtle">
-            Add a workflow when a role needs a different shape — a contractor
-            and a permanent hire rarely need the same steps.
-          </p>
-        </div>
+          {/* The last row is the empty workflow, which isn't a workflow — it's
+              the way to make one. Listing it as "Untitled workflow, Empty, 0
+              steps" put a thing you have to interpret where a button belongs,
+              and left the count of workflows one higher than the number of
+              workflows anybody had. */}
+          <ListItem
+            href={`/builder/${BLANK_WORKFLOW.id}`}
+            leading={
+              /* Dashed tile — the same signal the canvas uses for a block
+                 that isn't configured yet. */
+              <ListIcon tone="muted">
+                <Add />
+              </ListIcon>
+            }
+            title="Create a workflow"
+            description="Opens the builder with a trigger and nothing else."
+          />
+        </List>
       </div>
     </AppShell>
   );
 }
 
-function WorkflowsNav() {
+function WorkflowsNav({ total, ready }: { total: number; ready: number }) {
   return (
     <AdminNav>
       <div className="flex flex-col gap-2 px-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Workflows
         </p>
-        <NavStat label="Total" value={WORKFLOWS.length} />
+        <NavStat label="Total" value={total} />
         <NavStat
           label="Ready to assign"
-          value={READY}
-          tone={READY === 0 ? "warning" : "neutral"}
+          value={ready}
+          tone={ready === 0 ? "warning" : "neutral"}
         />
       </div>
 
