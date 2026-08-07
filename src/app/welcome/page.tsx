@@ -59,15 +59,15 @@ export default function WelcomePage() {
   const steps: Step[] = [
     {
       id: "1",
-      title: "Tell Craig about the company",
+      title: "Discovery",
       state: phase === "talk" ? "current" : "complete",
     },
     {
       id: "2",
-      title: "Craig writes your workflow",
+      title: "Build workflow",
       state: phase === "build" ? "current" : "upcoming",
     },
-    { id: "3", title: "Add your first person", state: "upcoming" },
+    { id: "3", title: "Onboard person", state: "upcoming" },
   ];
 
   return (

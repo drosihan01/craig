@@ -8,6 +8,7 @@ import {
   Button,
   CraigLockup,
   Field,
+  ThemeToggle,
   GoogleButton,
   Input,
   PasswordInput,
@@ -96,12 +97,15 @@ export default function SignUpPage() {
        four-field form stranded in the middle of a 700px column reads as an
        afterthought; sized to its content it reads as the thing you came for,
        and the canvas gets the rest. */
-    <main className="grid min-h-screen lg:grid-cols-[26rem_1fr]">
+    <main className="grid min-h-screen lg:grid-cols-[32rem_1fr]">
       {/* Form */}
       <div className="flex flex-col justify-between px-6 py-8 sm:px-10 lg:px-14">
-        <CraigLockup />
+        <div className="flex items-center justify-between gap-3">
+          <CraigLockup />
+          <ThemeToggle />
+        </div>
 
-        <div className="w-full max-w-sm py-12">
+        <div className="w-full max-w-md py-12">
           <GoogleButton onClick={() => router.push("/welcome")} />
           <AuthDivider label="or use your work email" />
 
@@ -116,11 +120,7 @@ export default function SignUpPage() {
               />
             </Field>
 
-            <Field
-              label="Work email"
-              error={errors.email}
-              hint="Craig sends mail on behalf of your company, so it can't be a personal address."
-            >
+            <Field label="Work email" error={errors.email}>
               <Input
                 type="email"
                 value={email}
