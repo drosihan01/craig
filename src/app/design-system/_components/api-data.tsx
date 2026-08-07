@@ -532,3 +532,50 @@ export const NOTIFICATION_PROPS: PropDoc[] = [
     description: "Omit it and the button doesn't render.",
   },
 ];
+
+export const LIST_PROPS: PropDoc[] = [
+  {
+    name: "leading",
+    type: "ReactNode",
+    description:
+      "Avatar, ListIcon, checkbox. Sits outside the divider inset, so a column of them lines up.",
+  },
+  {
+    name: "title",
+    type: "ReactNode",
+    required: true,
+    description: "The only required slot. Truncates to one line.",
+  },
+  {
+    name: "description",
+    type: "ReactNode",
+    description: "Supporting line, clamped to two. A row isn't a paragraph.",
+  },
+  {
+    name: "footnote",
+    type: "ReactNode",
+    description: "Third line, quieter still.",
+  },
+  {
+    name: "overline",
+    type: "ReactNode",
+    description: "Small label above the title, for a type or category.",
+  },
+  {
+    name: "meta",
+    type: "ReactNode",
+    description: "Right-aligned text — a count, a timestamp.",
+  },
+  {
+    name: "trailing",
+    type: "ReactNode",
+    description:
+      "Controls: a badge, a menu, a select. Clicks inside don't trigger the row.",
+  },
+  {
+    name: "href / onClick",
+    type: "string · () => void",
+    description:
+      "Makes the whole row a target. href renders a Link, onClick a button — the row shouldn't be a div with a handler.",
+  },
+];

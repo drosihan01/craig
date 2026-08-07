@@ -23,6 +23,9 @@ import {
   BackLink,
   CraigLockup,
   CraigMark,
+  List,
+  ListIcon,
+  ListItem,
   Badge,
   Button,
   Callout,
@@ -80,6 +83,7 @@ import {
   DROPDOWN_PROPS,
   PROMPTBAR_PROPS,
   BACKLINK_PROPS,
+  LIST_PROPS,
   NOTIFICATION_PROPS,
   TOAST_PROPS,
   BUILDER_PROPS,
@@ -867,6 +871,73 @@ export default function DesignSystemPage() {
             </Card>
           </div>
         </Demo>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="list"
+        title="List"
+        description="Rows of things — people, documents, workflows. Borrowed from Material's list anatomy, mainly for one detail: dividers are inset, starting where the text starts rather than at the row edge, so a column of avatars reads as a column instead of every row looking like a separate boxed card."
+      >
+        <Demo title="Two-line rows with a leading avatar" className="items-stretch">
+          <List className="w-full">
+            <ListItem
+              leading={<Avatar name="Ada Yıldız" size="md" />}
+              title="Ada Yıldız"
+              description="Founder · ada@katalis.ai"
+              meta="owns 4 steps"
+              trailing={<Badge tone="neutral" size="sm">Owner</Badge>}
+            />
+            <ListItem
+              leading={<Avatar name="Jason Cho" size="md" />}
+              title="Jason Cho"
+              description="Cofounder · jason@katalis.ai"
+              footnote="Every credential goes through him"
+              meta="owns 4 steps"
+              trailing={<Badge tone="neutral" size="sm">Admin</Badge>}
+            />
+            <ListItem
+              leading={<Avatar name="Matty" size="md" />}
+              title="Matty"
+              description="Frontend, contract · matty@katalis.ai"
+              trailing={<Badge tone="neutral" size="sm">Contributor</Badge>}
+            />
+          </List>
+        </Demo>
+
+        <Demo title="Icon tiles, overline, and an interactive row" className="items-stretch">
+          <List className="w-full">
+            <ListItem
+              href="/resources"
+              leading={
+                <ListIcon tone="accent">
+                  <Description />
+                </ListIcon>
+              }
+              overline="Onboarding"
+              title="Katalis Handbook"
+              description="PDF · last updated Feb 2026"
+              meta="2 steps use this"
+            />
+            <ListItem
+              leading={
+                <ListIcon tone="muted">
+                  <Warning />
+                </ListIcon>
+              }
+              overline="Engineering"
+              title="Slack channel list"
+              description="Nobody has written this down"
+            />
+            <ListItem
+              title="A row with nothing leading"
+              description="The divider runs the full width when there's no leading slot."
+            />
+          </List>
+        </Demo>
+
+        <Api component="ListItem" props={LIST_PROPS} />
+        <Usage>{`import { List, ListItem, ListSection, ListIcon } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}

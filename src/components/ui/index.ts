@@ -25,6 +25,13 @@ export {
   Separator,
 } from "./card";
 export { Avatar, AvatarStack } from "./avatar";
+export {
+  List,
+  ListItem,
+  ListSection,
+  ListIcon,
+  type ListItemProps,
+} from "./list";
 export { Tabs, SegmentedControl } from "./tabs";
 export {
   Progress,

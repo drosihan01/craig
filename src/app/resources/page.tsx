@@ -6,6 +6,10 @@ import {
   Badge,
   Button,
   CraigMark,
+  List,
+  ListIcon,
+  ListItem,
+  ListSection,
   PromptBar,
   Separator,
   type AppNotification,
@@ -174,20 +178,17 @@ export default function ResourcesPage() {
 
         <div className="flex flex-col gap-7">
           {LIBRARY.map((group) => (
-            <section key={group.category} className="flex flex-col gap-2">
-              <div className="flex items-baseline gap-2">
-                <h3 className="text-base font-medium">{group.category}</h3>
-                <span className="text-xs text-text-subtle">
-                  {group.items.length}
-                </span>
-              </div>
-
-              <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
+            <ListSection
+              key={group.category}
+              title={group.category}
+              count={group.items.length}
+            >
+              <List>
                 {group.items.map((r) => (
                   <ResourceRow key={r.name} resource={r} />
                 ))}
-              </ul>
-            </section>
+              </List>
+            </ListSection>
           ))}
         </div>
       </div>
@@ -200,46 +201,29 @@ function ResourceRow({ resource: r }: { resource: Resource }) {
   const missing = r.state === "missing";
 
   return (
-    <li className="flex items-start gap-3 px-3.5 py-3">
-      <span
-        aria-hidden
-        className={
-          missing
-            ? "flex size-8 shrink-0 items-center justify-center rounded-lg border border-dashed border-border-strong text-text-subtle"
-            : "flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-sunken text-text-subtle"
-        }
-      >
-        {missing ? (
-          <Warning className="size-4" />
-        ) : (
-          <Description className="size-4" />
-        )}
-      </span>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={
-              missing
-                ? "text-base text-text-muted"
-                : "text-base font-medium text-text"
-            }
-          >
+    <ListItem
+      leading={
+        <ListIcon tone={missing ? "muted" : "default"}>
+          {missing ? <Warning /> : <Description />}
+        </ListIcon>
+      }
+      title={
+        <span className="flex flex-wrap items-center gap-2">
+          <span className={missing ? "font-normal text-text-muted" : undefined}>
             {r.name}
           </span>
           <Badge tone={state.tone} size="sm">
             {state.label}
           </Badge>
-        </div>
-        <span className="text-sm text-text-subtle">{r.meta}</span>
-      </div>
-
-      {r.usedBy !== undefined && (
-        <span className="shrink-0 whitespace-nowrap pt-0.5 text-2xs text-text-subtle">
-          {r.usedBy} {r.usedBy === 1 ? "step" : "steps"} use this
         </span>
-      )}
-    </li>
+      }
+      description={r.meta}
+      meta={
+        r.usedBy !== undefined
+          ? `${r.usedBy} ${r.usedBy === 1 ? "step" : "steps"} use this`
+          : undefined
+      }
+    />
   );
 }
 

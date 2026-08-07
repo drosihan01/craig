@@ -3,18 +3,20 @@
 import * as React from "react";
 import {
   AppShell,
+  Avatar,
   Badge,
   buttonVariants,
   Card,
   ChatTranscript,
   CraigMark,
   PromptBar,
+  Separator,
   type AppNotification,
   type ChatMessage,
 } from "@/components/ui";
 import Link from "next/link";
 import { Campaign, Code, Groups, Schedule } from "@/components/ui/icons";
-import { ACCOUNT, NEW_HIRE } from "@/lib/demo";
+import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { SESSION } from "@/lib/demo-session";
 import { WORKFLOW } from "@/lib/demo-workflow";
 import { AdminNav, NavStat } from "@/components/app-nav";
@@ -197,6 +199,8 @@ export default function AdminHomePage() {
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
       fill={started}
+      asideTitle="Katalis"
+      aside={<HomeAside started={started} />}
     >
       {started ? (
         /* Pinned to the viewport so only the transcript scrolls. A composer
@@ -397,6 +401,91 @@ function DraftHandoff() {
         Open the draft
       </Link>
     </Card>
+  );
+}
+
+/**
+ * What Craig knows about Katalis, and what he doesn't.
+ *
+ * The gaps are listed as prominently as the facts. They're the reason his
+ * answers are worth anything, and if the panel only showed what's on file it
+ * would flatter a company that has three people and a stale handbook.
+ */
+function HomeAside({ started }: { started: boolean }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Company
+        </p>
+        <div className="flex flex-col gap-1 text-sm">
+          <span className="font-medium text-text">{COMPANY.name}</span>
+          <span className="leading-relaxed text-text-muted">
+            {COMPANY.pitch}
+          </span>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-col gap-2">
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          People
+        </p>
+        {Object.values(PEOPLE).map((p) => (
+          <div key={p.email} className="flex items-center gap-2">
+            <Avatar name={p.name} size="xs" />
+            <span className="truncate text-sm text-text-muted">{p.name}</span>
+            <span className="ml-auto shrink-0 text-2xs text-text-subtle">
+              {p.role}
+            </span>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 pt-0.5">
+          <Avatar name={NEW_HIRE.name} size="xs" />
+          <span className="truncate text-sm text-text-muted">
+            {NEW_HIRE.name}
+          </span>
+          <Badge tone="warning" size="sm" className="ml-auto shrink-0">
+            Starts in {NEW_HIRE.startsIn}
+          </Badge>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="flex flex-col gap-2">
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          What Craig has
+        </p>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-text-muted">Katalis Handbook</span>
+          <Badge tone="warning" size="sm">
+            Feb 2026
+          </Badge>
+        </div>
+        <p className="text-xs leading-relaxed text-text-subtle">
+          Five other things the workflow needs aren&apos;t written down
+          anywhere.{" "}
+          <Link
+            href="/resources"
+            className="text-accent underline-offset-4 hover:underline"
+          >
+            Resources
+          </Link>
+        </p>
+      </div>
+
+      {started && (
+        <>
+          <Separator />
+          <p className="text-xs leading-relaxed text-text-subtle">
+            Nothing in this conversation has been created. Craig drafts,
+            you publish.
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 

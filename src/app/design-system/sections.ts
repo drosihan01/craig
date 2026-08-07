@@ -30,6 +30,7 @@ export const SECTIONS: NavGroup[] = [
       { id: "selection", label: "Selection" },
       { id: "badge", label: "Badge & status" },
       { id: "card", label: "Card" },
+      { id: "list", label: "List" },
       { id: "avatar", label: "Avatar" },
       { id: "tabs", label: "Tabs" },
       { id: "progress", label: "Progress & steps" },

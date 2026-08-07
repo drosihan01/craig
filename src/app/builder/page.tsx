@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import {
   AppShell,
   Badge,
   Button,
-  Card,
   EmptyState,
+  List,
+  ListIcon,
+  ListItem,
   Separator,
   type AppNotification,
 } from "@/components/ui";
@@ -69,15 +70,17 @@ export default function WorkflowsPage() {
         </header>
 
         <div className="flex flex-col gap-3">
-          <Link href={`/builder/${WORKFLOW.id}`} className="block">
-            <Card interactive className="flex items-start gap-3.5 p-4">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-subtle-fg">
-                <Code className="size-5" />
-              </span>
-
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-md font-medium">{WORKFLOW.name}</span>
+          <List>
+            <ListItem
+              href={`/builder/${WORKFLOW.id}`}
+              leading={
+                <ListIcon tone="accent">
+                  <Code />
+                </ListIcon>
+              }
+              title={
+                <span className="flex flex-wrap items-center gap-2">
+                  {WORKFLOW.name}
                   <Badge tone="warning" size="sm">
                     Draft
                   </Badge>
@@ -87,19 +90,12 @@ export default function WorkflowsPage() {
                       {unconfigured} unconfigured
                     </Badge>
                   )}
-                </div>
-
-                <p className="text-sm text-text-muted">
-                  {steps} steps · drafted for {WORKFLOW.forWho}, starts in{" "}
-                  {WORKFLOW.startsIn}
-                </p>
-
-                <p className="text-2xs text-text-subtle">
-                  {WORKFLOW.createdBy} · {WORKFLOW.updated}
-                </p>
-              </div>
-            </Card>
-          </Link>
+                </span>
+              }
+              description={`${steps} steps · drafted for ${WORKFLOW.forWho}, starts in ${WORKFLOW.startsIn}`}
+              footnote={`${WORKFLOW.createdBy} · ${WORKFLOW.updated}`}
+            />
+          </List>
 
           {/* Only one workflow exists, so the second slot says what a second one
               would be for rather than sitting empty. */}

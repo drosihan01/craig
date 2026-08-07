@@ -7,6 +7,8 @@ import {
   Badge,
   Button,
   DropdownMenu,
+  List,
+  ListItem,
   SelectMenu,
   Separator,
   type AppNotification,
@@ -150,7 +152,7 @@ export default function PeoplePage() {
           </p>
         </header>
 
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
+        <List>
           {people.map((p) => (
             <PersonRow
               key={p.email}
@@ -160,24 +162,21 @@ export default function PeoplePage() {
               onRole={(role) => setRole(p.email, role)}
             />
           ))}
-        </ul>
+        </List>
 
         <div className="flex flex-col gap-2 pt-8">
           <h2 className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
             What each role can do
           </h2>
-          <dl className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
+          <List>
             {ROLES.map((r) => (
-              <div key={r.id} className="flex gap-3 px-3.5 py-2.5">
-                <dt className="w-28 shrink-0 text-base font-medium">
-                  {r.label}
-                </dt>
-                <dd className="text-sm leading-relaxed text-text-muted">
-                  {r.description}
-                </dd>
-              </div>
+              <ListItem
+                key={r.id}
+                title={r.label}
+                description={r.description}
+              />
             ))}
-          </dl>
+          </List>
         </div>
       </div>
     </AppShell>
@@ -196,12 +195,11 @@ function PersonRow({
   onRole: (role: Role) => void;
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-3 px-3.5 py-3">
-      <Avatar name={p.name} size="md" />
-
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-base font-medium">{p.name}</span>
+    <ListItem
+      leading={<Avatar name={p.name} size="md" />}
+      title={
+        <span className="flex flex-wrap items-center gap-2">
+          {p.name}
           {isYou && (
             <Badge tone="neutral" size="sm">
               You
@@ -215,71 +213,67 @@ function PersonRow({
               Invited
             </Badge>
           )}
-        </div>
-        <span className="truncate text-sm text-text-subtle">
-          {p.title} · {p.email}
         </span>
-        {p.note && (
-          <span className="text-2xs text-text-subtle">{p.note}</span>
-        )}
-      </div>
+      }
+      description={`${p.title} · ${p.email}`}
+      footnote={p.note}
+      meta={p.ownsSteps ? `owns ${p.ownsSteps} steps` : undefined}
+      trailing={
+        <>
+          <div className="w-40">
+            {isOnlyOwner ? (
+              /* The last owner can't be demoted. Rendering a picker that
+                 refuses on submit would be worse than not offering the choice
+                 — locking yourself out of your own account is unrecoverable. */
+              <span
+                title="There has to be an owner"
+                className="flex h-8 items-center gap-2 rounded-md border border-dashed border-border px-2.5 text-base text-text-muted"
+              >
+                Owner
+                <Warning className="ml-auto size-3.5 shrink-0 text-text-subtle" />
+              </span>
+            ) : (
+              <SelectMenu
+                label={`Role for ${p.name}`}
+                value={p.role}
+                onChange={(role) => onRole(role as Role)}
+                options={ROLES.map((r) => ({
+                  id: r.id,
+                  label: r.label,
+                  description: r.description,
+                }))}
+              />
+            )}
+          </div>
 
-      {p.ownsSteps !== undefined && p.ownsSteps > 0 && (
-        <span className="shrink-0 whitespace-nowrap text-2xs text-text-subtle">
-          owns {p.ownsSteps} steps
-        </span>
-      )}
-
-      <div className="w-40 shrink-0">
-        {isOnlyOwner ? (
-          /* The last owner can't be demoted. Rendering a picker that refuses
-             on submit would be worse than not offering the choice — and
-             locking yourself out of your own account is unrecoverable. */
-          <span
-            title="There has to be an owner"
-            className="flex h-8 items-center gap-2 rounded-md border border-dashed border-border px-2.5 text-base text-text-muted"
-          >
-            Owner
-            <Warning className="ml-auto size-3.5 shrink-0 text-text-subtle" />
-          </span>
-        ) : (
-          <SelectMenu
-            label={`Role for ${p.name}`}
-            value={p.role}
-            onChange={(role) => onRole(role as Role)}
-            options={ROLES.map((r) => ({
-              id: r.id,
-              label: r.label,
-              description: r.description,
-            }))}
+          <DropdownMenu
+            label={`${p.name} actions`}
+            align="end"
+            width="w-48"
+            trigger={
+              <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-hover hover:text-text">
+                <MoreHoriz className="size-4" />
+              </span>
+            }
+            items={[
+              p.status === "invited"
+                ? { id: "resend", label: "Resend invite", icon: <Mail /> }
+                : { id: "email", label: "Email", icon: <Mail /> },
+              {
+                id: "remove",
+                label: isOnlyOwner
+                  ? "Can't remove the owner"
+                  : "Remove from Katalis",
+                icon: <Delete />,
+                destructive: !isOnlyOwner,
+                disabled: isOnlyOwner,
+                separatorBefore: true,
+              },
+            ]}
           />
-        )}
-      </div>
-
-      <DropdownMenu
-        label={`${p.name} actions`}
-        align="end"
-        width="w-48"
-        trigger={
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-hover hover:text-text">
-            <MoreHoriz className="size-4" />
-          </span>
-        }
-        items={[
-          p.status === "invited"
-            ? { id: "resend", label: "Resend invite", icon: <Mail /> }
-            : { id: "email", label: "Email", icon: <Mail /> },
-          {
-            id: "remove",
-            label: isOnlyOwner ? "Can't remove the owner" : "Remove from Katalis",
-            icon: <Delete />,
-            destructive: !isOnlyOwner,
-            disabled: isOnlyOwner,
-            separatorBefore: true,
-          },
-        ]}
-      />
-    </li>
+        </>
+      }
+    />
   );
 }
 
