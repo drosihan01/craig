@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Add, ArrowUpward, StopCircle } from "./icons";
+import { Add, ArrowUpward, Mic, StopCircle } from "./icons";
 import { DEFAULT_MODEL, ModelPicker, type ChatModel } from "./model-picker";
 import { cn } from "@/lib/cn";
 
@@ -19,6 +19,8 @@ export interface PromptBarProps {
   placeholder?: string;
   busy?: boolean;
   onStop?: () => void;
+  /** Speech-to-text into this field. Not a live-voice mode. */
+  dictation?: boolean;
   /** Larger padding and radius for standalone page-level use. */
   size?: "sm" | "lg";
   /** Line under the bar — disclaimer, hint, character count. */
@@ -34,6 +36,7 @@ export function PromptBar({
   placeholder = "Type / for skills",
   busy,
   onStop,
+  dictation = true,
   size = "lg",
   footnote,
   autoFocus,
@@ -74,7 +77,9 @@ export function PromptBar({
       >
         <textarea
           ref={ref}
-          rows={1}
+          // Two lines at page level — a single-line box reads as a search
+          // field, and this is asking for a paragraph.
+          rows={lg ? 2 : 1}
           value={value}
           autoFocus={autoFocus}
           onChange={(e) => setValue(e.target.value)}
@@ -101,6 +106,15 @@ export function PromptBar({
 
           <div className="ml-auto flex items-center gap-0.5">
             <ModelPicker value={model} onChange={setModel} />
+
+            {/* Dictation, i.e. speech to text in this field. Deliberately not a
+                live-voice mode — that's a different interaction with different
+                expectations, and this bar is for composing a message. */}
+            {dictation && (
+              <IconButton label="Dictate">
+                <Mic className="size-4" />
+              </IconButton>
+            )}
 
             {busy && onStop ? (
               <button

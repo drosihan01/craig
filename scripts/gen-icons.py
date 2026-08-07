@@ -14,6 +14,7 @@ BASE = ("https://raw.githubusercontent.com/google/material-design-icons/master"
 # export name -> Material Symbols name
 ICONS = {
     "Add": "add",
+    "Science": "science",
     "Cancel": "cancel",
     "CheckCircle": "check_circle",
     "DoneAll": "done_all",
@@ -70,6 +71,12 @@ ICONS = {
     "ProgressActivity": "progress_activity",
     "Search": "search",
     "Warning": "warning",
+    "Checklist": "checklist",
+    "Palette": "palette",
+    "MenuBook": "menu_book",
+    "Database": "database",
+    "PlayArrow": "play_arrow",
+    "OpenInNew": "open_in_new",
 }
 
 HEADER = '''import * as React from "react";

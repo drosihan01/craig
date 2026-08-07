@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   ExpandLess,
   LeftPanelClose,
@@ -8,6 +9,7 @@ import {
   Logout,
   Person,
   RightPanelClose,
+  Science,
   RightPanelOpen,
   Settings,
 } from "./icons";
@@ -22,6 +24,11 @@ import { cn } from "@/lib/cn";
  * The product's frame: brand cell, collapsible left nav, content, collapsible
  * right panel. The account sits in the bottom cell of the left panel — nav and
  * account are both sticky, so they hold while the page scrolls.
+ *
+ * Header layout: the brand cell holds the nav toggle on its right edge, the
+ * centre cell holds the page (title, actions, theme), and the right cell holds
+ * the details-panel toggle on its left edge with notifications in the corner.
+ * Each panel's toggle sits against the rule it actually moves.
  *
  * The header is three cells and the body is three columns, sharing the same two
  * vertical rules — so each rule runs unbroken from the top of the header to the
@@ -200,30 +207,33 @@ export function AppShell({
             {actions && (
               <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
             )}
-            {notifications && (
-              <NotificationBell
-                items={notifications}
-                onSelect={onNotificationSelect}
-                onMarkAllRead={onMarkAllRead}
-                className="ml-auto shrink-0"
-              />
-            )}
+            <ThemeToggle className="ml-auto shrink-0" />
           </div>
 
-          {/* Right cell — tracks the details column's width, same rule. */}
+          {/* Right cell — tracks the details column's width, same rule. The
+              panel's toggle sits hard left, against the rule it actually
+              moves, mirroring the nav toggle in the brand cell. Notifications
+              take the far corner. */}
           <div
             className={cn(
-              "flex shrink-0 items-center justify-end gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
+              "flex shrink-0 items-center gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
               asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
             )}
           >
-            <ThemeToggle />
             {aside && (
               <PanelToggle
                 open={asideOpen}
                 onToggle={toggleAside}
                 side="right"
                 className="hidden lg:inline-flex"
+              />
+            )}
+            {notifications && (
+              <NotificationBell
+                items={notifications}
+                onSelect={onNotificationSelect}
+                onMarkAllRead={onMarkAllRead}
+                className="ml-auto shrink-0"
               />
             )}
           </div>
@@ -472,6 +482,8 @@ function PanelToggle({
  * something.
  */
 function AccountMenu({ account }: { account: AccountInfo }) {
+  const router = useRouter();
+
   return (
     <div className="flex w-full items-center gap-2.5 px-1.5 py-1">
       <Avatar name={account.name} size="md" />
@@ -505,6 +517,16 @@ function AccountMenu({ account }: { account: AccountInfo }) {
             icon: <Person />,
           },
           { id: "settings", label: "Settings", icon: <Settings /> },
+          /* The sandbox is a builder's tool, not an admin's — it doesn't belong
+             in the product nav, but it has to be reachable from every screen. */
+          {
+            id: "sandbox",
+            label: "Sandbox",
+            description: "Builder hub",
+            icon: <Science />,
+            separatorBefore: true,
+            onSelect: () => router.push("/sandbox"),
+          },
           {
             id: "signout",
             label: "Sign out",

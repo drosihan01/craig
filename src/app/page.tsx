@@ -1,15 +1,15 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import {
   AppShell,
-  Badge,
   CraigMark,
   PromptBar,
   Separator,
   type AppNotification,
 } from "@/components/ui";
+import { ACCOUNT } from "@/lib/demo";
+import { AdminNav, NavStat } from "@/components/app-nav";
 
 /**
  * The admin's first screen. Craig asks before it builds — a workflow generated
@@ -25,15 +25,17 @@ const NOTIFICATIONS: AppNotification[] = [
     id: "h1",
     kind: "info",
     title: "Welcome to Craig",
-    description: "Start by describing your company below.",
+    description: "Start by describing Katalis below.",
     timestamp: new Date(Date.now() - 3 * 60_000),
   },
 ];
 
+/* In Ada's voice, not a marketing deck's — the point of the prompt is that it
+   takes the company as it actually is. */
 const SUGGESTIONS = [
-  "We're a retail chain with 40 stores across VIC and NSW",
-  "Hospitality — casual staff, high turnover, lots of compliance",
-  "A 30-person software team, mostly remote",
+  "we're 3 people doing AI infra, first non-founder hire starts in two weeks and i have nothing written down",
+  "everything lives in slack and a notion doc i wrote at 11pm before a fundraise call",
+  "async, no meetings, we ship fast and things break sometimes — that's fine, but new people don't know that",
 ];
 
 export default function AdminHomePage() {
@@ -42,13 +44,9 @@ export default function AdminHomePage() {
   return (
     <AppShell
       title="Home"
-      nav={<AdminNav />}
+      nav={<HomeNav />}
       notifications={NOTIFICATIONS}
-      account={{
-        name: "Dzaky Rosihan",
-        email: "dzaky.rosihan@kmart.com.au",
-        role: "Admin",
-      }}
+      account={ACCOUNT}
     >
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col justify-center py-16">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -58,8 +56,9 @@ export default function AdminHomePage() {
           </h1>
           <p className="max-w-md text-md leading-relaxed text-text-muted">
             What you do, roughly how many people, and what a new starter&apos;s
-            first week usually looks like. I&apos;ll draft the onboarding
-            workflows from there — you&apos;ll edit them before anything goes
+            first week usually looks like. Rough is fine — you can attach a
+            handbook too, however out of date it is. I&apos;ll draft the
+            onboarding from there, and you&apos;ll edit it before anything goes
             live.
           </p>
         </div>
@@ -67,9 +66,9 @@ export default function AdminHomePage() {
         <div className="pt-8">
           <PromptBar
             autoFocus
-            placeholder="We're a retail chain with…"
+            placeholder="we're 3 people doing AI infra…"
             onSubmit={setSent}
-            footnote="Craigson Lambda 2.0 · your answer stays internal"
+            footnote="Craigson Lambda 2.0 · stays inside Katalis"
           />
         </div>
 
@@ -98,12 +97,14 @@ export default function AdminHomePage() {
               <CraigMark className="mt-0.5 size-6 shrink-0 text-accent" />
               <div className="flex flex-col gap-1">
                 <p className="text-base leading-relaxed text-text">
-                  Got it. From that I&apos;d start you with three workflows —
-                  one per role family — each with a pre-boarding stage, a day
-                  one stage and a 30-day check-in.
+                  Got it. At three people the useful thing isn&apos;t a policy
+                  library — it&apos;s making sure the things only you and Jason
+                  know actually get handed over. I&apos;d start with one
+                  workflow for an engineering hire: access, a first-week orient,
+                  and a 30-day check-in.
                 </p>
                 <p className="text-sm text-text-subtle">
-                  Nothing is created yet. This is where the generated drafts
+                  Nothing is created yet. This is where the generated draft
                   would appear for you to review.
                 </p>
               </div>
@@ -115,57 +116,16 @@ export default function AdminHomePage() {
   );
 }
 
-function AdminNav() {
-  const items = [
-    { label: "Home", href: "/", current: true },
-    { label: "Workflows", href: "/builder" },
-    { label: "People", href: "#" },
-    { label: "Settings", href: "#" },
-  ];
-
+function HomeNav() {
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-0.5">
-        {items.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            aria-current={item.current ? "page" : undefined}
-            className={
-              item.current
-                ? "rounded-md bg-accent-subtle px-2 py-1 text-sm font-medium text-accent-subtle-fg"
-                : "rounded-md px-2 py-1 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-            }
-          >
-            {item.label}
-          </Link>
-        ))}
-      </div>
-
-      <Separator />
-
+    <AdminNav>
       <div className="flex flex-col gap-2 px-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Getting started
         </p>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-text-muted">Workflows</span>
-          <Badge size="sm">0</Badge>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-text-muted">New starters</span>
-          <Badge size="sm">0</Badge>
-        </div>
+        <NavStat label="Workflows" value={0} />
+        <NavStat label="New hires" value={0} />
       </div>
-
-      <Separator />
-
-      <Link
-        href="/design-system"
-        className="px-2 text-xs text-text-subtle underline-offset-4 hover:text-text hover:underline"
-      >
-        Design system →
-      </Link>
-    </div>
+    </AdminNav>
   );
 }

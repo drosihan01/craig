@@ -181,8 +181,8 @@ export function AuthDemo() {
         <p className="text-sm font-medium">Returning to this device</p>
         <ContinueAs
           account={{
-            name: "Dzaky Rosihan",
-            email: "dzaky.rosihan@kmart.com.au",
+            name: "Ada Y\u0131ld\u0131z",
+            email: "ada@katalis.ai",
             method: "google",
           }}
         />
@@ -213,27 +213,27 @@ const DEMO_BLOCKS: WorkflowBlock[] = [
   {
     id: "t",
     kind: "trigger",
-    title: "A new starter is added",
-    summary: "Role is Retail team member",
+    title: "A new hire is added",
+    summary: "Role is Engineer · Katalis",
   },
   {
     id: "a",
     kind: "task",
-    title: "Order laptop and store login",
-    summary: "Due 3 days before start date",
-    owner: "IT service desk",
+    title: "GitHub, AWS and model provider keys",
+    summary: "Jason owns all of these",
+    owner: "Jason Cho",
   },
   {
     id: "b",
     kind: "approval",
-    title: "Hiring manager confirms readiness",
-    owner: "Hiring manager",
+    title: "Jason signs off on prod access",
+    owner: "Jason Cho",
   },
   {
     id: "c",
     kind: "notify",
-    title: "Send the welcome email",
-    incomplete: "No template chosen",
+    title: "Add to Slack channels",
+    incomplete: "No channel list \u2014 ask Ada or Jason",
   },
 ];
 

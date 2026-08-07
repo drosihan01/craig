@@ -18,10 +18,10 @@ import { AutoAwesome, Forum } from "@/components/ui/icons";
    exercised without a backend. */
 const REPLIES: Record<string, string> = {
   "craigson-lambda-2":
-    "Dzaky has 8 of 12 steps outstanding. Two are blocked on IT: the laptop order hasn't shipped and the store login isn't provisioned. The right-to-work check is the only one past its due date — it was due three days before start. Want me to nudge the owners?",
+    "Six of nine steps are outstanding, and five of them are owned by Jason. The Slack channel list still has no owner at all — it's the only step nobody can action. The handbook step points at a doc last updated in Feb 2026, which two other steps also reference. Want me to flag both to Jason?",
   claude:
-    "Looking at the workflow, the critical path runs through IT provisioning — four later steps depend on the store login existing. I'd resolve that first; the equipment order can slip a day without blocking anything else.",
-  gpt: "There are 8 open steps. The blockers are both IT-owned. I'd suggest escalating the store login first, then following up on the laptop order.",
+    "The critical path runs through Jason: keys, the who-owns-what walkthrough and the prod sign-off are all his, and the last one blocks day one. With three people that's a single point of failure rather than a queue — worth deciding now what happens if he's away that week.",
+  gpt: "There are 6 open steps, mostly assigned to Jason Cho. The Slack channels step is unassigned. I'd suggest giving it an owner and refreshing the handbook.",
 };
 
 export function ChatDemo() {
@@ -118,9 +118,9 @@ export function ChatDemo() {
         model={model}
         onModelChange={setModel}
         suggestions={[
-          "What's still outstanding for Dzaky?",
-          "Draft a step for the store login",
-          "Which steps are blocked, and on whom?",
+          "what's still outstanding for the new hire?",
+          "draft a step for the slack channels",
+          "which steps are blocked, and on whom?",
         ]}
       />
     </>

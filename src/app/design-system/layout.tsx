@@ -1,4 +1,5 @@
 import { AppShell, Badge, type AppNotification } from "@/components/ui";
+import { ACCOUNT } from "@/lib/demo";
 import { SectionNav } from "./_components/section-nav";
 import { ShellAside } from "./_components/shell-aside";
 
@@ -29,11 +30,7 @@ export default function DesignSystemLayout({
       asideTitle="On this page"
       actions={<Badge tone="neutral">v0.1</Badge>}
       notifications={NOTIFICATIONS}
-      account={{
-        name: "Dzaky Rosihan",
-        email: "dzaky.rosihan@kmart.com.au",
-        role: "Admin",
-      }}
+      account={ACCOUNT}
     >
       {children}
     </AppShell>

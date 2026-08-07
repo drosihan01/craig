@@ -220,6 +220,13 @@ export const PROMPTBAR_PROPS: PropDoc[] = [
     description: "While busy the send button becomes a stop button.",
   },
   {
+    name: "dictation",
+    type: "boolean",
+    default: "true",
+    description:
+      "Speech-to-text into this field. Not a live-voice mode — that's a different interaction with different expectations.",
+  },
+  {
     name: "footnote",
     type: "ReactNode",
     description: "Line under the bar — disclaimer, hint, character count.",

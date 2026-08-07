@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AuthDivider,
   AuthShell,
@@ -14,13 +15,17 @@ import {
   PasswordInput,
 } from "@/components/ui";
 import { Warning } from "@/components/ui/icons";
+import { PEOPLE } from "@/lib/demo";
 
 /**
- * Front-end only. Submitting validates shape and stops — there's no auth
- * backend yet, and pretending otherwise in the client would be worse than
- * doing nothing.
+ * Front-end only. Validation is real; authentication is not — there is no
+ * backend, so "signing in" here just routes to the admin home. That's fine for
+ * a demo and unacceptable for anything else: the route it lands on must be
+ * guarded server-side before this ships, or it's a login page that lets anyone
+ * in by clicking a button.
  */
 export default function SignInPage() {
+  const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [errors, setErrors] = React.useState<{
@@ -44,14 +49,15 @@ export default function SignInPage() {
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
+    // No credential check — see the note above.
     setPending(true);
-    window.setTimeout(() => setPending(false), 900);
+    window.setTimeout(() => router.push("/"), 500);
   }
 
   return (
     <AuthShell
       title="Sign in"
-      subtitle="Onboarding workflows for your team"
+      subtitle="Onboarding workflows for Katalis"
       footer={
         <>
           <Link
@@ -64,7 +70,7 @@ export default function SignInPage() {
           <br />
           Trouble signing in?{" "}
           <a href="#" className="text-accent underline-offset-4 hover:underline">
-            Contact People &amp; Culture
+            Ask Ada
           </a>
         </>
       }
@@ -73,17 +79,18 @@ export default function SignInPage() {
         <>
           <ContinueAs
             account={{
-              name: "Dzaky Rosihan",
-              email: "dzaky.rosihan@kmart.com.au",
+              name: PEOPLE.ada.name,
+              email: PEOPLE.ada.email,
               method: "google",
             }}
+            onContinue={() => router.push("/")}
             onUseAnother={() => setReturning(false)}
           />
           <AuthDivider label="or sign in another way" />
         </>
       ) : (
         <>
-          <GoogleButton />
+          <GoogleButton onClick={() => router.push("/")} />
           <AuthDivider label="or continue with email" />
         </>
       )}
@@ -123,7 +130,8 @@ export default function SignInPage() {
       </form>
 
       <Callout tone="neutral" icon={<Warning />} className="mt-5 text-xs">
-        Front-end only — there&apos;s no auth backend wired up yet.
+        Front-end only — nothing is authenticated. Any of these buttons just
+        routes to the admin home.
       </Callout>
     </AuthShell>
   );

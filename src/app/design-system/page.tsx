@@ -171,25 +171,25 @@ const STEPS: Step[] = [
   },
   {
     id: "2",
-    title: "Pre-boarding",
-    description: "Payroll details, right to work, equipment order",
+    title: "Before day one",
+    description: "Payroll details and the laptop order",
     state: "complete",
   },
   {
     id: "3",
     title: "Day one",
-    description: "Accounts provisioned, buddy assigned, welcome session",
+    description: "Keys from Jason, Slack, and the handbook",
     state: "current",
   },
   {
     id: "4",
     title: "First 30 days",
-    description: "Role training, team intros, first check-in",
+    description: "Who owns what, prod access, first check-in",
     state: "upcoming",
   },
   {
     id: "5",
-    title: "Probation review",
+    title: "30-day check-in",
     state: "upcoming",
   },
 ];
@@ -199,12 +199,12 @@ const WORKFLOW_STEPS: WorkflowStep[] = [
     id: "s1",
     title: "Before you start",
     description:
-      "Payroll details, right-to-work check and your equipment order. We need these back before your first day so your accounts are live when you walk in.",
+      "Contract, payroll details and your laptop order. Get these back to Ada early — the laptop has about two weeks of lead time and nothing else waits on it.",
     status: "complete",
     metrics: [
-      { value: 6, label: "forms signed" },
-      { value: 2, label: "documents uploaded" },
-      { value: 1, label: "equipment order" },
+      { value: 3, label: "forms signed" },
+      { value: 1, label: "laptop ordered" },
+      { value: 0, label: "blockers" },
     ],
     primaryAction: { label: "Review what you sent", href: "#" },
     secondaryAction: { label: "Download copies" },
@@ -213,34 +213,34 @@ const WORKFLOW_STEPS: WorkflowStep[] = [
     id: "s2",
     title: "Day one",
     description:
-      "Your accounts are provisioned, your buddy is assigned, and the welcome session is booked. Everything here happens on site.",
+      "GitHub, AWS and the model provider keys — Jason owns all of them. Slack channels too, once someone decides which ones you actually need.",
     status: "in_progress",
     metrics: [
       { value: 4, label: "accounts created" },
-      { value: 3, label: "sessions booked" },
-      { value: 1, label: "buddy assigned" },
+      { value: 1, label: "step unassigned" },
+      { value: 0, label: "prod access yet" },
     ],
     primaryAction: { label: "Open day one", href: "#" },
-    secondaryAction: { label: "Meet your buddy" },
+    secondaryAction: { label: "Ping Jason" },
   },
   {
     id: "s3",
-    title: "Role training",
+    title: "Find out who owns what",
     description:
-      "Six modules covering the floor, the register and safety. Your manager signs each one off as you finish it.",
+      "Most of it lives in Jason's head rather than a doc. Walk through the routing layer, the fallback path and what breaking prod actually looks like here.",
     status: "awaiting",
     metrics: [
-      { value: 6, label: "modules" },
-      { value: 4, label: "complete" },
-      { value: 2, label: "awaiting sign-off" },
+      { value: 4, label: "areas covered" },
+      { value: 2, label: "still undocumented" },
+      { value: 1, label: "awaiting sign-off" },
     ],
-    primaryAction: { label: "Continue training", href: "#" },
+    primaryAction: { label: "Continue the walkthrough", href: "#" },
   },
   {
     id: "s4",
-    title: "Probation review",
+    title: "30-day check-in",
     description:
-      "A structured conversation with your manager at the 90-day mark. Unlocks once role training is signed off.",
+      "A proper conversation with Ada about how the first month actually went, and what should have been written down but wasn't.",
     status: "not_started",
   },
 ];
@@ -659,7 +659,7 @@ export default function DesignSystemPage() {
         <Demo className="items-start">
           <div className="grid w-full gap-5 sm:grid-cols-2">
             <Field label="Workflow name" required hint="Shown to the new starter">
-              <Input placeholder="e.g. Retail team member — VIC" />
+              <Input placeholder="e.g. Engineer — Katalis" />
             </Field>
             <Field label="Search">
               <Input placeholder="Search steps…" icon={<Search />} />
@@ -679,18 +679,18 @@ export default function DesignSystemPage() {
                 options={[
                   {
                     id: "hr",
-                    label: "People & Culture",
+                    label: "Ada Yıldız",
                     description: "Default for anything unassigned",
                   },
                   {
                     id: "mgr",
-                    label: "Hiring manager",
-                    description: "The new starter's direct manager",
+                    label: "Jason Cho",
+                    description: "Infra, access, anything prod",
                   },
                   {
                     id: "it",
-                    label: "IT service desk",
-                    description: "Accounts, equipment, access",
+                    label: "Matty",
+                    description: "Frontend, part-time",
                   },
                 ]}
               />
@@ -709,7 +709,7 @@ export default function DesignSystemPage() {
               hint="Grows as you type, then scrolls at 12 lines"
               className="sm:col-span-2"
             >
-              <Textarea placeholder="Tell them what day one looks like…" />
+              <Textarea placeholder="Tell them what day one actually looks like…" />
             </Field>
             <Field label="Disabled">
               <Input placeholder="Not editable" disabled />
@@ -744,7 +744,7 @@ export default function DesignSystemPage() {
               <ControlRow
                 control={<Checkbox />}
                 label="Send a reminder"
-                description="Nudges the new starter 24h before the due date."
+                description="Nudges the new hire 24h before the due date."
               />
               <ControlRow
                 control={<Checkbox disabled />}
@@ -771,11 +771,11 @@ export default function DesignSystemPage() {
               <ControlRow
                 control={<Switch defaultChecked />}
                 label="Workflow is live"
-                description="New starters are assigned this workflow automatically."
+                description="New hires are assigned this workflow automatically."
               />
               <ControlRow
                 control={<Switch />}
-                label="Notify the buddy"
+                label="Notify Jason"
               />
             </div>
           </div>
@@ -825,15 +825,13 @@ export default function DesignSystemPage() {
           <div className="grid w-full gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Retail team member</CardTitle>
-                <CardDescription>
-                  12 steps across 4 stages · 6 owners
-                </CardDescription>
+                <CardTitle>Engineer — Katalis</CardTitle>
+                <CardDescription>9 steps across 3 stages · 2 owners</CardDescription>
               </CardHeader>
               <CardContent>
                 <Progress value={62} label="Workflow completion" />
                 <p className="mt-2 text-xs text-text-subtle">
-                  62% average completion across 34 active starters
+                  62% average completion across 3 active hires
                 </p>
               </CardContent>
               <CardFooter>
@@ -850,10 +848,8 @@ export default function DesignSystemPage() {
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex flex-col gap-1">
-                    <CardTitle>Order equipment</CardTitle>
-                    <CardDescription>
-                      Due 3 days before start date
-                    </CardDescription>
+                    <CardTitle>Order laptop</CardTitle>
+                    <CardDescription>Two weeks lead time</CardDescription>
                   </div>
                   <StatusPill status="in_progress" />
                 </div>
@@ -861,11 +857,11 @@ export default function DesignSystemPage() {
               <CardContent className="flex items-center gap-2">
                 <Badge tone="neutral">
                   <LaptopMac />
-                  IT
+                  Ada
                 </Badge>
                 <Separator orientation="vertical" className="h-4" />
                 <AvatarStack
-                  people={[{ name: "Priya Nair" }, { name: "Tom Walsh" }]}
+                  people={[{ name: "Ada Yıldız" }, { name: "Jason Cho" }]}
                 />
               </CardContent>
             </Card>
@@ -880,19 +876,19 @@ export default function DesignSystemPage() {
         description="Initials by default. Stacks cap at four and roll the rest into a counter."
       >
         <Demo>
-          <Avatar name="Dzaky Rosihan" size="xs" />
-          <Avatar name="Dzaky Rosihan" size="sm" />
-          <Avatar name="Dzaky Rosihan" size="md" />
-          <Avatar name="Dzaky Rosihan" size="lg" />
+          <Avatar name="Ada Yıldız" size="xs" />
+          <Avatar name="Ada Yıldız" size="sm" />
+          <Avatar name="Ada Yıldız" size="md" />
+          <Avatar name="Ada Yıldız" size="lg" />
           <Separator orientation="vertical" className="mx-2 h-8" />
           <AvatarStack
             size="md"
             people={[
-              { name: "Priya Nair" },
-              { name: "Tom Walsh" },
-              { name: "Amara Chen" },
-              { name: "Jonas Bergman" },
-              { name: "Lena Fischer" },
+              { name: "Ada Yıldız" },
+              { name: "Jason Cho" },
+              { name: "Matty" },
+              { name: "Nils Hoffman" },
+              { name: "Rae Okonkwo" },
               { name: "Sam Ortiz" },
             ]}
           />
@@ -1243,9 +1239,9 @@ export default function DesignSystemPage() {
             <h3 className="text-sm font-medium">Admin — step row in the builder</h3>
             <Card className="divide-y divide-border">
               {[
-                { title: "Sign employment contract", owner: "P&C", status: "complete" },
-                { title: "Order laptop & phone", owner: "IT", status: "in_progress" },
-                { title: "Assign a buddy", owner: "Manager", status: "not_started" },
+                { title: "Sign employment contract", owner: "Ada", status: "complete" },
+                { title: "GitHub + AWS keys", owner: "Jason", status: "in_progress" },
+                { title: "Add to Slack channels", owner: "—", status: "not_started" },
               ].map((row) => (
                 <div
                   key={row.title}
@@ -1281,12 +1277,10 @@ export default function DesignSystemPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2.5">
-                  <Avatar name="Dzaky Rosihan" size="lg" />
+                  <Avatar name="Nils Hoffman" size="lg" />
                   <div className="flex flex-col">
-                    <CardTitle>Welcome, Dzaky</CardTitle>
-                    <CardDescription>
-                      Day 1 of 30 · Retail team member
-                    </CardDescription>
+                    <CardTitle>Welcome, Nils</CardTitle>
+                    <CardDescription>Day 1 of 30 · Engineer</CardDescription>
                   </div>
                 </div>
               </CardHeader>
@@ -1309,7 +1303,7 @@ export default function DesignSystemPage() {
                   <ArrowForward />
                 </Button>
                 <span className="text-xs text-text-subtle">
-                  Next: meet your buddy
+                  Next: keys from Jason
                 </span>
               </CardFooter>
             </Card>

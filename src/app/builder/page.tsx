@@ -21,47 +21,76 @@ import {
 } from "@/components/ui";
 import { BLOCK_TYPES } from "@/components/ui/workflow-builder";
 import { AutoAwesome } from "@/components/ui/icons";
+import { ACCOUNT, PEOPLE } from "@/lib/demo";
+import { AdminNav, NavStat } from "@/components/app-nav";
 
+/* Drafted from Ada's handbook — the first-week checklist in that doc is
+   literally four bullets, so the workflow is deliberately small. The gaps it
+   surfaces (an unowned step, a handbook nobody has reviewed) are the point:
+   Craig's job here is to make the undocumented parts visible, not to invent
+   process a three-person company doesn't want. */
 const INITIAL: WorkflowBlock[] = [
   {
     id: "t",
     kind: "trigger",
-    title: "A new starter is added",
-    summary: "Role is Retail team member · VIC",
+    title: "A new hire is added",
+    summary: "Role is Engineer · Katalis",
   },
   {
     id: "b1",
     kind: "document",
-    title: "Collect payroll details and right to work",
-    summary: "Due 5 days before start date",
-    owner: "People & Culture",
+    title: "Contract signed and payroll details in",
+    summary: "Before day one",
+    owner: PEOPLE.ada.name,
   },
   {
     id: "b2",
     kind: "task",
-    title: "Order laptop and store login",
-    summary: "Due 3 days before start date",
-    owner: "IT service desk",
+    title: "Order laptop",
+    summary: "Two weeks lead time — start this when they sign",
+    owner: PEOPLE.ada.name,
   },
   {
     id: "b3",
-    kind: "approval",
-    title: "Hiring manager confirms readiness",
-    summary: "Blocks day one until signed off",
-    owner: "Hiring manager",
+    kind: "task",
+    title: "GitHub, AWS and model provider keys",
+    summary: "Jason owns all of these",
+    owner: PEOPLE.jason.name,
   },
   {
     id: "b4",
-    kind: "delay",
-    title: "Wait until start date",
-    summary: "Resumes 9:00am on day one",
+    kind: "task",
+    title: "Add to Slack channels",
+    summary: "Which ones is currently tribal knowledge",
+    incomplete: "No channel list — ask Ada or Jason",
   },
   {
     id: "b5",
-    kind: "notify",
-    title: "Send the welcome email",
-    owner: "People & Culture",
-    incomplete: "No template chosen",
+    kind: "delay",
+    title: "Wait until day one",
+    summary: "Resumes 9:00am, their time",
+  },
+  {
+    id: "b6",
+    kind: "document",
+    title: "Read the handbook",
+    summary: "Katalis Handbook — last updated Feb 2026",
+    owner: PEOPLE.ada.name,
+    incomplete: "Handbook is out of date",
+  },
+  {
+    id: "b7",
+    kind: "task",
+    title: "Walk through who owns what with Jason",
+    summary: "The bit that only exists in his head",
+    owner: PEOPLE.jason.name,
+  },
+  {
+    id: "b8",
+    kind: "approval",
+    title: "Jason signs off on prod access",
+    summary: "Nothing touches prod until this clears",
+    owner: PEOPLE.jason.name,
   },
 ];
 
@@ -69,24 +98,24 @@ const NOTIFICATIONS: AppNotification[] = [
   {
     id: "n1",
     kind: "approval",
-    title: "Priya Nair needs your sign-off",
-    description: "Hiring manager confirms readiness",
+    title: "Jason needs to sign off on prod access",
+    description: "Blocks the last step of the engineer workflow",
     timestamp: new Date(Date.now() - 4 * 60_000),
-    actor: "Priya Nair",
+    actor: PEOPLE.jason.name,
   },
   {
     id: "n2",
     kind: "overdue",
-    title: "Right-to-work check is overdue",
-    description: "Was due 3 days before start date",
+    title: "The handbook hasn\u2019t been reviewed since Feb 2026",
+    description: "Two steps point at it",
     timestamp: new Date(Date.now() - 90 * 60_000),
   },
   {
     id: "n3",
     kind: "complete",
-    title: "IT completed \u201cOrder laptop and store login\u201d",
+    title: "Jason completed \u201cGitHub, AWS and model provider keys\u201d",
     timestamp: new Date(Date.now() - 5 * 3_600_000),
-    actor: "Tom Walsh",
+    actor: PEOPLE.jason.name,
     read: true,
   },
 ];
@@ -153,7 +182,7 @@ export default function BuilderPage() {
 
   return (
     <AppShell
-      title="Retail team member — VIC"
+      title="Engineer — Katalis"
       nav={<BuilderNav steps={steps} unconfigured={unconfigured} />}
       asideTitle="Block"
       aside={
@@ -172,13 +201,13 @@ export default function BuilderPage() {
                 <Field label="Owner" hint="Who this falls to">
                   <SelectMenu
                     label="Owner"
-                    value={selected.owner ?? "hr"}
+                    value={selected.owner ?? PEOPLE.ada.name}
                     onChange={(owner) => patch(selected.id, { owner })}
                     options={[
-                      { id: "People & Culture", label: "People & Culture" },
-                      { id: "Hiring manager", label: "Hiring manager" },
-                      { id: "IT service desk", label: "IT service desk" },
-                      { id: "The new starter", label: "The new starter" },
+                      { id: PEOPLE.ada.name, label: PEOPLE.ada.name },
+                      { id: PEOPLE.jason.name, label: PEOPLE.jason.name },
+                      { id: PEOPLE.matty.name, label: PEOPLE.matty.name },
+                      { id: "The new hire", label: "The new hire" },
                     ]}
                   />
                 </Field>
@@ -208,11 +237,7 @@ export default function BuilderPage() {
         </BlockInspector>
       }
       notifications={NOTIFICATIONS}
-      account={{
-        name: "Dzaky Rosihan",
-        email: "dzaky.rosihan@kmart.com.au",
-        role: "Admin",
-      }}
+      account={ACCOUNT}
       actions={
         <>
           <Button size="sm" variant="ghost">
@@ -280,32 +305,13 @@ function BuilderNav({
   unconfigured: number;
 }) {
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-0.5">
-        <p className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Workflow
-        </p>
-        {["Build", "People", "Settings"].map((item, i) => (
-          <a
-            key={item}
-            href="#"
-            aria-current={i === 0 ? "true" : undefined}
-            className={
-              i === 0
-                ? "rounded-md bg-accent-subtle px-2 py-1 text-sm font-medium text-accent-subtle-fg"
-                : "rounded-md px-2 py-1 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-            }
-          >
-            {item}
-          </a>
-        ))}
-      </div>
-
-      <Separator />
-
+    <AdminNav>
       <div className="flex flex-col gap-2 px-2">
-        <Row label="Steps" value={steps} />
-        <Row
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          This workflow
+        </p>
+        <NavStat label="Steps" value={steps} />
+        <NavStat
           label="Unconfigured"
           value={unconfigured}
           tone={unconfigured > 0 ? "warning" : "neutral"}
@@ -317,25 +323,6 @@ function BuilderNav({
       <p className="px-2 text-xs leading-relaxed text-text-subtle">
         A workflow can&apos;t be published while any block is unconfigured.
       </p>
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number;
-  tone?: "neutral" | "warning";
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-text-muted">{label}</span>
-      <Badge tone={tone} size="sm">
-        {value}
-      </Badge>
-    </div>
+    </AdminNav>
   );
 }
