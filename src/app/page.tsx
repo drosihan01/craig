@@ -18,7 +18,7 @@ import {
   type ChatMessage,
 } from "@/components/ui";
 import Link from "next/link";
-import { Campaign, Code, Groups, Schedule } from "@/components/ui/icons";
+import { Code, Groups } from "@/components/ui/icons";
 import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { SESSION } from "@/lib/demo-session";
 import { WORKFLOW, stepCount, unconfiguredCount } from "@/lib/demo-workflow";
@@ -43,10 +43,26 @@ const NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
+/* Counted from the blocks rather than typed in, so the card, the workflows
+   list and the canvas can't disagree about how big the draft is. */
+const DRAFT_STEPS = stepCount([...WORKFLOW.blocks]);
+const DRAFT_UNCONFIGURED = unconfiguredCount([...WORKFLOW.blocks]);
+
 /**
  * Starting points, not finished workflows. Describing the company in prose is
  * the better path and stays primary, but it's a blank box, and a blank box is
  * where most people stop.
+ *
+ * Four cards, because they're a 2x2 rather than a list: engineering or not,
+ * employed or contracted. Those are the two questions that actually change the
+ * shape of an onboarding — an engineer needs five admin consoles and a
+ * walkthrough of what's live; a contractor needs an end date and an
+ * offboarding step that fires. Everything else is a variation on one of the
+ * four.
+ *
+ * The icon says which kind of person and repeats across the pair on purpose —
+ * that repetition is what makes the grid read as a matrix instead of four
+ * unrelated options. The tag says which kind of engagement.
  *
  * Step counts are deliberately small. A twenty-step template for a
  * three-person company is a template nobody finishes.
@@ -58,39 +74,38 @@ const TEMPLATES = [
     title: "Engineer",
     description:
       "One step per account, a quiz instead of \u201cread the handbook\u201d, and a 1:1 with whoever owns the system.",
-    steps: 12,
-    tag: "Most used",
+    // The one template that exists for real, so it counts its own blocks.
+    steps: DRAFT_STEPS,
+    tag: { label: "Most used", tone: "accent" as const },
   },
   {
-    id: "first-hire",
+    id: "general",
     icon: Groups,
-    title: "First non-founder hire",
+    title: "General hire",
     description:
-      "For when nothing is written down yet. Heavier on context and introductions than on process.",
+      "Anyone outside engineering. Fewer consoles, more context \u2014 most of what they need isn\u2019t written down anywhere yet.",
+    steps: 9,
+  },
+  {
+    id: "engineer-contract",
+    icon: Code,
+    title: "Engineer, contract",
+    description:
+      "The same access, scoped and dated. Read-only where it can be, and an offboarding step that actually fires.",
+    steps: 10,
+    tag: { label: "Contract", tone: "neutral" as const },
+  },
+  {
+    id: "general-contract",
+    icon: Groups,
+    title: "General contractor",
+    description:
+      "Same shape, less kit. A contract, a way to invoice, and the two or three tools they\u2019ll actually open.",
     steps: 6,
-  },
-  {
-    id: "contractor",
-    icon: Schedule,
-    title: "Contractor or part-time",
-    description:
-      "Scoped access, a clear end date, and an offboarding step that actually fires.",
-    steps: 5,
-  },
-  {
-    id: "gtm",
-    icon: Campaign,
-    title: "Sales and GTM",
-    description:
-      "CRM access, the pitch, and shadowing calls in the first fortnight.",
-    steps: 7,
+    tag: { label: "Contract", tone: "neutral" as const },
   },
 ];
 
-/* Counted from the blocks rather than typed in, so the card, the workflows
-   list and the canvas can't disagree about how big the draft is. */
-const DRAFT_STEPS = stepCount([...WORKFLOW.blocks]);
-const DRAFT_UNCONFIGURED = unconfiguredCount([...WORKFLOW.blocks]);
 
 /* The reply Craig gives once the scripted session runs out, so a demo that
    goes off-script degrades honestly instead of repeating itself. */
@@ -291,8 +306,12 @@ export default function AdminHomePage() {
                         {t.title}
                       </span>
                       {t.tag && (
-                        <Badge tone="accent" size="sm" className="shrink-0">
-                          {t.tag}
+                        <Badge
+                          tone={t.tag.tone}
+                          size="sm"
+                          className="shrink-0"
+                        >
+                          {t.tag.label}
                         </Badge>
                       )}
                     </div>
