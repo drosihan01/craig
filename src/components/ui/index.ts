@@ -101,11 +101,15 @@ export {
   BLOCK_TYPES,
   INSERTABLE,
   blockLabel,
+  isUnconfigured,
+  missingSetup,
+  setupWarning,
   type BlockKind,
   type BlockTypeDef,
   type WorkflowBlock,
 } from "./workflow-builder";
 export { BlockPicker } from "./block-picker";
+export { BlockSetup } from "./block-setup";
 export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";
 export {
   CraigMark,
@@ -130,4 +134,5 @@ export {
 } from "./notifications";
 export { ThemeToggle } from "./theme-toggle";
 export * as Icons from "./icons";
+export * as BrandIcons from "./brand-icons";
 export { type IconProps } from "./icons";

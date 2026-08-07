@@ -2,44 +2,88 @@ import {
   AltRoute,
   Apps,
   Badge,
+  Cloud,
   Description,
   Draw,
+  EventAvailable,
+  FactCheck,
   Forum,
+  Groups,
   Handshake,
   HowToReg,
-  Key,
+  LaptopMac,
   Lock,
   Mail,
+  MenuBook,
   RocketLaunch,
   School,
   Schedule,
   TaskAlt,
 } from "@/components/ui/icons";
+/* Real marks for the services, generic Material glyphs for everything else.
+   Slack and AWS keep a Material glyph because no freely licensed set carries
+   their logos — see scripts/gen-brand-icons.py. */
+import {
+  Asana,
+  Dropbox,
+  Figma,
+  GitHub,
+  Google,
+  Jira,
+  Linear,
+  Notion,
+  Okta,
+  OnePassword,
+  Zoom,
+} from "@/components/ui/brand-icons";
 import type { BlockKind, WorkflowBlock } from "@/components/ui";
 
 /**
  * The block library — what an admin actually picks from.
  *
- * Two layers, deliberately.
+ * Three ideas, and they're separate on purpose.
  *
  * `BlockKind` (in workflow-builder) is the *mechanism*: what the engine does
- * with a block. There are seven and there should stay seven — a task, an
- * approval, a wait, a document, and so on.
+ * with a block. There are seven and there should stay seven.
  *
  * A `BlockPreset` is a *named piece of onboarding* sitting on one of those
- * mechanisms. "Set up MFA & security" and "Get tools & access" are both tasks
- * as far as the engine is concerned, but nobody builds an onboarding by
- * thinking "I need three tasks". They think "they need MFA".
+ * mechanisms. "Set up MFA" and "Invite to GitHub" are both tasks as far as the
+ * engine is concerned, but nobody builds an onboarding by thinking "I need
+ * three tasks". Adding a preset is data; adding a kind changes the engine.
  *
- * Keeping them separate is what stops the block list growing a new kind every
- * time onboarding practice changes. Adding a preset is data; adding a kind is
- * a change to the engine.
+ * A `SetupField` is what the preset needs before it can run. This is the part
+ * that makes a block real rather than a label: "Sign contract" means nothing
+ * until a template is attached and somebody is named to countersign, and
+ * "Invite to GitHub" means nothing without the org and the permission level.
+ * Required fields with no value are exactly what "unconfigured" means — the
+ * badge is derived from them rather than typed in, so it can't lie.
  *
- * Presets carry a `gap` when the thing they describe is genuinely
- * company-specific and can't be guessed — the country's identity check, which
- * apps count as "tools". Those land unconfigured on purpose: a block that
- * looks finished but points at nothing is worse than one that says so.
+ * Each SaaS account is its own preset rather than one "tools & access" block
+ * with a list inside it. They're provisioned in different places by different
+ * people with different permission models, they fail independently, and an
+ * admin needs to see at a glance that the GitHub invite went out and the AWS
+ * one didn't.
  */
+
+export type FieldKind =
+  | "text"
+  | "url"
+  | "select"
+  | "multiselect"
+  | "person"
+  | "file"
+  | "when";
+
+export interface SetupField {
+  id: string;
+  label: string;
+  kind: FieldKind;
+  /** Placeholder or example — says what a good answer looks like. */
+  hint?: string;
+  options?: { id: string; label: string }[];
+  /** The block counts as unconfigured until this has a value. */
+  required?: boolean;
+}
 
 export interface BlockPreset {
   id: string;
@@ -52,8 +96,7 @@ export interface BlockPreset {
   /** Prefilled onto the block. */
   title: string;
   summary?: string;
-  /** Why this can't be finished until the admin says something. */
-  gap?: string;
+  setup: SetupField[];
 }
 
 export interface BlockCategory {
@@ -62,6 +105,47 @@ export interface BlockCategory {
   /** Shown under the category heading in the picker. */
   description: string;
   presets: BlockPreset[];
+}
+
+/* Reused across every account preset — same shape, different service. */
+const WHO_PROVISIONS: SetupField = {
+  id: "owner",
+  label: "Who provisions it",
+  kind: "person",
+  required: true,
+};
+
+const WHEN: SetupField = {
+  id: "when",
+  label: "When",
+  kind: "when",
+  hint: "Relative to the start date",
+  options: [
+    { id: "on-signing", label: "As soon as they sign" },
+    { id: "week-before", label: "A week before day one" },
+    { id: "day-before", label: "The day before" },
+    { id: "day-one", label: "Day one" },
+    { id: "first-week", label: "First week" },
+  ],
+};
+
+/** An account on a third-party service. */
+function account(
+  id: string,
+  label: string,
+  description: string,
+  icon: BlockPreset["icon"],
+  fields: SetupField[],
+): BlockPreset {
+  return {
+    id,
+    label,
+    description,
+    kind: "task",
+    icon,
+    title: label,
+    setup: [...fields, WHO_PROVISIONS, WHEN],
+  };
 }
 
 export const BLOCK_LIBRARY: BlockCategory[] = [
@@ -79,6 +163,43 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         icon: Draw,
         title: "Sign contract",
         summary: "Employment agreement and required acknowledgements",
+        setup: [
+          {
+            id: "template",
+            label: "Contract template",
+            kind: "file",
+            hint: "The document they'll be sent",
+            required: true,
+          },
+          {
+            id: "countersign",
+            label: "Who countersigns",
+            kind: "person",
+            required: true,
+          },
+          {
+            id: "provider",
+            label: "Signing method",
+            kind: "select",
+            options: [
+              { id: "docusign", label: "DocuSign" },
+              { id: "dropbox-sign", label: "Dropbox Sign" },
+              { id: "email", label: "Email a PDF back" },
+            ],
+            required: true,
+          },
+          {
+            id: "acks",
+            label: "Extra acknowledgements",
+            kind: "multiselect",
+            options: [
+              { id: "ip", label: "IP assignment" },
+              { id: "nda", label: "NDA" },
+              { id: "handbook", label: "Handbook acknowledgement" },
+              { id: "code", label: "Code of conduct" },
+            ],
+          },
+        ],
       },
       {
         id: "payroll-details",
@@ -88,68 +209,689 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         kind: "document",
         icon: Badge,
         title: "Personal and payroll details",
-        summary: "Legal name, address, bank, tax, emergency contact",
+        summary: "Collected once, before the first pay run",
+        setup: [
+          {
+            id: "fields",
+            label: "What to collect",
+            kind: "multiselect",
+            options: [
+              { id: "legal-name", label: "Legal name" },
+              { id: "address", label: "Home address" },
+              { id: "bank", label: "Bank / payment details" },
+              { id: "tax", label: "Tax details" },
+              { id: "emergency", label: "Emergency contact" },
+              { id: "dob", label: "Date of birth" },
+            ],
+            required: true,
+          },
+          {
+            id: "system",
+            label: "Payroll system",
+            kind: "select",
+            options: [
+              { id: "deel", label: "Deel" },
+              { id: "remote", label: "Remote" },
+              { id: "gusto", label: "Gusto" },
+              { id: "manual", label: "Spreadsheet, for now" },
+            ],
+            required: true,
+          },
+          WHO_PROVISIONS,
+        ],
       },
       {
         id: "verify-identity",
         label: "Verify employment eligibility",
         description:
-          "Right to work or identity check. What's required depends on the country.",
+          "Right to work or identity check. Which one applies depends on the country.",
         kind: "document",
         icon: HowToReg,
         title: "Verify employment eligibility",
-        summary: "Right-to-work or identity check",
-        gap: "Which check applies isn't set",
+        setup: [
+          {
+            id: "check",
+            label: "Which check",
+            kind: "select",
+            hint: "Set by where they're employed, not where you are",
+            options: [
+              { id: "uk-rtw", label: "UK right to work" },
+              { id: "us-i9", label: "US Form I-9" },
+              { id: "de-aufenthalt", label: "Germany — residence and work permit" },
+              { id: "au-vevo", label: "Australia — VEVO check" },
+              { id: "other", label: "Something else" },
+            ],
+            required: true,
+          },
+          {
+            id: "verifier",
+            label: "Who verifies it",
+            kind: "person",
+            required: true,
+          },
+          {
+            id: "deadline",
+            label: "Must clear by",
+            kind: "when",
+            options: [
+              { id: "before-start", label: "Before day one" },
+              { id: "day-one", label: "Day one" },
+            ],
+            required: true,
+          },
+        ],
       },
     ],
   },
   {
-    id: "access",
-    label: "Access",
+    id: "checks",
+    label: "Third-party checks",
     description:
-      "Identity first, then security, then the tools. That order is the point.",
+      "Run by someone outside the company, so they take days and need consent first.",
     presets: [
       {
-        id: "join-workspace",
-        label: "Join workspace",
+        id: "background-check",
+        label: "Background check",
         description:
-          "Company email and chat. Everything else keys off this account existing.",
+          "Criminal record or police check through a provider. Needs consent before it starts.",
         kind: "task",
-        icon: Forum,
-        title: "Join workspace",
-        summary: "Company email, Slack and calendar",
+        icon: FactCheck,
+        title: "Background check",
+        summary: "Runs with a provider — allow a few days",
+        setup: [
+          {
+            id: "provider",
+            label: "Provider",
+            kind: "select",
+            options: [
+              { id: "checkr", label: "Checkr" },
+              { id: "certn", label: "Certn" },
+              { id: "zinc", label: "Zinc" },
+              { id: "sterling", label: "Sterling" },
+              { id: "manual", label: "Direct with the police service" },
+            ],
+            required: true,
+          },
+          {
+            id: "level",
+            label: "Level of check",
+            kind: "select",
+            options: [
+              { id: "basic", label: "Basic / standard" },
+              { id: "enhanced", label: "Enhanced" },
+              { id: "financial", label: "Financial + criminal" },
+            ],
+            required: true,
+          },
+          {
+            id: "consent",
+            label: "Consent form",
+            kind: "file",
+            hint: "Nothing can be requested without it",
+            required: true,
+          },
+          { id: "chaser", label: "Who chases the result", kind: "person" },
+        ],
       },
       {
+        id: "reference-check",
+        label: "Reference check",
+        description: "Previous employers, chased by a named person.",
+        kind: "task",
+        icon: Groups,
+        title: "Reference check",
+        setup: [
+          {
+            id: "count",
+            label: "How many references",
+            kind: "select",
+            options: [
+              { id: "1", label: "One" },
+              { id: "2", label: "Two" },
+              { id: "3", label: "Three" },
+            ],
+            required: true,
+          },
+          {
+            id: "template",
+            label: "Question set",
+            kind: "file",
+            hint: "What you ask each referee",
+          },
+          WHO_PROVISIONS,
+        ],
+      },
+      {
+        id: "health-check",
+        label: "Occupational health",
+        description:
+          "Pre-employment health or fitness assessment, where the role needs one.",
+        kind: "task",
+        icon: HowToReg,
+        title: "Occupational health assessment",
+        setup: [
+          {
+            id: "provider",
+            label: "Provider",
+            kind: "text",
+            hint: "Clinic or service",
+            required: true,
+          },
+          { id: "when", label: "Must clear by", kind: "when", required: true },
+        ],
+      },
+    ],
+  },
+  {
+    id: "accounts",
+    label: "Accounts & access",
+    description:
+      "One block per service. They're provisioned in different places by different people and they fail independently.",
+    presets: [
+      account(
+        "google-workspace",
+        "Google Workspace",
+        "Company email and calendar. Almost everything else keys off this account existing.",
+        Google,
+        [
+          {
+            id: "domain",
+            label: "Email domain",
+            kind: "text",
+            hint: "katalis.ai",
+            required: true,
+          },
+          {
+            id: "groups",
+            label: "Groups to add them to",
+            kind: "multiselect",
+            options: [
+              { id: "everyone", label: "everyone@" },
+              { id: "eng", label: "engineering@" },
+              { id: "alerts", label: "alerts@" },
+            ],
+          },
+          {
+            id: "license",
+            label: "Licence",
+            kind: "select",
+            options: [
+              { id: "starter", label: "Business Starter" },
+              { id: "standard", label: "Business Standard" },
+              { id: "plus", label: "Business Plus" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "slack",
+        "Slack",
+        "Workspace invite and the channels they should land in on day one.",
+        Forum,
+        [
+          {
+            id: "workspace",
+            label: "Workspace URL",
+            kind: "url",
+            hint: "katalis.slack.com",
+            required: true,
+          },
+          {
+            id: "channels",
+            label: "Channels to add them to",
+            kind: "multiselect",
+            hint: "The ones nobody thinks to mention",
+            options: [
+              { id: "general", label: "#general" },
+              { id: "eng", label: "#engineering" },
+              { id: "incidents", label: "#incidents" },
+              { id: "deploys", label: "#deploys" },
+              { id: "random", label: "#random" },
+            ],
+            required: true,
+          },
+          {
+            id: "type",
+            label: "Account type",
+            kind: "select",
+            options: [
+              { id: "member", label: "Member" },
+              { id: "guest", label: "Single-channel guest" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "github",
+        "GitHub",
+        "Org invite, the teams they join, and what they can do to a repo.",
+        GitHub,
+        [
+          {
+            id: "org",
+            label: "Organisation",
+            kind: "text",
+            hint: "github.com/katalis",
+            required: true,
+          },
+          {
+            id: "teams",
+            label: "Teams",
+            kind: "multiselect",
+            options: [
+              { id: "eng", label: "engineering" },
+              { id: "infra", label: "infra" },
+              { id: "oncall", label: "on-call" },
+            ],
+          },
+          {
+            id: "permission",
+            label: "Base permission",
+            kind: "select",
+            hint: "Start at the lowest that lets them work",
+            options: [
+              { id: "read", label: "Read" },
+              { id: "write", label: "Write" },
+              { id: "maintain", label: "Maintain" },
+              { id: "admin", label: "Admin" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "linear",
+        "Linear",
+        "Workspace invite, the teams they're on, and their role in it.",
+        Linear,
+        [
+          {
+            id: "workspace",
+            label: "Workspace URL",
+            kind: "url",
+            hint: "linear.app/katalis",
+            required: true,
+          },
+          {
+            id: "teams",
+            label: "Teams",
+            kind: "multiselect",
+            options: [
+              { id: "eng", label: "Engineering" },
+              { id: "infra", label: "Infra" },
+              { id: "product", label: "Product" },
+            ],
+          },
+          {
+            id: "role",
+            label: "Role",
+            kind: "select",
+            options: [
+              { id: "member", label: "Member" },
+              { id: "guest", label: "Guest" },
+              { id: "admin", label: "Admin" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "aws",
+        "AWS",
+        "SSO or IAM access, scoped to the accounts they actually need.",
+        Cloud,
+        [
+          {
+            id: "method",
+            label: "How they get in",
+            kind: "select",
+            options: [
+              { id: "sso", label: "IAM Identity Center (SSO)" },
+              { id: "iam", label: "IAM user" },
+            ],
+            required: true,
+          },
+          {
+            id: "accounts",
+            label: "Accounts",
+            kind: "multiselect",
+            options: [
+              { id: "dev", label: "dev" },
+              { id: "staging", label: "staging" },
+              { id: "prod", label: "prod" },
+            ],
+            required: true,
+          },
+          {
+            id: "role",
+            label: "Permission set",
+            kind: "select",
+            options: [
+              { id: "readonly", label: "ReadOnly" },
+              { id: "developer", label: "Developer" },
+              { id: "admin", label: "Administrator" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "notion",
+        "Notion",
+        "Workspace invite and which teamspaces they can see.",
+        Notion,
+        [
+          {
+            id: "workspace",
+            label: "Workspace URL",
+            kind: "url",
+            hint: "notion.so/katalis",
+            required: true,
+          },
+          {
+            id: "spaces",
+            label: "Teamspaces",
+            kind: "multiselect",
+            options: [
+              { id: "company", label: "Company" },
+              { id: "eng", label: "Engineering" },
+              { id: "handbook", label: "Handbook" },
+            ],
+          },
+          {
+            id: "permission",
+            label: "Permission",
+            kind: "select",
+            options: [
+              { id: "member", label: "Member" },
+              { id: "guest", label: "Guest" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "figma",
+        "Figma",
+        "Team invite, and whether they need an editor seat or just to look.",
+        Figma,
+        [
+          {
+            id: "team",
+            label: "Team",
+            kind: "text",
+            hint: "Which Figma team",
+            required: true,
+          },
+          {
+            id: "seat",
+            label: "Seat",
+            kind: "select",
+            hint: "Editor seats are billed — viewer isn't",
+            options: [
+              { id: "viewer", label: "Viewer" },
+              { id: "editor", label: "Editor" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "jira",
+        "Jira",
+        "Project access and the boards they should land on.",
+        Jira,
+        [
+          {
+            id: "site",
+            label: "Site URL",
+            kind: "url",
+            hint: "katalis.atlassian.net",
+            required: true,
+          },
+          {
+            id: "projects",
+            label: "Projects",
+            kind: "multiselect",
+            options: [
+              { id: "eng", label: "ENG" },
+              { id: "infra", label: "INFRA" },
+              { id: "sup", label: "SUPPORT" },
+            ],
+          },
+          {
+            id: "role",
+            label: "Role",
+            kind: "select",
+            options: [
+              { id: "member", label: "Member" },
+              { id: "admin", label: "Admin" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "asana",
+        "Asana",
+        "Workspace invite and the projects they're a member of.",
+        Asana,
+        [
+          {
+            id: "workspace",
+            label: "Workspace",
+            kind: "text",
+            required: true,
+          },
+          { id: "projects", label: "Projects", kind: "multiselect" },
+        ],
+      ),
+      account(
+        "onepassword",
+        "1Password",
+        "The vaults they can open. Shared credentials are the quietest over-provisioning there is.",
+        OnePassword,
+        [
+          {
+            id: "vaults",
+            label: "Vaults",
+            kind: "multiselect",
+            hint: "Only the ones the role needs",
+            options: [
+              { id: "eng", label: "Engineering" },
+              { id: "infra", label: "Infra" },
+              { id: "shared", label: "Company shared" },
+            ],
+            required: true,
+          },
+          {
+            id: "access",
+            label: "Access",
+            kind: "select",
+            options: [
+              { id: "read", label: "Read" },
+              { id: "write", label: "Read and write" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "okta",
+        "Okta",
+        "SSO identity, and the app groups that identity unlocks.",
+        Okta,
+        [
+          {
+            id: "org",
+            label: "Okta org",
+            kind: "url",
+            hint: "katalis.okta.com",
+            required: true,
+          },
+          {
+            id: "groups",
+            label: "Groups",
+            kind: "multiselect",
+            hint: "Group membership is what actually grants the apps",
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "zoom",
+        "Zoom",
+        "A licensed seat, if they'll be hosting rather than joining.",
+        Zoom,
+        [
+          {
+            id: "license",
+            label: "Licence",
+            kind: "select",
+            options: [
+              { id: "basic", label: "Basic (free)" },
+              { id: "pro", label: "Licensed" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "dropbox",
+        "Dropbox",
+        "Shared folders, and whether they can edit or only look.",
+        Dropbox,
+        [
+          {
+            id: "folders",
+            label: "Shared folders",
+            kind: "multiselect",
+            required: true,
+          },
+          {
+            id: "access",
+            label: "Access",
+            kind: "select",
+            options: [
+              { id: "viewer", label: "Viewer" },
+              { id: "editor", label: "Editor" },
+            ],
+            required: true,
+          },
+        ],
+      ),
+      account(
+        "custom-app",
+        "Another app",
+        "Anything the library doesn't name — internal tools, a CRM, a provider console.",
+        Apps,
+        [
+          {
+            id: "app",
+            label: "App name",
+            kind: "text",
+            required: true,
+          },
+          {
+            id: "url",
+            label: "Where to provision it",
+            kind: "url",
+            hint: "The admin console, not the login page",
+            required: true,
+          },
+          {
+            id: "permission",
+            label: "Permission level",
+            kind: "text",
+            hint: "The lowest that lets them do the job",
+            required: true,
+          },
+        ],
+      ),
+    ],
+  },
+  {
+    id: "security",
+    label: "Security & kit",
+    description:
+      "Multi-factor before the accounts get used in anger, and something to use them on.",
+    presets: [
+      {
         id: "mfa",
-        label: "Set up MFA & security",
+        label: "Set up MFA",
         description:
           "Multi-factor on email, files and remote access. Phishing-resistant where it's offered.",
         kind: "task",
         icon: Lock,
-        title: "Set up MFA and security",
-        summary: "Email, file storage and remote access",
+        title: "Set up MFA",
+        summary: "Before any of the accounts get used in anger",
+        setup: [
+          {
+            id: "systems",
+            label: "Which systems",
+            kind: "multiselect",
+            options: [
+              { id: "email", label: "Email" },
+              { id: "files", label: "File storage" },
+              { id: "vpn", label: "Remote access / VPN" },
+              { id: "code", label: "Source control" },
+              { id: "cloud", label: "Cloud console" },
+            ],
+            required: true,
+          },
+          {
+            id: "method",
+            label: "Method",
+            kind: "select",
+            hint: "A passkey or hardware key resists phishing; SMS doesn't",
+            options: [
+              { id: "passkey", label: "Passkey" },
+              { id: "hardware", label: "Hardware key" },
+              { id: "totp", label: "Authenticator app" },
+            ],
+            required: true,
+          },
+          { id: "deadline", label: "Done by", kind: "when", required: true },
+        ],
       },
       {
-        id: "tools",
-        label: "Get tools & access",
+        id: "laptop",
+        label: "Issue laptop",
         description:
-          "The apps and permission levels this role actually needs — and nothing beyond them.",
+          "Order it, ship it, and get it back at the end. Lead time is usually the long pole.",
         kind: "task",
-        icon: Key,
-        title: "Tools and access",
-        summary: "One entry per app, with the permission level",
-        gap: "No apps listed yet",
-      },
-      {
-        id: "access-approval",
-        label: "Approve production access",
-        description:
-          "Hold anything sensitive until a named person signs it off.",
-        kind: "approval",
-        icon: Apps,
-        title: "Approve production access",
-        summary: "Nothing sensitive is granted until this clears",
-        gap: "Nobody owns this yet",
+        icon: LaptopMac,
+        title: "Issue laptop",
+        setup: [
+          {
+            id: "spec",
+            label: "Model and spec",
+            kind: "text",
+            hint: "MacBook Pro 14, M4, 24GB",
+            required: true,
+          },
+          {
+            id: "ship",
+            label: "Ship to",
+            kind: "text",
+            hint: "Their home address, usually",
+            required: true,
+          },
+          WHO_PROVISIONS,
+          {
+            id: "when",
+            label: "Order",
+            kind: "when",
+            hint: "Lead time is why this goes first",
+            options: [
+              { id: "on-signing", label: "The day they sign" },
+              { id: "week-before", label: "A week before day one" },
+            ],
+            required: true,
+          },
+        ],
       },
     ],
   },
@@ -166,8 +908,44 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         kind: "document",
         icon: School,
         title: "Training and required reading",
-        summary: "Security awareness, policies, role-specific material",
-        gap: "No material attached",
+        setup: [
+          {
+            id: "material",
+            label: "Material",
+            kind: "file",
+            hint: "The document or course they work through",
+            required: true,
+          },
+          { id: "deadline", label: "Done by", kind: "when", required: true },
+          {
+            id: "ack",
+            label: "Acknowledgement",
+            kind: "select",
+            options: [
+              { id: "none", label: "Just read it" },
+              { id: "tick", label: "Tick to confirm" },
+              { id: "sign", label: "Sign it" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "handbook",
+        label: "Read the handbook",
+        description:
+          "The company doc — assuming it's been looked at recently enough to be worth reading.",
+        kind: "document",
+        icon: MenuBook,
+        title: "Read the handbook",
+        setup: [
+          {
+            id: "doc",
+            label: "Which document",
+            kind: "file",
+            required: true,
+          },
+          { id: "when", label: "By", kind: "when", required: true },
+        ],
       },
     ],
   },
@@ -185,7 +963,63 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         kind: "task",
         icon: Handshake,
         title: "Manager 1:1",
-        summary: "30 minutes in the first week",
+        setup: [
+          {
+            id: "manager",
+            label: "Manager",
+            kind: "person",
+            required: true,
+          },
+          { id: "when", label: "When", kind: "when", required: true },
+          {
+            id: "length",
+            label: "Length",
+            kind: "select",
+            options: [
+              { id: "30", label: "30 minutes" },
+              { id: "45", label: "45 minutes" },
+              { id: "60", label: "An hour" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "meet-team",
+        label: "Meet the team",
+        description:
+          "Named people, booked in. “Say hi to everyone” is not a step.",
+        kind: "task",
+        icon: Groups,
+        title: "Meet the team",
+        setup: [
+          {
+            id: "people",
+            label: "Who they should meet",
+            kind: "multiselect",
+            hint: "Name them — this is the step that quietly doesn't happen",
+            required: true,
+          },
+          { id: "when", label: "By", kind: "when", required: true },
+        ],
+      },
+      {
+        id: "walkthrough",
+        label: "Walkthrough with an owner",
+        description:
+          "Half an hour on the part of the system that only lives in someone's head.",
+        kind: "task",
+        icon: Description,
+        title: "Walkthrough",
+        setup: [
+          {
+            id: "topic",
+            label: "What they're walked through",
+            kind: "text",
+            required: true,
+          },
+          { id: "owner", label: "Who runs it", kind: "person", required: true },
+          { id: "when", label: "When", kind: "when", required: true },
+        ],
       },
       {
         id: "first-task",
@@ -195,8 +1029,39 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         kind: "task",
         icon: RocketLaunch,
         title: "First task",
-        summary: "Small, real, and done in the first week",
-        gap: "No task picked",
+        setup: [
+          {
+            id: "task",
+            label: "The task",
+            kind: "text",
+            hint: "Small enough to finish in the first week",
+            required: true,
+          },
+          { id: "owner", label: "Who assigns it", kind: "person", required: true },
+        ],
+      },
+      {
+        id: "check-in",
+        label: "Check-in",
+        description:
+          "A proper conversation once they've been here long enough to have opinions.",
+        kind: "task",
+        icon: EventAvailable,
+        title: "30-day check-in",
+        setup: [
+          { id: "owner", label: "Who runs it", kind: "person", required: true },
+          {
+            id: "when",
+            label: "When",
+            kind: "when",
+            options: [
+              { id: "7", label: "After a week" },
+              { id: "30", label: "After 30 days" },
+              { id: "90", label: "After 90 days" },
+            ],
+            required: true,
+          },
+        ],
       },
     ],
   },
@@ -206,13 +1071,21 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
     description: "Shape, not content. These control when the rest happens.",
     presets: [
       {
-        id: "task",
-        label: "Task",
-        description: "Anything the library doesn't cover.",
-        kind: "task",
-        icon: TaskAlt,
-        title: "New task",
-        gap: "Not configured",
+        id: "approval",
+        label: "Approval",
+        description: "Hold everything after this until a named person signs off.",
+        kind: "approval",
+        icon: HowToReg,
+        title: "Approval",
+        setup: [
+          {
+            id: "what",
+            label: "What's being approved",
+            kind: "text",
+            required: true,
+          },
+          { id: "approver", label: "Approver", kind: "person", required: true },
+        ],
       },
       {
         id: "wait",
@@ -220,7 +1093,10 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         description: "Pause, relative to the start date.",
         kind: "delay",
         icon: Schedule,
-        title: "Wait until day one",
+        title: "Wait",
+        setup: [
+          { id: "until", label: "Wait until", kind: "when", required: true },
+        ],
       },
       {
         id: "condition",
@@ -228,8 +1104,16 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         description: "Only run what follows if this is true.",
         kind: "branch",
         icon: AltRoute,
-        title: "New condition",
-        gap: "No condition set",
+        title: "Condition",
+        setup: [
+          {
+            id: "expression",
+            label: "Run the rest when",
+            kind: "text",
+            hint: "e.g. the role is Engineer",
+            required: true,
+          },
+        ],
       },
       {
         id: "notify",
@@ -238,7 +1122,23 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         kind: "notify",
         icon: Mail,
         title: "Send a message",
-        gap: "No recipient",
+        setup: [
+          { id: "to", label: "To", kind: "person", required: true },
+          { id: "body", label: "Message", kind: "text", required: true },
+        ],
+      },
+      {
+        id: "task",
+        label: "Task",
+        description: "Anything the library doesn't cover.",
+        kind: "task",
+        icon: TaskAlt,
+        title: "New task",
+        setup: [
+          { id: "what", label: "What has to happen", kind: "text", required: true },
+          WHO_PROVISIONS,
+          { id: "when", label: "When", kind: "when" },
+        ],
       },
       {
         id: "document",
@@ -247,7 +1147,19 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         kind: "document",
         icon: Description,
         title: "New document",
-        gap: "Not configured",
+        setup: [
+          { id: "doc", label: "Document", kind: "file", required: true },
+          {
+            id: "direction",
+            label: "Direction",
+            kind: "select",
+            options: [
+              { id: "collect", label: "Collect it from them" },
+              { id: "issue", label: "Issue it to them" },
+            ],
+            required: true,
+          },
+        ],
       },
     ],
   },
@@ -270,6 +1182,6 @@ export function blockFromPreset(
     preset: preset.id,
     title: preset.title,
     summary: preset.summary,
-    incomplete: preset.gap,
+    config: {},
   };
 }

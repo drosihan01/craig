@@ -30,9 +30,16 @@ const clampZoom = (z: number) =>
 
 export function WorkflowCanvas({
   children,
+  onBackgroundClick,
   className,
 }: {
   children: React.ReactNode;
+  /**
+   * Fired by a click on empty canvas — not on a block, and not at the end of a
+   * pan. Deselecting by clicking away is the gesture every canvas tool has, and
+   * without it the only way back to the workflow's own settings is to guess.
+   */
+  onBackgroundClick?: () => void;
   className?: string;
 }) {
   const [zoom, setZoom] = React.useState(1);
@@ -40,6 +47,7 @@ export function WorkflowCanvas({
   const [panning, setPanning] = React.useState(false);
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
+  const pannedRef = React.useRef(false);
 
   /**
    * Keeps the workflow findable. Without this the surface is infinite and it's
@@ -136,6 +144,11 @@ export function WorkflowCanvas({
     setPanning(true);
 
     function onMove(ev: PointerEvent) {
+      // A pan is not a click. Three pixels of slop so a shaky press still
+      // counts as one.
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 3) {
+        pannedRef.current = true;
+      }
       setPan(
         clampPan(
           {
@@ -162,6 +175,16 @@ export function WorkflowCanvas({
     <div
       ref={viewportRef}
       onPointerDown={onPointerDown}
+      onClick={(e) => {
+        if (pannedRef.current) {
+          pannedRef.current = false;
+          return;
+        }
+        if (!onBackgroundClick) return;
+        // Anything inside a block is that block's business.
+        if ((e.target as HTMLElement).closest("[data-block-card]")) return;
+        onBackgroundClick();
+      }}
       className={cn(
         "relative overflow-hidden rounded-xl border border-border bg-canvas",
         panning ? "cursor-grabbing" : "cursor-grab",

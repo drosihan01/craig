@@ -20,7 +20,11 @@ import {
 import { Badge } from "./badge";
 import { BlockPicker } from "./block-picker";
 import { DropdownMenu } from "./dropdown";
-import { findPreset, type BlockPreset } from "@/lib/workflow/library";
+import {
+  findPreset,
+  type BlockPreset,
+  type SetupField,
+} from "@/lib/workflow/library";
 import { cn } from "@/lib/cn";
 
 /**
@@ -70,8 +74,11 @@ export interface BlockTypeDef {
 export const BLOCK_TYPES: Record<BlockKind, BlockTypeDef> = {
   trigger: {
     kind: "trigger",
+    /* There is exactly one trigger and it is not a choice. Craig runs
+       onboarding, onboarding starts when somebody gets a seat, and a trigger
+       picker would only offer wrong answers. */
     label: "Trigger",
-    description: "What starts this workflow",
+    description: "Fires when a new seat is added. Every workflow starts here",
     icon: Bolt,
     structural: true,
   },
@@ -129,7 +136,13 @@ export interface WorkflowBlock {
   title: string;
   summary?: string;
   owner?: string;
-  /** Shown as an unresolved-configuration warning on the card. */
+  /** Answers to the preset's setup fields, keyed by field id. */
+  config?: Record<string, string | string[]>;
+  /**
+   * A gap the admin has to close that isn't a missing field — "nobody owns
+   * this yet", "the doc it points at is out of date". Sits alongside the
+   * derived setup warning rather than replacing it.
+   */
   incomplete?: string;
 }
 
@@ -142,6 +155,38 @@ export function blockLabel(block: WorkflowBlock) {
     description: preset?.description ?? `${type.description}.`,
     icon: preset?.icon ?? type.icon,
   };
+}
+
+const hasValue = (v: string | string[] | undefined) =>
+  Array.isArray(v) ? v.length > 0 : Boolean(v && v.trim());
+
+/**
+ * The setup fields this block still needs.
+ *
+ * Derived rather than stored, so "unconfigured" can't drift from what's
+ * actually missing — the badge, the nav count and the disabled Publish button
+ * all read from the same answer.
+ */
+export function missingSetup(block: WorkflowBlock): SetupField[] {
+  const preset = block.preset ? findPreset(block.preset) : undefined;
+  if (!preset) return [];
+  return preset.setup.filter(
+    (f) => f.required && !hasValue(block.config?.[f.id]),
+  );
+}
+
+export function isUnconfigured(block: WorkflowBlock) {
+  return Boolean(block.incomplete) || missingSetup(block).length > 0;
+}
+
+/** What the warning badge says. */
+export function setupWarning(block: WorkflowBlock) {
+  if (block.incomplete) return block.incomplete;
+  const missing = missingSetup(block);
+  if (missing.length === 0) return null;
+  return missing.length === 1
+    ? `Needs ${missing[0].label.toLowerCase()}`
+    : `${missing.length} things to set up`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -298,9 +343,11 @@ function BlockCard({
   const type = blockLabel(block);
   const Icon = type.icon;
   const isTrigger = block.kind === "trigger";
+  const warning = setupWarning(block);
 
   return (
     <div
+      data-block-card
       // The card is a button, so the whole thing selects — but the menu inside
       // is a real button too, so clicks there must not also select.
       role="button"
@@ -366,10 +413,10 @@ function BlockCard({
           <p className="truncate text-sm text-text-muted">{block.summary}</p>
         )}
 
-        {block.incomplete && (
+        {warning && (
           <Badge tone="warning" size="sm" className="mt-1 w-fit">
             <Warning />
-            {block.incomplete}
+            {warning}
           </Badge>
         )}
       </div>

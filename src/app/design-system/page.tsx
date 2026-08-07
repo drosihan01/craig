@@ -1284,7 +1284,7 @@ export default function DesignSystemPage() {
       <Section
         id="builder"
         title="Workflow builder"
-        description="One column, top to bottom, in the order the workflow runs. A free canvas would let an admin draw a shape that doesn't correspond to any execution order — a single column can only express what the engine can actually do."
+        description="One column, top to bottom, in the order the workflow runs. A free canvas would let an admin draw a shape that doesn't correspond to any execution order — a single column can only express what the engine can actually do. The first block is always the same one: a workflow starts when someone is given a seat, and that isn't a choice."
       >
         <Demo
           title="Blocks on a canvas"
@@ -1312,9 +1312,11 @@ export default function DesignSystemPage() {
           </p>
           <p className="pt-2">
             {ALL_PRESETS.length} presets across {BLOCK_LIBRARY.length}{" "}
-            categories, picked from the dialog on any connector. Ones that can’t
-            be guessed — which identity check applies, which apps count as
-            “tools” — land unconfigured on purpose and say so in the picker.
+            categories, picked from the dialog on any connector. Each carries
+            its own <em>setup</em> — the fields it needs before it can run — and
+            a block with a required field still empty is what “unconfigured”
+            means. Derived, not stored, so the badge on the canvas and the
+            disabled Publish button are reading the same answer.
           </p>
         </Callout>
 

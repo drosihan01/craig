@@ -3,7 +3,6 @@
 import * as React from "react";
 import { Dialog } from "./dialog";
 import { SearchInput } from "./filters";
-import { Warning } from "./icons";
 import {
   ALL_PRESETS,
   BLOCK_LIBRARY,
@@ -14,10 +13,10 @@ import { cn } from "@/lib/cn";
 /**
  * Picking a block.
  *
- * A dropdown was fine at seven abstract kinds. With a real library — fifteen
- * named blocks across five categories, each needing a sentence to distinguish
- * "Join workspace" from "Get tools & access" — a menu becomes a 600px column
- * you scroll blind. So it's a dialog with a search box.
+ * A dropdown was fine at seven abstract kinds. With a real library — thirty-odd
+ * named blocks across seven categories, each needing a sentence to tell "Slack"
+ * from "Google Workspace" — a menu becomes a column you scroll blind. So it's a
+ * dialog with a search box.
  *
  * Search is first and focused, because past the second workflow an admin knows
  * the name of the block they want and shouldn't have to find it in a grid.
@@ -62,7 +61,7 @@ export function BlockPicker({
       onClose={close}
       size="xl"
       title="Add a step"
-      description="Named blocks, not raw building blocks. Everything here can be renamed once it's on the canvas."
+      description="Named blocks, not raw building blocks. Each one says how much it needs set up before it can run."
     >
       {/* Search stays put while the library scrolls under it — with fifteen
           blocks, a search box that scrolls away is a search box you can't use
@@ -113,6 +112,8 @@ function PresetCard({
   preset: BlockPreset;
   onPick: () => void;
 }) {
+  const required = p.setup.filter((f) => f.required).length;
+
   return (
     <button
       type="button"
@@ -130,13 +131,12 @@ function PresetCard({
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-base font-medium">{p.label}</span>
-          {/* Says up front that this one lands unconfigured, so nobody adds it
+          {/* Says up front how much setup this one needs, so nobody adds it
               expecting it to be finished. */}
-          {p.gap && (
-            <Warning
-              className="size-3.5 shrink-0 text-warning"
-              aria-label="Needs configuring"
-            />
+          {required > 0 && (
+            <span className="shrink-0 rounded-sm bg-surface-sunken px-1 py-px text-2xs tabular-nums text-text-subtle">
+              {required} to set up
+            </span>
           )}
         </span>
         <span className="text-xs leading-relaxed text-text-subtle">

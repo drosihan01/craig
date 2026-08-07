@@ -91,6 +91,13 @@ ICONS = {
     "Handshake": "handshake",
     "RocketLaunch": "rocket_launch",
     "Apps": "apps",
+    "AlternateEmail": "alternate_email",
+    "ViewKanban": "view_kanban",
+    "Cloud": "cloud",
+    "FactCheck": "fact_check",
+    "EventAvailable": "event_available",
+    "UploadFile": "upload_file",
+    "Link": "link",
 }
 
 HEADER = '''import * as React from "react";

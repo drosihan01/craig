@@ -99,9 +99,10 @@ const LIBRARY: { category: string; items: Resource[] }[] = [
         usedBy: 1,
       },
       {
-        name: "Right to work",
-        meta: "Not collected anywhere yet",
+        name: "Right to work — Germany",
+        meta: "Nobody has said which check applies to a Berlin hire",
         state: "missing",
+        usedBy: 1,
       },
     ],
   },
@@ -116,7 +117,7 @@ const LIBRARY: { category: string; items: Resource[] }[] = [
       },
       {
         name: "Slack channel list",
-        meta: "Nobody has written this down",
+        meta: "Which channels a new engineer actually needs",
         state: "missing",
         usedBy: 1,
       },
