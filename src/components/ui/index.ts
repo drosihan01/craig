@@ -32,6 +32,15 @@ export {
   ListIcon,
   type ListItemProps,
 } from "./list";
+export {
+  FilterBar,
+  FilterChip,
+  SearchInput,
+  SortControl,
+  type FilterOption,
+  type SortDirection,
+  type SortState,
+} from "./filters";
 export { Tabs, SegmentedControl } from "./tabs";
 export {
   Progress,
@@ -91,10 +100,12 @@ export {
   BlockInspector,
   BLOCK_TYPES,
   INSERTABLE,
+  blockLabel,
   type BlockKind,
   type BlockTypeDef,
   type WorkflowBlock,
 } from "./workflow-builder";
+export { BlockPicker } from "./block-picker";
 export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";
 export {
   CraigMark,

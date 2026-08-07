@@ -6,15 +6,21 @@ import {
   Badge,
   Button,
   CraigMark,
+  EmptyState,
+  FilterBar,
+  FilterChip,
   List,
   ListIcon,
   ListItem,
   ListSection,
   PromptBar,
+  SearchInput,
   Separator,
+  SortControl,
   type AppNotification,
+  type SortState,
 } from "@/components/ui";
-import { Add, Description, Warning } from "@/components/ui/icons";
+import { Add, Description, Search, Warning } from "@/components/ui/icons";
 import { ACCOUNT } from "@/lib/demo";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
@@ -137,7 +143,88 @@ const ALL = LIBRARY.flatMap((g) => g.items);
 const MISSING = ALL.filter((r) => r.state === "missing").length;
 const STALE = ALL.filter((r) => r.state === "stale").length;
 
+const STATE_OPTIONS = (Object.keys(STATE) as ResourceState[]).map((id) => ({
+  id,
+  label: STATE[id].label,
+}));
+
+const CATEGORY_OPTIONS = LIBRARY.map((g) => ({
+  id: g.category,
+  label: g.category,
+}));
+
+const SORTS = [
+  { id: "category", label: "Category" },
+  { id: "state", label: "State" },
+  { id: "name", label: "Name" },
+  { id: "used", label: "Steps using it" },
+];
+
+/* Missing first when sorting by state — the useful ordering for Ada is
+   "what's broken", not "what's fine". */
+const STATE_ORDER: ResourceState[] = ["missing", "stale", "current"];
+
 export default function ResourcesPage() {
+  const [query, setQuery] = React.useState("");
+  const [states, setStates] = React.useState<string[]>([]);
+  const [categories, setCategories] = React.useState<string[]>([]);
+  const [sort, setSort] = React.useState<SortState>({
+    field: "category",
+    direction: "asc",
+  });
+
+  const q = query.trim().toLowerCase();
+  const filtering = Boolean(q || states.length || categories.length);
+
+  function clear() {
+    setQuery("");
+    setStates([]);
+    setCategories([]);
+  }
+
+  /* Filtering runs inside each group so the categories stay as headings.
+     Flattening on filter would drop the one piece of structure the page has,
+     and "Slack channel list" means something different under Engineering. */
+  const groups = LIBRARY.map((g) => ({
+    category: g.category,
+    items: g.items.filter((r) => {
+      if (states.length && !states.includes(r.state)) return false;
+      if (categories.length && !categories.includes(g.category)) return false;
+      if (!q) return true;
+      return `${r.name} ${r.meta}`.toLowerCase().includes(q);
+    }),
+  })).filter((g) => g.items.length > 0);
+
+  const dir = sort.direction === "asc" ? 1 : -1;
+
+  /* Sorting by category means sorting the *groups*; the other fields sort the
+     rows inside each one. Two different things behind one control, but the
+     alternative — a separate "group by" — is a second control for a page with
+     four categories. */
+  const sorted =
+    sort.field === "category"
+      ? sort.direction === "asc"
+        ? groups
+        : [...groups].reverse()
+      : groups.map((g) => ({
+          ...g,
+          items: [...g.items].sort((a, b) => {
+            switch (sort.field) {
+              case "used":
+                return ((a.usedBy ?? 0) - (b.usedBy ?? 0)) * dir;
+              case "state":
+                return (
+                  (STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state)) *
+                  dir
+                );
+              default:
+                return a.name.localeCompare(b.name) * dir;
+            }
+          }),
+        }));
+
+  const shownCount = sorted.reduce((n, g) => n + g.items.length, 0);
+
   return (
     <AppShell
       title="Resources"
@@ -172,25 +259,78 @@ export default function ResourcesPage() {
             Documents
           </h2>
           <span className="text-xs text-text-subtle">
-            {ALL.length} tracked · {MISSING} don&apos;t exist
+            {MISSING} of {ALL.length} don&apos;t exist
           </span>
         </div>
 
-        <div className="flex flex-col gap-7">
-          {LIBRARY.map((group) => (
-            <ListSection
-              key={group.category}
-              title={group.category}
-              count={group.items.length}
-            >
-              <List>
-                {group.items.map((r) => (
-                  <ResourceRow key={r.name} resource={r} />
-                ))}
-              </List>
-            </ListSection>
-          ))}
-        </div>
+        <FilterBar
+          className="pb-5"
+          shown={shownCount}
+          total={ALL.length}
+          noun="documents"
+          onClear={clear}
+        >
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search documents"
+            className="w-56"
+          />
+          <FilterChip
+            label="State"
+            options={STATE_OPTIONS}
+            selected={states}
+            onChange={setStates}
+          />
+          <FilterChip
+            label="Category"
+            options={CATEGORY_OPTIONS}
+            selected={categories}
+            onChange={setCategories}
+          />
+          <SortControl
+            className="ml-auto"
+            value={sort}
+            options={SORTS}
+            onChange={setSort}
+          />
+        </FilterBar>
+
+        {sorted.length > 0 ? (
+          <div className="flex flex-col gap-7">
+            {sorted.map((group) => (
+              <ListSection
+                key={group.category}
+                title={group.category}
+                count={group.items.length}
+              >
+                <List>
+                  {group.items.map((r) => (
+                    <ResourceRow key={r.name} resource={r} />
+                  ))}
+                </List>
+              </ListSection>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            className="border-dashed"
+            icon={<Search />}
+            title="Nothing matches"
+            description={
+              filtering
+                ? "Try widening the filters — Katalis only tracks ten things in total."
+                : "Nothing has been uploaded yet."
+            }
+            action={
+              filtering ? (
+                <Button size="sm" variant="secondary" onClick={clear}>
+                  Clear filters
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
       </div>
     </AppShell>
   );
@@ -220,7 +360,7 @@ function ResourceRow({ resource: r }: { resource: Resource }) {
       description={r.meta}
       meta={
         r.usedBy !== undefined
-          ? `${r.usedBy} ${r.usedBy === 1 ? "step" : "steps"} use this`
+          ? `${r.usedBy} ${r.usedBy === 1 ? "step uses" : "steps use"} this`
           : undefined
       }
     />

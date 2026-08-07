@@ -579,3 +579,75 @@ export const LIST_PROPS: PropDoc[] = [
       "Makes the whole row a target. href renders a Link, onClick a button — the row shouldn't be a div with a handler.",
   },
 ];
+
+export const FILTER_PROPS: PropDoc[] = [
+  {
+    name: "label",
+    type: "string",
+    required: true,
+    description:
+      "The field name. Shown alone when nothing is selected, and as “Role: Admin” when something is.",
+  },
+  {
+    name: "options",
+    type: "FilterOption[]",
+    required: true,
+    description: "{ id, label } — the values this field can take.",
+  },
+  {
+    name: "selected",
+    type: "string[]",
+    required: true,
+    description:
+      "Selected ids. Empty means no filter, not “nothing matches”. Multi-select: filters within a field are OR, filters across fields are AND.",
+  },
+  {
+    name: "onChange",
+    type: "(selected: string[]) => void",
+    required: true,
+    description: "Called with the next selection. Clearing passes [].",
+  },
+];
+
+export const SORT_PROPS: PropDoc[] = [
+  {
+    name: "value",
+    type: "SortState",
+    required: true,
+    description: "{ field, direction }. Both live in one object so a page holds one piece of sort state, not two.",
+  },
+  {
+    name: "options",
+    type: "FilterOption[]",
+    required: true,
+    description: "The fields that can be sorted on.",
+  },
+  {
+    name: "onChange",
+    type: "(value: SortState) => void",
+    required: true,
+    description:
+      "Fires for both halves — picking a field from the menu, and toggling direction with the arrow button.",
+  },
+];
+
+export const FILTER_BAR_PROPS: PropDoc[] = [
+  {
+    name: "shown / total",
+    type: "number",
+    description:
+      "Renders “Showing 2 of 4”. Pass both or neither. Omitting them hides the count line entirely.",
+  },
+  {
+    name: "noun",
+    type: "string",
+    default: '"results"',
+    description: "Pluralised by the caller — “people”, “documents”.",
+  },
+  {
+    name: "onClear",
+    type: "() => void",
+    description:
+      "Renders “Clear filters”, but only while something is actually filtered.",
+  },
+];

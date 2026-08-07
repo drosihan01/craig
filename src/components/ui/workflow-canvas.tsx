@@ -168,8 +168,10 @@ export function WorkflowCanvas({
         className,
       )}
       style={{
+        // border-strong rather than border: at 56px apart the dots are sparse
+        // enough that the lighter value reads as a smudge on a laptop screen.
         backgroundImage:
-          "radial-gradient(circle, var(--color-border) 1px, transparent 1px)",
+          "radial-gradient(circle, var(--color-border-strong) 1.25px, transparent 1.25px)",
         // Fixed spacing — deliberately not multiplied by zoom.
         backgroundSize: `${GRID}px ${GRID}px`,
         backgroundPosition: `${pan.x}px ${pan.y}px`,

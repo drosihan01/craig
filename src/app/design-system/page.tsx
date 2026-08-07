@@ -71,6 +71,7 @@ import {
   CalendarDemo,
   CanvasDemo,
   DropdownDemo,
+  FiltersDemo,
 } from "./_components/misc-demo";
 import { Api, Usage } from "./_components/api";
 import {
@@ -84,6 +85,9 @@ import {
   PROMPTBAR_PROPS,
   BACKLINK_PROPS,
   LIST_PROPS,
+  FILTER_PROPS,
+  FILTER_BAR_PROPS,
+  SORT_PROPS,
   NOTIFICATION_PROPS,
   TOAST_PROPS,
   BUILDER_PROPS,
@@ -95,6 +99,7 @@ import {
   WORKFLOW_PROPS,
 } from "./_components/api-data";
 import { Demo, Section, Swatch } from "./_components/specimen";
+import { ALL_PRESETS, BLOCK_LIBRARY } from "@/lib/workflow/library";
 
 const SEMANTIC = [
   { name: "canvas", cls: "bg-canvas" },
@@ -936,8 +941,46 @@ export default function DesignSystemPage() {
           </List>
         </Demo>
 
+        <Demo title="Dense, undivided — for side panels" className="items-stretch">
+          <div className="w-64 rounded-lg border border-border bg-surface p-3">
+            <List dense divided={false} bordered={false}>
+              <ListItem
+                leading={<Avatar name="Ada Yıldız" size="xs" />}
+                title={<span className="font-normal text-text-muted">Ada Yıldız</span>}
+                meta="Founder"
+              />
+              <ListItem
+                leading={<Avatar name="Jason Cho" size="xs" />}
+                title={<span className="font-normal text-text-muted">Jason Cho</span>}
+                meta="Cofounder"
+              />
+              <ListItem
+                leading={<Avatar name="Nils Hoffman" size="xs" />}
+                title={<span className="font-normal text-text-muted">Nils Hoffman</span>}
+                trailing={<Badge tone="warning" size="sm">Starts in 2 weeks</Badge>}
+              />
+            </List>
+          </div>
+        </Demo>
+
         <Api component="ListItem" props={LIST_PROPS} />
         <Usage>{`import { List, ListItem, ListSection, ListIcon } from "@/components/ui";`}</Usage>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="filters"
+        title="Sort & filter"
+        description="A chip shows its value, not just its name — “Role: Admin”, not “Role ▾”. The state of a filtered list has to be readable without opening anything, because the expensive mistake is looking at a filtered list and believing it's the whole list. The count says “showing 2 of 4” for the same reason."
+      >
+        <Demo className="items-stretch">
+          <FiltersDemo />
+        </Demo>
+
+        <Api component="FilterChip" props={FILTER_PROPS} />
+        <Api component="SortControl" props={SORT_PROPS} />
+        <Api component="FilterBar" props={FILTER_BAR_PROPS} />
+        <Usage>{`import { FilterBar, FilterChip, SearchInput, SortControl } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -1250,6 +1293,31 @@ export default function DesignSystemPage() {
         >
           <CanvasDemo />
         </Demo>
+
+        <Callout tone="neutral" title="Kinds and presets are different things">
+          <p>
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              BlockKind
+            </code>{" "}
+            is the mechanism — what the engine does with a block. There are
+            seven, and there should stay seven. A <em>preset</em> is a named
+            piece of onboarding sitting on one of them: “Set up MFA” and “Get
+            tools &amp; access” are both tasks as far as the engine is
+            concerned, but nobody builds an onboarding by thinking “I need three
+            tasks”. Adding a preset is data ({" "}
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              src/lib/workflow/library.ts
+            </code>{" "}
+            ); adding a kind is a change to the engine.
+          </p>
+          <p className="pt-2">
+            {ALL_PRESETS.length} presets across {BLOCK_LIBRARY.length}{" "}
+            categories, picked from the dialog on any connector. Ones that can’t
+            be guessed — which identity check applies, which apps count as
+            “tools” — land unconfigured on purpose and say so in the picker.
+          </p>
+        </Callout>
+
         <Api component="WorkflowBuilder" props={BUILDER_PROPS} />
         <Api
           component="WorkflowCanvas"

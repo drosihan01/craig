@@ -14,6 +14,8 @@ BASE = ("https://raw.githubusercontent.com/google/material-design-icons/master"
 # export name -> Material Symbols name
 ICONS = {
     "Add": "add",
+    "SwapVert": "swap_vert",
+    "FilterList": "filter_list",
     "Groups": "groups",
     "Code": "code",
     "Campaign": "campaign",
@@ -80,6 +82,15 @@ ICONS = {
     "Database": "database",
     "PlayArrow": "play_arrow",
     "OpenInNew": "open_in_new",
+    # Workflow block library
+    "Draw": "draw",
+    "Badge": "badge",
+    "VerifiedUser": "verified_user",
+    "Key": "key",
+    "School": "school",
+    "Handshake": "handshake",
+    "RocketLaunch": "rocket_launch",
+    "Apps": "apps",
 }
 
 HEADER = '''import * as React from "react";

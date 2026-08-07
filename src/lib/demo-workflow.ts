@@ -86,17 +86,60 @@ export const INITIAL: WorkflowBlock[] = [
   },
 ];
 
-export const WORKFLOW = {
+/**
+ * The empty one.
+ *
+ * A trigger and nothing else, which is the only honest starting state: a
+ * workflow can't begin without something starting it, and everything after
+ * that is a choice. It exists so the block library has somewhere to be used
+ * from — the Engineer draft arrives pre-written, so it never exercises the
+ * picker.
+ */
+export const BLANK: WorkflowBlock[] = [
+  {
+    id: "t",
+    kind: "trigger",
+    title: "A new hire is added",
+    summary: "Anyone added to People starts this",
+  },
+];
+
+export interface DemoWorkflow {
+  id: string;
+  name: string;
+  role: string;
+  blocks: WorkflowBlock[];
+  /** Who the current draft was written for, when it was written for someone. */
+  forWho?: string;
+  startsIn?: string;
+  createdBy: string;
+  updated: string;
+}
+
+export const WORKFLOW: DemoWorkflow = {
   id: "engineer",
   name: "Engineer",
   role: "Engineering hire",
   blocks: INITIAL,
-  /** Who the current draft was written for. */
   forWho: NEW_HIRE.name,
   startsIn: NEW_HIRE.startsIn,
   createdBy: "Craig, from your handbook",
   updated: "Just now",
-} as const;
+};
+
+export const BLANK_WORKFLOW: DemoWorkflow = {
+  id: "blank",
+  name: "Untitled workflow",
+  role: "Not decided yet",
+  blocks: BLANK,
+  createdBy: "You",
+  updated: "Not saved",
+};
+
+export const WORKFLOWS: DemoWorkflow[] = [WORKFLOW, BLANK_WORKFLOW];
+
+export const findWorkflow = (id: string) =>
+  WORKFLOWS.find((w) => w.id === id) ?? WORKFLOW;
 
 /** Steps excluding the trigger. */
 export const stepCount = (blocks: WorkflowBlock[]) => blocks.length - 1;

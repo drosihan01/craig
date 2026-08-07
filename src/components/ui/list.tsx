@@ -25,11 +25,20 @@ import { cn } from "@/lib/cn";
 export function List({
   className,
   bordered = true,
+  dense = false,
+  divided = true,
   children,
   ...props
 }: React.HTMLAttributes<HTMLUListElement> & {
   /** Wrap the list in a surface. Off when it already sits inside a Card. */
   bordered?: boolean;
+  /**
+   * Panel-sized rows: no gutter, tighter vertical rhythm. For side panels and
+   * summaries, where a full-height row would eat the whole column.
+   */
+  dense?: boolean;
+  /** Dividers between rows. Off for short summaries where they'd be noise. */
+  divided?: boolean;
 }) {
   return (
     <ul
@@ -37,8 +46,14 @@ export function List({
         bordered && "overflow-hidden rounded-lg border border-border bg-surface",
         // The divider lives on the row's content, so it starts after the
         // leading slot. Suppressed on the first row.
-        "[&_[data-list-row]]:border-t [&_[data-list-row]]:border-border",
-        "[&>li:first-child_[data-list-row]]:border-t-0",
+        divided && [
+          "[&_[data-list-row]]:border-t [&_[data-list-row]]:border-border",
+          "[&>li:first-child_[data-list-row]]:border-t-0",
+        ],
+        dense && [
+          "[&_[data-list-item]]:min-h-0 [&_[data-list-item]]:pl-0",
+          "[&_[data-list-row]]:ml-2 [&_[data-list-row]]:py-1 [&_[data-list-row]]:pr-0",
+        ],
         className,
       )}
       {...props}
@@ -136,6 +151,7 @@ export function ListItem({
 
   const row = (
     <div
+      data-list-item
       className={cn(
         "flex min-h-11 w-full items-center pl-3.5 text-left transition-colors",
         interactive && !disabled && "cursor-pointer hover:bg-surface-hover",

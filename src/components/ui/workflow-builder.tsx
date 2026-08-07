@@ -18,7 +18,9 @@ import {
   Warning,
 } from "./icons";
 import { Badge } from "./badge";
+import { BlockPicker } from "./block-picker";
 import { DropdownMenu } from "./dropdown";
+import { findPreset, type BlockPreset } from "@/lib/workflow/library";
 import { cn } from "@/lib/cn";
 
 /**
@@ -119,11 +121,27 @@ export const INSERTABLE = Object.values(BLOCK_TYPES).filter(
 export interface WorkflowBlock {
   id: string;
   kind: BlockKind;
+  /**
+   * Which library preset this came from, when it came from one. Only affects
+   * how the block is labelled and iconed — the engine runs `kind`.
+   */
+  preset?: string;
   title: string;
   summary?: string;
   owner?: string;
   /** Shown as an unresolved-configuration warning on the card. */
   incomplete?: string;
+}
+
+/** What a block calls itself: its preset if it has one, otherwise its kind. */
+export function blockLabel(block: WorkflowBlock) {
+  const preset = block.preset ? findPreset(block.preset) : undefined;
+  const type = BLOCK_TYPES[block.kind];
+  return {
+    label: preset?.label ?? type.label,
+    description: preset?.description ?? `${type.description}.`,
+    icon: preset?.icon ?? type.icon,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -144,7 +162,7 @@ export function WorkflowBuilder({
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   /** index is the position the new block should occupy. */
-  onInsert?: (kind: BlockKind, index: number) => void;
+  onInsert?: (preset: BlockPreset, index: number) => void;
   onRemove?: (id: string) => void;
   onMove?: (id: string, direction: -1 | 1) => void;
   onDuplicate?: (id: string) => void;
@@ -193,9 +211,11 @@ function Connector({
   last,
 }: {
   index: number;
-  onInsert?: (kind: BlockKind, index: number) => void;
+  onInsert?: (preset: BlockPreset, index: number) => void;
   last?: boolean;
 }) {
+  const [picking, setPicking] = React.useState(false);
+
   return (
     <div className="group/conn relative h-14">
       {/* Solid across the gap; dashed inside the cards above and below. Same
@@ -212,36 +232,31 @@ function Connector({
           className="absolute top-1/2 z-10 -translate-y-1/2"
           style={{ left: THREAD_X - 14 }}
         >
-        <DropdownMenu
-          label={last ? "Add a step" : "Insert a step here"}
-          align="start"
-          width="w-64"
-          trigger={
-            /* Always visible — a hover-only affordance hides the single most
-               important action in the builder. It stays small and quiet at
-               rest and grows a label on hover. */
-            <span
-              className={cn(
-                "flex h-7 items-center gap-1 rounded-full border border-dashed border-border-strong bg-surface px-1.5 text-2xs font-medium text-text-subtle shadow-e1",
-                "transition-[background-color,border-color,color,padding] duration-150 ease-out-quart",
-                "hover:border-solid hover:border-accent hover:bg-accent hover:pl-2 hover:pr-2.5 hover:text-accent-fg",
-                "group-focus-within/conn:border-solid group-focus-within/conn:border-accent",
-              )}
-            >
-              <Add className="size-4 shrink-0" />
-              <span className="hidden whitespace-nowrap group-hover/conn:inline">
-                {last ? "Add step" : "Insert step"}
-              </span>
+          {/* Always visible — a hover-only affordance hides the single most
+              important action in the builder. It stays small and quiet at rest
+              and grows a label on hover. */}
+          <button
+            type="button"
+            onClick={() => setPicking(true)}
+            aria-label={last ? "Add a step" : "Insert a step here"}
+            className={cn(
+              "flex h-7 items-center gap-1 rounded-full border border-dashed border-border-strong bg-surface px-1.5 text-2xs font-medium text-text-subtle shadow-e1",
+              "transition-[background-color,border-color,color,padding] duration-150 ease-out-quart",
+              "hover:border-solid hover:border-accent hover:bg-accent hover:pl-2 hover:pr-2.5 hover:text-accent-fg",
+              "focus-visible:border-solid focus-visible:border-accent",
+            )}
+          >
+            <Add className="size-4 shrink-0" />
+            <span className="hidden whitespace-nowrap group-hover/conn:inline">
+              {last ? "Add step" : "Insert step"}
             </span>
-          }
-          items={INSERTABLE.map((t) => ({
-            id: t.kind,
-            label: t.label,
-            description: t.description,
-            icon: <t.icon />,
-          }))}
-          onSelect={(kind) => onInsert(kind as BlockKind, index)}
-        />
+          </button>
+
+          <BlockPicker
+            open={picking}
+            onClose={() => setPicking(false)}
+            onPick={(preset) => onInsert(preset, index)}
+          />
         </span>
       )}
     </div>
@@ -273,7 +288,7 @@ function BlockCard({
   canMoveUp: boolean;
   canMoveDown: boolean;
 }) {
-  const type = BLOCK_TYPES[block.kind];
+  const type = blockLabel(block);
   const Icon = type.icon;
   const isTrigger = block.kind === "trigger";
 
@@ -445,7 +460,7 @@ export function BlockInspector({
     );
   }
 
-  const type = BLOCK_TYPES[block.kind];
+  const type = blockLabel(block);
   const Icon = type.icon;
 
   return (
@@ -463,8 +478,16 @@ export function BlockInspector({
       </div>
 
       <p className="text-sm leading-relaxed text-text-muted">
-        {type.description}.
+        {type.description}
       </p>
+
+      {/* Named blocks sit on a generic mechanism, and which one decides what
+          the engine does with it. Worth saying once, quietly. */}
+      {block.preset && (
+        <p className="text-xs text-text-subtle">
+          Runs as a {BLOCK_TYPES[block.kind].label.toLowerCase()}.
+        </p>
+      )}
 
       {children}
     </div>

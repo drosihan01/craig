@@ -2,8 +2,16 @@
 
 import * as React from "react";
 import {
+  Avatar,
   AuthDivider,
   Badge,
+  FilterBar,
+  FilterChip,
+  List,
+  ListItem,
+  SearchInput,
+  SortControl,
+  type SortState,
   ContinueAs,
   Button,
   Calendar,
@@ -16,10 +24,9 @@ import {
   WorkflowBuilder,
   WorkflowCanvas,
   CanvasPanel,
-  type BlockKind,
   type WorkflowBlock,
 } from "@/components/ui";
-import { BLOCK_TYPES } from "@/components/ui/workflow-builder";
+import { blockFromPreset } from "@/lib/workflow/library";
 import {
   ContentCopy,
   Delete,
@@ -256,16 +263,11 @@ export function CanvasDemo() {
       blocks={blocks}
       selectedId={selected}
       onSelect={setSelected}
-      onInsert={(kind: BlockKind, index: number) => {
+      onInsert={(preset, index) => {
         const id = `d${n++}`;
         setBlocks((prev) => [
           ...prev.slice(0, index),
-          {
-            id,
-            kind,
-            title: `New ${BLOCK_TYPES[kind].label.toLowerCase()}`,
-            incomplete: "Not configured",
-          },
+          blockFromPreset(preset, id),
           ...prev.slice(index),
         ]);
         setSelected(id);
@@ -290,5 +292,106 @@ export function CanvasDemo() {
     />
       </div>
     </WorkflowCanvas>
+  );
+}
+
+/* --- Sort & filter --------------------------------------------------------- */
+
+const FILTER_ROWS = [
+  { name: "Ada Yıldız", role: "owner", status: "active", steps: 4 },
+  { name: "Jason Cho", role: "admin", status: "active", steps: 4 },
+  { name: "Matty", role: "contributor", status: "active", steps: 0 },
+  { name: "Nils Hoffman", role: "starter", status: "invited", steps: 0 },
+];
+
+const ROLE_OPTIONS = [
+  { id: "owner", label: "Owner" },
+  { id: "admin", label: "Admin" },
+  { id: "contributor", label: "Contributor" },
+  { id: "starter", label: "New starter" },
+];
+
+export function FiltersDemo() {
+  const [query, setQuery] = React.useState("");
+  const [roles, setRoles] = React.useState<string[]>([]);
+  const [statuses, setStatuses] = React.useState<string[]>([]);
+  const [sort, setSort] = React.useState<SortState>({
+    field: "name",
+    direction: "asc",
+  });
+
+  const q = query.trim().toLowerCase();
+  const rows = FILTER_ROWS.filter(
+    (r) =>
+      (!roles.length || roles.includes(r.role)) &&
+      (!statuses.length || statuses.includes(r.status)) &&
+      (!q || r.name.toLowerCase().includes(q)),
+  ).sort((a, b) => {
+    const dir = sort.direction === "asc" ? 1 : -1;
+    return sort.field === "steps"
+      ? (a.steps - b.steps) * dir
+      : a.name.localeCompare(b.name) * dir;
+  });
+
+  function clear() {
+    setQuery("");
+    setRoles([]);
+    setStatuses([]);
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-3">
+      <FilterBar
+        shown={rows.length}
+        total={FILTER_ROWS.length}
+        noun="people"
+        onClear={clear}
+      >
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search people"
+          className="w-52"
+        />
+        <FilterChip
+          label="Role"
+          options={ROLE_OPTIONS}
+          selected={roles}
+          onChange={setRoles}
+        />
+        <FilterChip
+          label="Status"
+          options={[
+            { id: "active", label: "Active" },
+            { id: "invited", label: "Invited" },
+          ]}
+          selected={statuses}
+          onChange={setStatuses}
+        />
+        <SortControl
+          className="ml-auto"
+          value={sort}
+          options={[
+            { id: "name", label: "Name" },
+            { id: "steps", label: "Steps owned" },
+          ]}
+          onChange={setSort}
+        />
+      </FilterBar>
+
+      <List className="w-full">
+        {rows.map((r) => (
+          <ListItem
+            key={r.name}
+            leading={<Avatar name={r.name} size="md" />}
+            title={r.name}
+            description={
+              ROLE_OPTIONS.find((o) => o.id === r.role)?.label ?? r.role
+            }
+            meta={r.steps ? `owns ${r.steps} steps` : undefined}
+          />
+        ))}
+      </List>
+    </div>
   );
 }

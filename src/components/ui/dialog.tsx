@@ -41,7 +41,7 @@ export interface DialogProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   /** Sizes the panel. `chat` is tall and fixed so the composer stays put. */
-  size?: "sm" | "md" | "lg" | "chat";
+  size?: "sm" | "md" | "lg" | "xl" | "chat";
   className?: string;
   /** Hide the default header entirely — the content supplies its own. */
   bare?: boolean;
@@ -51,6 +51,9 @@ const sizes = {
   sm: "max-w-sm",
   md: "max-w-lg",
   lg: "max-w-2xl",
+  /* Wide enough for a two-column grid of cards, and capped so a long list
+     scrolls inside the panel rather than running off the screen. */
+  xl: "max-w-3xl max-h-[min(44rem,calc(100vh-4rem))]",
   chat: "max-w-2xl h-[min(42rem,calc(100vh-4rem))]",
 };
 

@@ -14,13 +14,13 @@ import {
   WorkflowBuilder,
   WorkflowCanvas,
   type AppNotification,
-  type BlockKind,
   type WorkflowBlock,
 } from "@/components/ui";
-import { BLOCK_TYPES } from "@/components/ui/workflow-builder";
 import { AutoAwesome } from "@/components/ui/icons";
-import { ACCOUNT, NEW_HIRE, PEOPLE } from "@/lib/demo";
-import { INITIAL, WORKFLOW } from "@/lib/demo-workflow";
+import { useParams } from "next/navigation";
+import { ACCOUNT, PEOPLE } from "@/lib/demo";
+import { findWorkflow } from "@/lib/demo-workflow";
+import { blockFromPreset, type BlockPreset } from "@/lib/workflow/library";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
 /* Drafted from Ada's handbook — the first-week checklist in that doc is
@@ -58,24 +58,22 @@ let seq = 0;
 const nextId = () => `b${Date.now()}-${seq++}`;
 
 export default function BuilderPage() {
-  const [blocks, setBlocks] = React.useState<WorkflowBlock[]>(INITIAL);
-  const [selectedId, setSelectedId] = React.useState<string | null>("b2");
+  const params = useParams<{ id: string }>();
+  const workflow = findWorkflow(params.id);
+  const blank = workflow.id === "blank";
+
+  const [blocks, setBlocks] = React.useState<WorkflowBlock[]>(workflow.blocks);
+  /* A pre-written draft opens with something selected so the right panel isn't
+     blank; an empty one has nothing worth selecting. */
+  const [selectedId, setSelectedId] = React.useState<string | null>(
+    blank ? null : "b2",
+  );
 
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
 
-  function insert(kind: BlockKind, index: number) {
-    const type = BLOCK_TYPES[kind];
-    const block: WorkflowBlock = {
-      id: nextId(),
-      kind,
-      title: `New ${type.label.toLowerCase()}`,
-      incomplete: "Not configured",
-    };
-    setBlocks((prev) => [
-      ...prev.slice(0, index),
-      block,
-      ...prev.slice(index),
-    ]);
+  function insert(preset: BlockPreset, index: number) {
+    const block = blockFromPreset(preset, nextId());
+    setBlocks((prev) => [...prev.slice(0, index), block, ...prev.slice(index)]);
     setSelectedId(block.id);
   }
 
@@ -123,13 +121,19 @@ export default function BuilderPage() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-base font-medium">{WORKFLOW.name}</span>
+              <span className="text-base font-medium">{workflow.name}</span>
               <Badge tone="warning" size="sm">
                 Draft
               </Badge>
             </div>
             <p className="text-sm text-text-muted">
-              {steps} steps · for {NEW_HIRE.name}, starts in {NEW_HIRE.startsIn}
+              {steps === 0
+                ? "No steps yet — add one from the line below the trigger"
+                : `${steps} ${steps === 1 ? "step" : "steps"} · ${
+                    workflow.forWho
+                      ? `for ${workflow.forWho}, starts in ${workflow.startsIn}`
+                      : "not assigned to anyone yet"
+                  }`}
             </p>
           </div>
 
@@ -198,7 +202,9 @@ export default function BuilderPage() {
             <AutoAwesome />
             Ask Craig
           </Button>
-          <Button size="sm" disabled={unconfigured > 0}>
+          {/* A trigger on its own is valid but pointless, so an empty workflow
+              is unpublishable for a different reason to an unconfigured one. */}
+          <Button size="sm" disabled={unconfigured > 0 || steps === 0}>
             Publish
           </Button>
         </>

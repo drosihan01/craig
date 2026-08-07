@@ -9,6 +9,9 @@ import {
   Card,
   ChatTranscript,
   CraigMark,
+  List,
+  ListIcon,
+  ListItem,
   PromptBar,
   Separator,
   type AppNotification,
@@ -18,7 +21,7 @@ import Link from "next/link";
 import { Campaign, Code, Groups, Schedule } from "@/components/ui/icons";
 import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { SESSION } from "@/lib/demo-session";
-import { WORKFLOW } from "@/lib/demo-workflow";
+import { WORKFLOW, stepCount, unconfiguredCount } from "@/lib/demo-workflow";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
 /**
@@ -83,6 +86,11 @@ const TEMPLATES = [
     steps: 7,
   },
 ];
+
+/* Counted from the blocks rather than typed in, so the card, the workflows
+   list and the canvas can't disagree about how big the draft is. */
+const DRAFT_STEPS = stepCount([...WORKFLOW.blocks]);
+const DRAFT_UNCONFIGURED = unconfiguredCount([...WORKFLOW.blocks]);
 
 /* The reply Craig gives once the scripted session runs out, so a demo that
    goes off-script degrades honestly instead of repeating itself. */
@@ -376,31 +384,32 @@ function ReplyOptions({
  */
 function DraftHandoff() {
   return (
-    <Card className="flex items-start gap-3 p-3">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-subtle-fg">
-        <Code className="size-4" />
-      </span>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-base font-medium">Engineer — Katalis</span>
-          <Badge tone="warning" size="sm">
-            Draft
-          </Badge>
-        </div>
-        <p className="text-sm text-text-muted">
-          9 steps · 2 unconfigured · for {NEW_HIRE.name}, starts in{" "}
-          {NEW_HIRE.startsIn}
-        </p>
-      </div>
-
-      <Link
-        href={`/builder/${WORKFLOW.id}`}
-        className={buttonVariants({ size: "sm", className: "shrink-0" })}
-      >
-        Open the draft
-      </Link>
-    </Card>
+    <List>
+      <ListItem
+        leading={
+          <ListIcon tone="accent">
+            <Code />
+          </ListIcon>
+        }
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            {WORKFLOW.name}
+            <Badge tone="warning" size="sm">
+              Draft
+            </Badge>
+          </span>
+        }
+        description={`${DRAFT_STEPS} steps · ${DRAFT_UNCONFIGURED} unconfigured · for ${NEW_HIRE.name}, starts in ${NEW_HIRE.startsIn}`}
+        trailing={
+          <Link
+            href={`/builder/${WORKFLOW.id}`}
+            className={buttonVariants({ size: "sm" })}
+          >
+            Open the draft
+          </Link>
+        }
+      />
+    </List>
   );
 }
 
@@ -432,24 +441,34 @@ function HomeAside({ started }: { started: boolean }) {
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           People
         </p>
-        {Object.values(PEOPLE).map((p) => (
-          <div key={p.email} className="flex items-center gap-2">
-            <Avatar name={p.name} size="xs" />
-            <span className="truncate text-sm text-text-muted">{p.name}</span>
-            <span className="ml-auto shrink-0 text-2xs text-text-subtle">
-              {p.role}
-            </span>
-          </div>
-        ))}
-        <div className="flex items-center gap-2 pt-0.5">
-          <Avatar name={NEW_HIRE.name} size="xs" />
-          <span className="truncate text-sm text-text-muted">
-            {NEW_HIRE.name}
-          </span>
-          <Badge tone="warning" size="sm" className="ml-auto shrink-0">
-            Starts in {NEW_HIRE.startsIn}
-          </Badge>
-        </div>
+        {/* Dense and undivided — a four-row summary in a 260px panel. The rules
+            and the gutter are what make a list read as a surface, and this
+            isn't one; it's the roster, sitting next to the conversation. */}
+        <List dense divided={false} bordered={false}>
+          {Object.values(PEOPLE).map((p) => (
+            <ListItem
+              key={p.email}
+              leading={<Avatar name={p.name} size="xs" />}
+              title={<span className="font-normal text-text-muted">{p.name}</span>}
+              meta={p.role}
+            />
+          ))}
+          <ListItem
+            leading={<Avatar name={NEW_HIRE.name} size="xs" />}
+            title={
+              <span className="font-normal text-text-muted">
+                {NEW_HIRE.name}
+              </span>
+            }
+            /* Short form — the panel is 260px and the full sentence pushes his
+               surname into an ellipsis. */
+            trailing={
+              <Badge tone="warning" size="sm">
+                In {NEW_HIRE.startsIn}
+              </Badge>
+            }
+          />
+        </List>
       </div>
 
       <Separator />

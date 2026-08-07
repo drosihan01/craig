@@ -1,21 +1,22 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   AppShell,
   Badge,
-  Button,
-  EmptyState,
   List,
   ListIcon,
   ListItem,
   Separator,
+  buttonVariants,
   type AppNotification,
 } from "@/components/ui";
 import { Add, Code, Warning } from "@/components/ui/icons";
 import { ACCOUNT } from "@/lib/demo";
 import {
-  WORKFLOW,
+  BLANK_WORKFLOW,
+  WORKFLOWS,
   stepCount,
   unconfiguredCount,
 } from "@/lib/demo-workflow";
@@ -24,10 +25,10 @@ import { AdminNav, NavStat } from "@/components/app-nav";
 /**
  * Pick a workflow, then build it.
  *
- * Katalis has exactly one, which makes this page look thin — and that's the
- * honest state of a three-person company that started last week. Padding it
- * with sample workflows would make the product look busier and the customer
- * look further along than they are.
+ * Katalis has two: the Engineer draft Craig wrote from the handbook, and an
+ * empty one. That's the honest state of a three-person company that started
+ * last week — padding it with sample workflows would make the product look
+ * busier and the customer look further along than they are.
  */
 
 const NOTIFICATIONS: AppNotification[] = [
@@ -41,9 +42,6 @@ const NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-const steps = stepCount([...WORKFLOW.blocks]);
-const unconfigured = unconfiguredCount([...WORKFLOW.blocks]);
-
 export default function WorkflowsPage() {
   return (
     <AppShell
@@ -52,10 +50,13 @@ export default function WorkflowsPage() {
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
       actions={
-        <Button size="sm" variant="secondary">
+        <Link
+          href={`/builder/${BLANK_WORKFLOW.id}`}
+          className={buttonVariants({ size: "sm", variant: "secondary" })}
+        >
           <Add />
           New workflow
-        </Button>
+        </Link>
       }
     >
       <div className="mx-auto w-full max-w-3xl py-10">
@@ -69,48 +70,55 @@ export default function WorkflowsPage() {
           </p>
         </header>
 
-        <div className="flex flex-col gap-3">
-          <List>
-            <ListItem
-              href={`/builder/${WORKFLOW.id}`}
-              leading={
-                <ListIcon tone="accent">
-                  <Code />
-                </ListIcon>
-              }
-              title={
-                <span className="flex flex-wrap items-center gap-2">
-                  {WORKFLOW.name}
-                  <Badge tone="warning" size="sm">
-                    Draft
-                  </Badge>
-                  {unconfigured > 0 && (
-                    <Badge tone="warning" size="sm">
-                      <Warning />
-                      {unconfigured} unconfigured
-                    </Badge>
-                  )}
-                </span>
-              }
-              description={`${steps} steps · drafted for ${WORKFLOW.forWho}, starts in ${WORKFLOW.startsIn}`}
-              footnote={`${WORKFLOW.createdBy} · ${WORKFLOW.updated}`}
-            />
-          </List>
+        <List>
+          {WORKFLOWS.map((w) => {
+            const count = stepCount(w.blocks);
+            const gaps = unconfiguredCount(w.blocks);
+            const empty = count === 0;
 
-          {/* Only one workflow exists, so the second slot says what a second one
-              would be for rather than sitting empty. */}
-          <EmptyState
-            className="border-dashed"
-            icon={<Add />}
-            title="No other workflows yet"
-            description="Add one when you hire for a different kind of role — a contractor or a first GTM person needs a different shape to an engineer."
-            action={
-              <Button size="sm" variant="secondary">
-                New workflow
-              </Button>
-            }
-          />
-        </div>
+            return (
+              <ListItem
+                key={w.id}
+                href={`/builder/${w.id}`}
+                leading={
+                  /* Dashed tile for the empty one — the same signal the canvas
+                     uses for a block that isn't configured yet. */
+                  <ListIcon tone={empty ? "muted" : "accent"}>
+                    {empty ? <Add /> : <Code />}
+                  </ListIcon>
+                }
+                title={
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className={empty ? "text-text-muted" : undefined}>
+                      {w.name}
+                    </span>
+                    <Badge tone={empty ? "neutral" : "warning"} size="sm">
+                      {empty ? "Empty" : "Draft"}
+                    </Badge>
+                    {gaps > 0 && (
+                      <Badge tone="warning" size="sm">
+                        <Warning />
+                        {gaps} unconfigured
+                      </Badge>
+                    )}
+                  </span>
+                }
+                description={
+                  empty
+                    ? "Nothing but a trigger. Build it from the block library."
+                    : `${count} steps · drafted for ${w.forWho}, starts in ${w.startsIn}`
+                }
+                footnote={`${w.createdBy} · ${w.updated}`}
+              />
+            );
+          })}
+        </List>
+
+        <p className="pt-3 text-xs leading-relaxed text-text-subtle">
+          Add a workflow when you hire for a different kind of role — a
+          contractor or a first GTM person needs a different shape to an
+          engineer.
+        </p>
       </div>
     </AppShell>
   );
@@ -123,7 +131,7 @@ function WorkflowsNav() {
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Workflows
         </p>
-        <NavStat label="Drafts" value={1} />
+        <NavStat label="Drafts" value={WORKFLOWS.length} />
         <NavStat label="Live" value={0} />
       </div>
 

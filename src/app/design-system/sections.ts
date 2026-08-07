@@ -31,6 +31,7 @@ export const SECTIONS: NavGroup[] = [
       { id: "badge", label: "Badge & status" },
       { id: "card", label: "Card" },
       { id: "list", label: "List" },
+      { id: "filters", label: "Sort & filter" },
       { id: "avatar", label: "Avatar" },
       { id: "tabs", label: "Tabs" },
       { id: "progress", label: "Progress & steps" },
