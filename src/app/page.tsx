@@ -1,445 +1,314 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   AppShell,
   Avatar,
   Badge,
-  buttonVariants,
-  Card,
-  ChatTranscript,
-  CraigMark,
+  Button,
+  EmptyState,
   List,
   ListIcon,
   ListItem,
+  Progress,
   PromptBar,
   Separator,
   type AppNotification,
-  type ChatMessage,
 } from "@/components/ui";
-import Link from "next/link";
-import { Code, Groups } from "@/components/ui/icons";
+import { PersonAdd, Warning } from "@/components/ui/icons";
 import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
-import { SESSION } from "@/lib/demo-session";
-import { WORKFLOW, stepCount, unconfiguredCount } from "@/lib/demo-workflow";
+import {
+  WORKFLOW,
+  WORKFLOWS,
+  stepCount,
+  unconfiguredCount,
+} from "@/lib/demo-workflow";
+import { AddSeat, SeatState } from "@/components/add-seat";
+import { DraftSession } from "@/components/draft-session";
+import { type Onboarding } from "@/lib/onboarding";
 import { AdminNav, NavStat } from "@/components/app-nav";
 
 /**
- * The admin's first screen, and then the conversation that follows it.
+ * The admin's home.
  *
- * Two states in one route rather than two routes: the first message continues
- * the question, it isn't a navigation. Sending collapses the hero and the
- * templates and pins the composer to the bottom — once there's a transcript,
- * the thing that needs to be in reach is the reply box, not the pitch.
+ * Two states, and which one you get depends on whether the account has
+ * anything in it yet.
+ *
+ * Empty: the hero and the prompt, because with nothing built there is exactly
+ * one useful thing to do and it's describe the company. That was previously
+ * the *permanent* state of this page, which meant the largest text on screen
+ * was a question with a permanent answer — a home screen optimised for the
+ * least frequent visit anyone makes to it.
+ *
+ * Otherwise: the loop. Add someone, and a workflow runs against them. Building
+ * a workflow is the means; an admin who never adds a seat has got nothing out
+ * of Craig at all. Under that, what needs them — derived from the same data
+ * the other pages read, so it can't disagree with them — and who's currently
+ * onboarding.
+ *
+ * The nav is already permanently on the left, so this page deliberately isn't
+ * a launcher. Status is the better wayfinding: every row points at one
+ * specific thing that needs Ada rather than at a section.
  */
 
 const NOTIFICATIONS: AppNotification[] = [
   {
     id: "h1",
-    kind: "info",
-    title: "Welcome to Craig",
-    description: "Start by describing Katalis below.",
+    kind: "assigned",
+    title: `${NEW_HIRE.name} starts in ${NEW_HIRE.startsIn}`,
+    description: "Nothing is running for him yet",
     timestamp: new Date(Date.now() - 3 * 60_000),
   },
 ];
 
-/* Counted from the blocks rather than typed in, so the card, the workflows
-   list and the canvas can't disagree about how big the draft is. */
-const DRAFT_STEPS = stepCount([...WORKFLOW.blocks]);
-const DRAFT_UNCONFIGURED = unconfiguredCount([...WORKFLOW.blocks]);
-
-/**
- * Starting points, not finished workflows. Describing the company in prose is
- * the better path and stays primary, but it's a blank box, and a blank box is
- * where most people stop.
- *
- * Four cards, because they're a 2x2 rather than a list: engineering or not,
- * employed or contracted. Those are the two questions that actually change the
- * shape of an onboarding — an engineer needs five admin consoles and a
- * walkthrough of what's live; a contractor needs an end date and an
- * offboarding step that fires. Everything else is a variation on one of the
- * four.
- *
- * The icon says which kind of person and repeats across the pair on purpose —
- * that repetition is what makes the grid read as a matrix instead of four
- * unrelated options. The tag says which kind of engagement.
- *
- * Step counts are deliberately small. A twenty-step template for a
- * three-person company is a template nobody finishes.
- */
-const TEMPLATES = [
-  {
-    id: "engineer",
-    icon: Code,
-    title: "Engineer",
-    description:
-      "One step per account, a quiz instead of \u201cread the handbook\u201d, and a 1:1 with whoever owns the system.",
-    // The one template that exists for real, so it counts its own blocks.
-    steps: DRAFT_STEPS,
-    tag: { label: "Most used", tone: "accent" as const },
-  },
-  {
-    id: "general",
-    icon: Groups,
-    title: "General hire",
-    description:
-      "Anyone outside engineering. Fewer consoles, more context \u2014 most of what they need isn\u2019t written down anywhere yet.",
-    steps: 9,
-  },
-  {
-    id: "engineer-contract",
-    icon: Code,
-    title: "Engineer, contract",
-    description:
-      "The same access, scoped and dated. Read-only where it can be, and an offboarding step that actually fires.",
-    steps: 10,
-    tag: { label: "Contract", tone: "neutral" as const },
-  },
-  {
-    id: "general-contract",
-    icon: Groups,
-    title: "General contractor",
-    description:
-      "Same shape, less kit. A contract, a way to invoice, and the two or three tools they\u2019ll actually open.",
-    steps: 6,
-    tag: { label: "Contract", tone: "neutral" as const },
-  },
-];
-
-
-/* The reply Craig gives once the scripted session runs out, so a demo that
-   goes off-script degrades honestly instead of repeating itself. */
-const FALLBACK =
-  "Ah — that's past what I've got scripted. There's no model hooked up behind me yet, so I'd only be making something up.";
-
 export default function AdminHomePage() {
-  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
-  const [busy, setBusy] = React.useState(false);
-  const [turnIndex, setTurnIndex] = React.useState(0);
-  const [offerDraft, setOfferDraft] = React.useState(false);
-  const [replies, setReplies] = React.useState<string[]>([]);
-  const composerRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const timers = React.useRef<number[]>([]);
+  const [seats, setSeats] = React.useState<Onboarding[]>([]);
+  const [adding, setAdding] = React.useState(false);
+  /* Local to this page: it only decides whether the hero collapses. */
+  const [drafting, setDrafting] = React.useState(false);
 
-  const clearTimers = React.useCallback(() => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-  }, []);
-  React.useEffect(() => clearTimers, [clearTimers]);
+  /* Katalis has a draft, so Home is past its empty state from the first load.
+     If that ever stops being true the hero comes back on its own. */
+  const hasWorkflows = WORKFLOWS.some((w) => stepCount(w.blocks) > 0);
+  const empty = !hasWorkflows && seats.length === 0;
 
-  /* Walks the scripted session.
-     Typed text is *replaced* by Ada's line for that turn — the demo is driven
-     by pressing enter, not by typing her paragraphs out in front of people,
-     and it survives any input. A picked reply is sent verbatim, because she
-     chose those words and showing her different ones would be a lie about
-     what she just said. Past the script, typed text is used as-is. */
-  function send(text: string, verbatim = false) {
-    const turn = SESSION[turnIndex];
-    const replyId = crypto.randomUUID();
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: verbatim ? text : (turn?.ada ?? text),
-        attachment: turn?.attachment,
-      },
-      {
-        id: replyId,
-        role: "assistant",
-        content: "",
-        streaming: true,
-        question: turn?.question,
-        steps: turn ? [{ id: turn.steps[0], label: turn.steps[0], state: "running" }] : [],
-      },
-    ]);
-    setBusy(true);
-    setTurnIndex((i) => i + 1);
-    setReplies([]);
-
-    const patch = (fn: (m: ChatMessage) => ChatMessage) =>
-      setMessages((prev) => prev.map((m) => (m.id === replyId ? fn(m) : m)));
-
-    const steps = turn?.steps ?? [];
-    const reply = turn?.craig ?? FALLBACK;
-
-    // One state at a time — the point of showing them is watching where the
-    // time goes, which a finished list doesn't tell you.
-    steps.forEach((label, i) => {
-      const t = window.setTimeout(
-        () => {
-          const next = steps[i + 1];
-          patch((m) => ({
-            ...m,
-            steps: next
-              ? [{ id: next, label: next, state: "running" }]
-              : [{ id: label, label, state: "done" }],
-          }));
-        },
-        800 * (i + 1),
-      );
-      timers.current.push(t);
-    });
-
-    const startAt = 800 * steps.length + 200;
-    const words = reply.split(" ");
-    words.forEach((_, i) => {
-      const t = window.setTimeout(
-        () => {
-          patch((m) => ({
-            ...m,
-            content: words.slice(0, i + 1).join(" "),
-            streaming: i < words.length - 1,
-            steps: [],
-          }));
-          if (i === words.length - 1) {
-            setBusy(false);
-            setReplies(turn?.replies ?? []);
-            if (turn?.offersWorkflow) setOfferDraft(true);
-          }
-        },
-        startAt + i * 18,
-      );
-      timers.current.push(t);
-    });
-  }
-
-  function stop() {
-    clearTimers();
-    setBusy(false);
-    setMessages((prev) =>
-      prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)),
-    );
-  }
-
-  const started = messages.length > 0;
+  const todo = openItems(seats);
 
   return (
     <AppShell
       title="Home"
-      nav={<HomeNav started={started} />}
+      nav={<HomeNav seats={seats} open={todo.length} />}
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
-      fill={started}
+      fill={empty && drafting}
       asideTitle="Katalis"
-      aside={<HomeAside started={started} />}
+      aside={<HomeAside />}
+      actions={
+        empty ? undefined : (
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <PersonAdd />
+            Add someone
+          </Button>
+        )
+      }
     >
-      {started ? (
-        /* Pinned to the viewport so only the transcript scrolls. A composer
-           that scrolls away is the single most annoying thing a chat can do. */
-        <div className="flex h-[calc(100vh-3rem)] flex-col">
-          <ChatTranscript
-            messages={messages}
-            className="-mx-4 flex-1 px-4 py-8"
-          />
-
-          <div className="shrink-0 pb-6">
-            <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
-              {offerDraft && <DraftHandoff />}
-
-              {replies.length > 0 && (
-                <ReplyOptions
-                  replies={replies}
-                  onPick={(r) => send(r, true)}
-                  onCompose={() => composerRef.current?.focus()}
-                />
-              )}
-
-              <PromptBar
-                autoFocus
-                inputRef={composerRef}
-                numberHint={replies.length > 0 ? replies.length + 1 : undefined}
-                placeholder="Ask a follow-up…"
-                onSubmit={send}
-                onStop={stop}
-                busy={busy}
-                footnote="Craig can make mistakes. Nothing is created until you publish it."
-              />
-            </div>
-          </div>
-        </div>
+      {empty ? (
+        <DraftSession onStart={() => setDrafting(true)} />
       ) : (
-        <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col justify-center py-16">
-          <div className="flex flex-col items-center gap-4 text-center">
-            <CraigMark className="size-14 text-accent" />
-            <h1 className="text-4xl font-semibold tracking-[-0.03em]">
-              Tell me a little bit about your company
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 py-10">
+          {/* The ask stays prominent rather than being demoted to a corner.
+              It's the thing that's useful on the days when there's nothing to
+              report, which for a three-person company is most days. */}
+          <div className="flex flex-col gap-3">
+            <h1 className="text-2xl font-semibold tracking-[-0.02em]">
+              {COMPANY.name}
             </h1>
-          </div>
-
-          <div className="pt-8">
             <PromptBar
-              autoFocus
-              placeholder="we're 3 people doing AI infra…"
-              onSubmit={send}
-              footnote="Attach a handbook if you have one — however out of date it is"
+              placeholder="Ask Craig anything — a policy, a step, who's waiting on what…"
+              onSubmit={() => {}}
+              footnote="Craig knows your workflows, your people and whatever you've uploaded."
             />
           </div>
 
-          <div className="flex flex-col gap-3 pt-8">
-            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-              Or start from a template
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {TEMPLATES.map((t) => (
-                <Card
-                  key={t.id}
-                  interactive
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => send(`Start from the ${t.title} template`)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      send(`Start from the ${t.title} template`);
-                    }
-                  }}
-                  className="flex flex-col gap-2 p-4"
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-subtle-fg">
-                      <t.icon className="size-4" />
-                    </span>
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <span className="truncate text-base font-medium">
-                        {t.title}
-                      </span>
-                      {t.tag && (
-                        <Badge
-                          tone={t.tag.tone}
-                          size="sm"
-                          className="shrink-0"
-                        >
-                          {t.tag.label}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
+          <NeedsYou items={todo} />
 
-                  <p className="text-sm leading-relaxed text-text-muted">
-                    {t.description}
-                  </p>
-
-                  <span className="mt-auto pt-1 text-2xs text-text-subtle">
-                    {t.steps} steps · you edit before anything goes live
-                  </span>
-                </Card>
-              ))}
-            </div>
-          </div>
+          <Onboardings seats={seats} onAdd={() => setAdding(true)} />
         </div>
       )}
+
+      <AddSeat
+        open={adding}
+        onClose={() => setAdding(false)}
+        onAdd={(seat) => setSeats((prev) => [...prev, seat])}
+      />
     </AppShell>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  What needs you                                                            */
+/* -------------------------------------------------------------------------- */
+
+interface OpenItem {
+  id: string;
+  title: string;
+  detail: string;
+  href: string;
+  urgent?: boolean;
+}
+
 /**
- * Predicted replies to Craig's question.
- *
- * Numbered, and pickable with the number keys — Ada types fast and shouldn't
- * have to reach for the mouse to answer a yes/no. The options are phrasings of
- * one answer rather than genuinely different answers; the script is linear, and
- * an option that changed what she said would make Craig's next turn incoherent.
- *
- * "Or just type" stays visible because a predicted reply that isn't quite right
- * is worse than no prediction, and the composer is right underneath.
+ * Derived, never typed in. Every row here is computed from the same data the
+ * page it points at reads, so Home can't claim three unconfigured steps while
+ * the builder shows two.
  */
-function ReplyOptions({
-  replies,
-  onPick,
-  onCompose,
-}: {
-  replies: string[];
-  onPick: (text: string) => void;
-  /** The last option is "write your own" — focuses the composer. */
-  onCompose: () => void;
-}) {
-  React.useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      // Not while they're typing their own answer.
-      const el = document.activeElement;
-      if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
-        return;
-      }
-      const n = Number(e.key);
-      if (n >= 1 && n <= replies.length) {
-        e.preventDefault();
-        onPick(replies[n - 1]);
-      } else if (n === replies.length + 1) {
-        e.preventDefault();
-        onCompose();
-      }
+function openItems(seats: Onboarding[]): OpenItem[] {
+  const items: OpenItem[] = [];
+
+  for (const w of WORKFLOWS) {
+    const gaps = unconfiguredCount(w.blocks);
+    if (gaps > 0) {
+      items.push({
+        id: `gaps-${w.id}`,
+        title: `${gaps} ${gaps === 1 ? "step needs" : "steps need"} setting up in ${w.name}`,
+        detail: "Nothing can be assigned to it until they're done",
+        href: `/builder/${w.id}`,
+        urgent: true,
+      });
     }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [replies, onPick, onCompose]);
+  }
+
+  /* Matched on his own seat, not on "any seat exists" — onboarding someone
+     else doesn't make Nils any less unstarted. */
+  const nilsStarted = seats.some(
+    (s) => s.email === NEW_HIRE.email || s.name === NEW_HIRE.name,
+  );
+  if (!nilsStarted) {
+    items.push({
+      id: "nils",
+      title: `${NEW_HIRE.name} starts in ${NEW_HIRE.startsIn}`,
+      detail: "He has a seat but no workflow running against it",
+      href: "/people",
+      urgent: true,
+    });
+  }
+
+  items.push({
+    id: "handbook",
+    title: "The handbook hasn't been reviewed since Feb 2026",
+    detail: "It's what the pop quiz would read from",
+    href: "/resources",
+  });
+
+  return items;
+}
+
+function NeedsYou({ items }: { items: OpenItem[] }) {
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col gap-2">
+        <SectionHead title="Needs you" />
+        <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-base text-text-subtle">
+          Nothing. Genuinely — everything that could be waiting on you isn&apos;t.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      {replies.map((r, i) => (
-        <button
-          key={r}
-          type="button"
-          onClick={() => onPick(r)}
-          className="group flex w-full items-start gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-accent hover:bg-surface-hover"
-        >
-          <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded bg-surface-sunken text-2xs font-semibold tabular-nums text-text-subtle transition-colors group-hover:bg-accent group-hover:text-accent-fg">
-            {i + 1}
-          </span>
-          <span className="text-sm leading-relaxed text-text-muted transition-colors group-hover:text-text">
-            {r}
-          </span>
-        </button>
-      ))}
+    <div className="flex flex-col gap-2">
+      <SectionHead title="Needs you" count={items.length} />
+      <List>
+        {items.map((i) => (
+          <ListItem
+            key={i.id}
+            href={i.href}
+            leading={
+              <ListIcon tone={i.urgent ? "accent" : "default"}>
+                <Warning />
+              </ListIcon>
+            }
+            title={i.title}
+            description={i.detail}
+          />
+        ))}
+      </List>
     </div>
   );
 }
 
-/**
- * The hand-off out of the conversation. Deliberately a draft rather than a
- * published workflow — Craig proposes, Ada edits, and the two unconfigured
- * steps are the reason she has to look before anything runs.
- */
-function DraftHandoff() {
+/* -------------------------------------------------------------------------- */
+/*  Onboarding now                                                            */
+/* -------------------------------------------------------------------------- */
+
+function Onboardings({
+  seats,
+  onAdd,
+}: {
+  seats: Onboarding[];
+  onAdd: () => void;
+}) {
   return (
-    <List>
-      <ListItem
-        leading={
-          <ListIcon tone="accent">
-            <Code />
-          </ListIcon>
-        }
-        title={
-          <span className="flex flex-wrap items-center gap-2">
-            {WORKFLOW.name}
-            <Badge tone="warning" size="sm">
-              Draft
-            </Badge>
-          </span>
-        }
-        description={`${DRAFT_STEPS} steps · ${DRAFT_UNCONFIGURED} unconfigured · for ${NEW_HIRE.name}, starts in ${NEW_HIRE.startsIn}`}
-        trailing={
-          <Link
-            href={`/builder/${WORKFLOW.id}`}
-            className={buttonVariants({ size: "sm" })}
-          >
-            Open the draft
-          </Link>
-        }
-      />
-    </List>
+    <div className="flex flex-col gap-2">
+      <SectionHead title="Onboarding now" count={seats.length || undefined} />
+
+      {seats.length === 0 ? (
+        <EmptyState
+          className="border-dashed"
+          icon={<PersonAdd />}
+          title="Nobody yet"
+          description="Add someone and Craig takes it from there — the first email goes out immediately, and the rest run in order."
+          action={
+            <Button size="sm" onClick={onAdd}>
+              Add someone
+            </Button>
+          }
+        />
+      ) : (
+        <List>
+          {seats.map((s) => {
+            const w = WORKFLOWS.find((x) => x.id === s.workflowId);
+            const total = w ? stepCount(w.blocks) : 0;
+            return (
+              <ListItem
+                key={s.id}
+                href="/people"
+                leading={<Avatar name={s.name} size="md" />}
+                title={
+                  <span className="flex items-center gap-2">
+                    <span className="truncate">{s.name}</span>
+                    <SeatState state={s.state} />
+                  </span>
+                }
+                description={`${s.role} · starts ${s.startsIn} · ${w?.name ?? "no workflow"}`}
+                meta={
+                  <span className="flex w-24 flex-col items-end gap-1">
+                    <span>
+                      {s.done} of {total}
+                    </span>
+                    <Progress
+                      value={s.done}
+                      max={total || 1}
+                      label={`${s.name} progress`}
+                      className="w-full"
+                    />
+                  </span>
+                }
+              />
+            );
+          })}
+        </List>
+      )}
+    </div>
   );
 }
+
+function SectionHead({ title, count }: { title: string; count?: number }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <h2 className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+        {title}
+      </h2>
+      {count !== undefined && (
+        <span className="text-xs text-text-subtle">{count}</span>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Panels                                                                    */
+/* -------------------------------------------------------------------------- */
 
 /**
  * What Craig knows about Katalis, and what he doesn't.
  *
  * The gaps are listed as prominently as the facts. They're the reason his
- * answers are worth anything, and if the panel only showed what's on file it
- * would flatter a company that has three people and a stale handbook.
+ * answers are worth anything, and a panel that only showed what's on file
+ * would flatter a company with three people and a stale handbook.
  */
-function HomeAside({ started }: { started: boolean }) {
+function HomeAside() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
@@ -462,13 +331,15 @@ function HomeAside({ started }: { started: boolean }) {
         </p>
         {/* Dense and undivided — a four-row summary in a 260px panel. The rules
             and the gutter are what make a list read as a surface, and this
-            isn't one; it's the roster, sitting next to the conversation. */}
+            isn't one; it's the roster, sitting next to the work. */}
         <List dense divided={false} bordered={false}>
           {Object.values(PEOPLE).map((p) => (
             <ListItem
               key={p.email}
               leading={<Avatar name={p.name} size="xs" />}
-              title={<span className="font-normal text-text-muted">{p.name}</span>}
+              title={
+                <span className="font-normal text-text-muted">{p.name}</span>
+              }
               meta={p.role}
             />
           ))}
@@ -479,8 +350,6 @@ function HomeAside({ started }: { started: boolean }) {
                 {NEW_HIRE.name}
               </span>
             }
-            /* Short form — the panel is 260px and the full sentence pushes his
-               surname into an ellipsis. */
             trailing={
               <Badge tone="warning" size="sm">
                 In {NEW_HIRE.startsIn}
@@ -513,35 +382,32 @@ function HomeAside({ started }: { started: boolean }) {
           </Link>
         </p>
       </div>
-
-      {started && (
-        <>
-          <Separator />
-          <p className="text-xs leading-relaxed text-text-subtle">
-            Nothing in this conversation has been created. Craig drafts,
-            you publish.
-          </p>
-        </>
-      )}
     </div>
   );
 }
 
-function HomeNav({ started }: { started: boolean }) {
+function HomeNav({ seats, open }: { seats: Onboarding[]; open: number }) {
   return (
     <AdminNav>
       <div className="flex flex-col gap-2 px-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Getting started
+          Right now
         </p>
-        <NavStat label="Workflows" value={0} />
-        <NavStat label="New hires" value={0} />
-        {started && (
-          <p className="pt-1 text-xs leading-relaxed text-text-subtle">
-            Still zero — nothing in this conversation has been created yet.
-          </p>
-        )}
+        <NavStat label="Onboarding" value={seats.length} />
+        <NavStat
+          label="Needs you"
+          value={open}
+          tone={open > 0 ? "warning" : "neutral"}
+        />
+        <NavStat label="Published" value={0} />
       </div>
+
+      <Separator />
+
+      <p className="px-2 text-xs leading-relaxed text-text-subtle">
+        {WORKFLOW.name} is still a draft, so nothing is running against anyone
+        yet.
+      </p>
     </AdminNav>
   );
 }

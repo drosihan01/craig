@@ -214,6 +214,116 @@ export const INITIAL: WorkflowBlock[] = [
   },
 ];
 
+
+/**
+ * The finished one.
+ *
+ * Katalis has a small, complete workflow for a non-engineering hire and a
+ * large, half-finished one for an engineer. That's the honest shape of a
+ * three-person company: the simple case got done because it was simple, and
+ * the one that matters most is the one still full of holes.
+ *
+ * It also means the product's actual loop — add a seat, a workflow runs — can
+ * be walked end to end, instead of every path ending at "finish the draft
+ * first".
+ */
+export const GENERAL: WorkflowBlock[] = [
+  TRIGGER,
+  {
+    id: "g1",
+    kind: "document",
+    preset: "sign-contract",
+    title: "Sign contract",
+    summary: "Ada countersigns",
+    owner: PEOPLE.ada.name,
+    config: {
+      template: "Katalis — standard contract.pdf",
+      countersign: PEOPLE.ada.name,
+      provider: "docusign",
+      acks: ["ip", "nda"],
+    },
+  },
+  {
+    id: "g2",
+    kind: "document",
+    preset: "payroll-details",
+    title: "Personal and payroll details",
+    summary: "Before the first pay run",
+    owner: PEOPLE.ada.name,
+    config: {
+      fields: ["legal-name", "address", "bank", "tax", "emergency"],
+      system: "deel",
+      owner: PEOPLE.ada.name,
+    },
+  },
+  {
+    id: "g3",
+    kind: "task",
+    preset: "laptop",
+    title: "Issue laptop",
+    summary: "Two weeks to arrive — order the day they sign",
+    owner: PEOPLE.ada.name,
+    config: {
+      spec: "MacBook Air 13, M4, 16GB",
+      ship: "Their home address",
+      owner: PEOPLE.ada.name,
+      when: "on-signing",
+    },
+  },
+  {
+    id: "g4",
+    kind: "task",
+    preset: "google-workspace",
+    title: "Google Workspace",
+    summary: "Email and calendar",
+    owner: PEOPLE.jason.name,
+    config: {
+      domain: "katalis.ai",
+      groups: ["everyone"],
+      license: "starter",
+      owner: PEOPLE.jason.name,
+      when: "week-before",
+    },
+  },
+  {
+    id: "g5",
+    kind: "task",
+    preset: "slack",
+    title: "Slack",
+    summary: "#general and #random — that's the whole company",
+    owner: PEOPLE.jason.name,
+    config: {
+      workspace: "katalis.slack.com",
+      channels: ["general", "random"],
+      type: "member",
+      owner: PEOPLE.jason.name,
+      when: "week-before",
+    },
+  },
+  {
+    id: "g6",
+    kind: "task",
+    preset: "mfa",
+    title: "Set up MFA",
+    summary: "Email and files",
+    owner: PEOPLE.jason.name,
+    config: {
+      systems: ["email", "files"],
+      method: "passkey",
+      deadline: "day-one",
+    },
+  },
+  {
+    id: "g7",
+    kind: "task",
+    preset: "meet-manager",
+    title: "1:1 with Ada",
+    summary: "Half an hour, first week",
+    owner: PEOPLE.ada.name,
+    config: { manager: PEOPLE.ada.name, when: "first-week", length: "30" },
+  },
+];
+
 /**
  * The empty one.
  *
@@ -246,6 +356,15 @@ export const WORKFLOW: DemoWorkflow = {
   updated: "Just now",
 };
 
+export const GENERAL_WORKFLOW: DemoWorkflow = {
+  id: "general",
+  name: "General hire",
+  role: "Anyone outside engineering",
+  blocks: GENERAL,
+  createdBy: PEOPLE.ada.name,
+  updated: "Last week",
+};
+
 export const BLANK_WORKFLOW: DemoWorkflow = {
   id: "blank",
   name: "Untitled workflow",
@@ -255,7 +374,11 @@ export const BLANK_WORKFLOW: DemoWorkflow = {
   updated: "Not saved",
 };
 
-export const WORKFLOWS: DemoWorkflow[] = [WORKFLOW, BLANK_WORKFLOW];
+export const WORKFLOWS: DemoWorkflow[] = [
+  WORKFLOW,
+  GENERAL_WORKFLOW,
+  BLANK_WORKFLOW,
+];
 
 export const findWorkflow = (id: string) =>
   WORKFLOWS.find((w) => w.id === id) ?? WORKFLOW;
