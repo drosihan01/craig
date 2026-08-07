@@ -10,21 +10,18 @@ import {
   Button,
   buttonVariants,
   CraigMark,
-  EmptyState,
   List,
   ListItem,
-  Progress,
   PromptBar,
   Separator,
   isUnconfigured,
   setupWarning,
   type AppNotification,
 } from "@/components/ui";
-import { PersonAdd } from "@/components/ui/icons";
 import { ACCOUNT, COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { WORKFLOW, WORKFLOWS, stepCount } from "@/lib/demo-workflow";
 import { ACTIVITY, ACTIVITY_VERB, outstanding } from "@/lib/craig-activity";
-import { AddSeat, SeatState } from "@/components/add-seat";
+import { AddSeat } from "@/components/add-seat";
 import { DraftSession } from "@/components/draft-session";
 import { type Onboarding } from "@/lib/onboarding";
 import { AdminNav, NavStat } from "@/components/app-nav";
@@ -100,32 +97,39 @@ function Home({ fresh }: { fresh: boolean }) {
       nav={<HomeNav seats={seats} open={todo.length} fresh={fresh} />}
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
-      fill={empty && drafting}
+      /* The established state manages its own height so the composer can sit
+         on the bottom edge. The empty state only needs it once the draft
+         session takes the screen over. */
+      fill={empty ? drafting : true}
       asideTitle="Katalis"
       aside={<HomeAside fresh={fresh} />}
     >
       {empty ? (
         <DraftSession onStart={() => setDrafting(true)} />
       ) : (
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 py-10">
-          {/* Craig speaks first. A dashboard renders state and waits; an
-              agent tells you what it did, what it's stuck on, and what it
-              needs from you. The counters still exist — in the panel, where a
-              number belongs. */}
-          <CraigBrief items={todo} fresh={fresh} />
+        /* A conversation, so it's shaped like one: the brief scrolls and the
+           composer stays on the bottom edge. Asking Craig something shouldn't
+           mean scrolling past his morning report to find the box. */
+        <div className="mx-auto flex h-[calc(100vh-3rem)] w-full max-w-2xl flex-col">
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto py-10">
+            {/* Craig speaks first. A dashboard renders state and waits; an
+                agent tells you what it did, what it's stuck on, and what it
+                needs from you. The counters still exist — in the panel, where
+                a number belongs. */}
+            <CraigBrief
+              items={todo}
+              fresh={fresh}
+              onAddSeat={() => setAdding(true)}
+            />
+          </div>
 
-          <div className="flex flex-col gap-3">
-            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-              Ask me anything
-            </p>
+          <div className="shrink-0 pb-6 pt-2">
             <PromptBar
               placeholder="Ask Craig anything — a policy, a step, who's waiting on what…"
               onSubmit={() => {}}
               footnote="Craig knows your workflows, your people and whatever you've uploaded."
             />
           </div>
-
-          <Onboardings seats={seats} onAdd={() => setAdding(true)} />
         </div>
       )}
 
@@ -148,8 +152,11 @@ interface OpenItem {
   /** The same thing phrased as Craig asking, rather than as a chore. */
   ask?: string;
   detail: string;
-  href: string;
-  urgent?: boolean;
+  /** Where the button goes. Omitted for the one that opens a dialog. */
+  href?: string;
+  cta: string;
+  /** Opens the add-seat dialog rather than navigating. */
+  seat?: boolean;
 }
 
 /**
@@ -186,107 +193,39 @@ function openItems(seats: Onboarding[], fresh: boolean): OpenItem[] {
         ask: askFor(b.title, setupWarning(b)),
         detail: `${w.name} · ${setupWarning(b) ?? "something is missing"}`,
         href: `/builder/${w.id}?step=${b.id}`,
-        urgent: true,
+        cta: "Answer",
       });
     }
   }
 
-  /* Matched on his own seat, not on "any seat exists" — onboarding someone
-     else doesn't make Nils any less unstarted. Skipped entirely on a fresh
-     account: Craig has heard about Nils, he doesn't have a seat yet. */
+  /* The last thing on the list, and the only one that isn't a gap. Everything
+     above it is housekeeping in service of this — an admin who answers every
+     question and never adds a seat has got nothing out of Craig at all. It
+     stays on the list once somebody is running, because hiring the second
+     person is the same job as hiring the first.
+
+     Matched on his own seat, not on "any seat exists": onboarding someone else
+     doesn't make Nils any less unstarted. */
   const nilsStarted = seats.some(
     (s) => s.email === NEW_HIRE.email || s.name === NEW_HIRE.name,
   );
-  if (!fresh && !nilsStarted) {
-    items.push({
-      id: "nils",
-      title: `${NEW_HIRE.name} starts in ${NEW_HIRE.startsIn}`,
-      detail: "He has a seat but no workflow running against it",
-      href: "/people",
-      urgent: true,
-    });
-  }
+  const gaps = items.length;
+  items.push({
+    id: "seat",
+    title: "Add a person",
+    ask:
+      !fresh && !nilsStarted
+        ? `Shall I start ${NEW_HIRE.name.split(" ")[0]}? He's in ${NEW_HIRE.startsIn}.`
+        : "Ready to put somebody through this?",
+    detail:
+      gaps > 0
+        ? `${WORKFLOW.name} can't run until those ${gaps === 1 ? "is" : "are"} answered`
+        : `${WORKFLOW.name} is ready — the first email goes out immediately`,
+    cta: "Add someone",
+    seat: true,
+  });
 
   return items;
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Onboarding now                                                            */
-/* -------------------------------------------------------------------------- */
-
-function Onboardings({
-  seats,
-  onAdd,
-}: {
-  seats: Onboarding[];
-  onAdd: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <SectionHead title="Onboarding now" count={seats.length || undefined} />
-
-      {seats.length === 0 ? (
-        <EmptyState
-          className="border-dashed"
-          icon={<PersonAdd />}
-          title="Nobody yet"
-          description="Add someone and Craig takes it from there — the first email goes out immediately, and the rest run in order."
-          action={
-            <Button size="sm" onClick={onAdd}>
-              Add someone
-            </Button>
-          }
-        />
-      ) : (
-        <List>
-          {seats.map((s) => {
-            const w = WORKFLOWS.find((x) => x.id === s.workflowId);
-            const total = w ? stepCount(w.blocks) : 0;
-            return (
-              <ListItem
-                key={s.id}
-                href="/people"
-                leading={<Avatar name={s.name} size="md" />}
-                title={
-                  <span className="flex items-center gap-2">
-                    <span className="truncate">{s.name}</span>
-                    <SeatState state={s.state} />
-                  </span>
-                }
-                description={`${s.role} · starts ${s.startsIn} · ${w?.name ?? "no workflow"}`}
-                meta={
-                  <span className="flex w-24 flex-col items-end gap-1">
-                    <span>
-                      {s.done} of {total}
-                    </span>
-                    <Progress
-                      value={s.done}
-                      max={total || 1}
-                      label={`${s.name} progress`}
-                      className="w-full"
-                    />
-                  </span>
-                }
-              />
-            );
-          })}
-        </List>
-      )}
-    </div>
-  );
-}
-
-function SectionHead({ title, count }: { title: string; count?: number }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <h2 className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-        {title}
-      </h2>
-      {count !== undefined && (
-        <span className="text-xs text-text-subtle">{count}</span>
-      )}
-    </div>
-  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -303,16 +242,12 @@ function SectionHead({ title, count }: { title: string; count?: number }) {
 function HomeAside({ fresh }: { fresh: boolean }) {
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Company
+      <div>
+        {/* No name and no "Company" heading — the panel is already titled
+            Katalis, and three ways of saying so in 200px is two too many. */}
+        <p className="text-sm leading-relaxed text-text-muted">
+          {COMPANY.pitch}
         </p>
-        <div className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-text">{COMPANY.name}</span>
-          <span className="leading-relaxed text-text-muted">
-            {COMPANY.pitch}
-          </span>
-        </div>
       </div>
 
       <Separator />
@@ -431,35 +366,44 @@ function HomeNav({
  * Three parts, in the order Ada cares about them: what he's already handled,
  * what he's stuck on and chasing, and what only she can answer.
  */
-function CraigBrief({ items, fresh }: { items: OpenItem[]; fresh: boolean }) {
+function CraigBrief({
+  items,
+  fresh,
+  onAddSeat,
+}: {
+  items: OpenItem[];
+  fresh: boolean;
+  onAddSeat: () => void;
+}) {
   const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
   const asks = items.filter((i) => !dismissed.has(i.id));
   const waiting = outstanding;
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
-      <div className="flex items-start gap-3">
-        <CraigMark className="mt-0.5 size-6 shrink-0 text-accent" />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="text-md font-semibold tracking-[-0.01em]">
-            {fresh
-              ? `Right — ${COMPANY.name} is set up.`
-              : `Morning. Here's where ${NEW_HIRE.name.split(" ")[0]} is up to.`}
-          </p>
-          <p className="text-sm leading-relaxed text-text-muted">
+    <div className="flex flex-col gap-6">
+      {/* No card. A card is a boundary, and there's nothing on this page for
+          it to be a boundary against — it was one box holding the only thing
+          on screen, which is just a border drawn around the page. */}
+      <div className="flex flex-col gap-3">
+        <CraigMark className="size-8 text-accent" />
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-semibold tracking-[-0.02em]">
+            Hey, {PEOPLE.ada.name.split(" ")[0]}
+          </h1>
+          <p className="text-md leading-relaxed text-text-muted">
             {fresh ? (
               <>
-                I&apos;ve written your first workflow. There{" "}
-                {asks.length === 1 ? "is" : "are"} {asks.length} thing
-                {asks.length === 1 ? "" : "s"} only you can answer, and then you
-                can put somebody through it.
+                {COMPANY.name} is set up and I&apos;ve written your first
+                workflow. There {asks.length === 1 ? "is" : "are"} {asks.length}{" "}
+                thing{asks.length === 1 ? "" : "s"} left, and only you can
+                answer {asks.length === 1 ? "it" : "them"}.
               </>
             ) : (
               <>
                 I&apos;ve handled what I can. {waiting.length}{" "}
                 {waiting.length === 1 ? "thing is" : "things are"} with someone
                 else and I&apos;m chasing {waiting.length === 1 ? "it" : "them"}
-                . {asks.length === 0 ? "Nothing needs you." : ""}
+                .{asks.length === 0 ? " Nothing needs you." : ""}
               </>
             )}
           </p>
@@ -469,7 +413,7 @@ function CraigBrief({ items, fresh }: { items: OpenItem[]; fresh: boolean }) {
       {/* What he did on his own. Small, because it's reassurance rather than
           work — but present, because it's the proof he does anything. */}
       {!fresh && (
-        <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+        <div className="flex flex-col gap-1.5">
           {ACTIVITY.slice(0, 3).map((a) => (
             <div key={a.id} className="flex items-baseline gap-2 text-xs">
               <span className="shrink-0 text-text-subtle">
@@ -487,9 +431,10 @@ function CraigBrief({ items, fresh }: { items: OpenItem[]; fresh: boolean }) {
       )}
 
       {asks.length > 0 && (
-        <div className="flex flex-col gap-2 border-t border-border pt-3">
+        <div className="flex flex-col gap-2">
           <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-            I need you for {asks.length === 1 ? "one thing" : `${asks.length} things`}
+            I need you for{" "}
+            {asks.length === 1 ? "one thing" : `${asks.length} things`}
           </p>
 
           {/* One row per question, phrased as him asking rather than as a
@@ -506,17 +451,24 @@ function CraigBrief({ items, fresh }: { items: OpenItem[]; fresh: boolean }) {
                   {i.detail}
                 </span>
               </span>
-              <Link
-                href={i.href}
-                className={buttonVariants({ size: "sm", variant: "secondary" })}
-              >
-                Answer
-              </Link>
+              {i.seat ? (
+                <Button size="sm" variant="secondary" onClick={onAddSeat}>
+                  {i.cta}
+                </Button>
+              ) : (
+                <Link
+                  href={i.href ?? "#"}
+                  className={buttonVariants({
+                    size: "sm",
+                    variant: "secondary",
+                  })}
+                >
+                  {i.cta}
+                </Link>
+              )}
               <button
                 type="button"
-                onClick={() =>
-                  setDismissed((prev) => new Set(prev).add(i.id))
-                }
+                onClick={() => setDismissed((prev) => new Set(prev).add(i.id))}
                 className="rounded-md px-2 py-1 text-xs text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
               >
                 Not now
