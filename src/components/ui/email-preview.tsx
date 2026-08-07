@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { CraigMark } from "./craig-mark";
-import { render, type EmailTemplate } from "@/lib/email";
+import { render, SENDER, type EmailTemplate } from "@/lib/email";
 import { cn } from "@/lib/cn";
 
 /**
@@ -31,7 +31,8 @@ export function EmailPreview({
   const subject = render(template.subject, values);
   const preheader = render(template.preheader, values);
   const body = render(template.body, values);
-  const from = render("Craig, for {{company}}", values);
+  const company = render("{{company}}", values);
+  const from = SENDER.name(company);
 
   return (
     <div
@@ -52,6 +53,11 @@ export function EmailPreview({
             </span>
             <span className="shrink-0 text-2xs text-[#8a8279]">now</span>
           </div>
+          {/* The address, not just the display name. It's what a suspicious
+              reader checks, and what deliverability actually turns on. */}
+          <span className="truncate text-2xs text-[#8a8279]">
+            {SENDER.address}
+          </span>
           <span className="truncate text-sm font-medium text-[#1f1d1a]">
             {subject}
           </span>
@@ -83,9 +89,10 @@ export function EmailPreview({
             {/* No unsubscribe, on purpose. These are transactional — there's
                 no list to leave, and offering one would imply there is. */}
             <p className="text-2xs leading-relaxed text-[#8a8279]">
-              Sent by Craig on behalf of {render("{{company}}", values)}. You
-              got this because someone there added you to an onboarding, not
-              because you signed up for anything.
+              Sent by Craig on behalf of {company}. You got this because
+              someone there added you to an onboarding, not because you signed
+              up for anything. Reply to this and it reaches a person —{" "}
+              {SENDER.replyTo}.
             </p>
           </div>
         </div>

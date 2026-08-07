@@ -16,6 +16,37 @@ import { COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
  * Fixture data. Goes when there's somewhere to persist it.
  */
 
+
+/**
+ * Who the mail actually comes from.
+ *
+ * Two different things, and conflating them is how transactional mail ends up
+ * in spam:
+ *
+ * The **envelope** is a domain we control. It has to be — sending as
+ * `katalis.ai` when we don't own it is spoofing, DMARC bins it, and no amount
+ * of good copy survives that. Craig sends as himself and puts the customer in
+ * the display name.
+ *
+ * It sends from a **subdomain**, not the root. If transactional sending ever
+ * picks up a spam trap or a bad bounce rate, the reputation damage is confined
+ * to `mail.` and never touches the address a human reads their post at.
+ *
+ * Reply-To is a real monitored inbox, because a new starter's first instinct
+ * when something is confusing is to hit reply, and that should reach a person
+ * rather than bounce.
+ *
+ * Sending from the *customer's* own domain is the better version and a later
+ * one — it needs each customer to add DNS records, which is a setup step Ada
+ * hasn't earned yet on day one.
+ */
+export const SENDER = {
+  /** Display name. The company is the customer's, the sender is Craig. */
+  name: (company: string) => `Craig, for ${company}`,
+  address: "craig@mail.craig-ob.me",
+  replyTo: "hello@craig-ob.me",
+};
+
 export interface MergeField {
   token: string;
   label: string;
