@@ -1,20 +1,8 @@
 "use client";
 
 import * as React from "react";
-import {
-  Add,
-  ArrowUpward,
-  GraphicEq,
-  Mic,
-  StopCircle,
-} from "./icons";
-import {
-  DEFAULT_MODEL,
-  EffortPicker,
-  ModelPicker,
-  type ChatModel,
-  type Effort,
-} from "./model-picker";
+import { Add, ArrowUpward, StopCircle } from "./icons";
+import { DEFAULT_MODEL, ModelPicker, type ChatModel } from "./model-picker";
 import { cn } from "@/lib/cn";
 
 /**
@@ -28,13 +16,9 @@ export interface PromptBarProps {
   onSubmit: (text: string) => void;
   model?: ChatModel;
   onModelChange?: (model: ChatModel) => void;
-  effort?: Effort;
-  onEffortChange?: (effort: Effort) => void;
   placeholder?: string;
   busy?: boolean;
   onStop?: () => void;
-  /** Mic + waveform. Off inside the modal, where the header owns the chrome. */
-  voice?: boolean;
   /** Larger padding and radius for standalone page-level use. */
   size?: "sm" | "lg";
   /** Line under the bar — disclaimer, hint, character count. */
@@ -47,12 +31,9 @@ export function PromptBar({
   onSubmit,
   model: controlledModel,
   onModelChange,
-  effort: controlledEffort,
-  onEffortChange,
   placeholder = "Type / for skills",
   busy,
   onStop,
-  voice = true,
   size = "lg",
   footnote,
   autoFocus,
@@ -60,12 +41,9 @@ export function PromptBar({
 }: PromptBarProps) {
   const [value, setValue] = React.useState("");
   const [internalModel, setInternalModel] = React.useState(DEFAULT_MODEL);
-  const [internalEffort, setInternalEffort] = React.useState<Effort>("medium");
 
   const model = controlledModel ?? internalModel;
   const setModel = onModelChange ?? setInternalModel;
-  const effort = controlledEffort ?? internalEffort;
-  const setEffort = onEffortChange ?? setInternalEffort;
 
   const ref = React.useRef<HTMLTextAreaElement>(null);
 
@@ -123,19 +101,6 @@ export function PromptBar({
 
           <div className="ml-auto flex items-center gap-0.5">
             <ModelPicker value={model} onChange={setModel} />
-            <EffortPicker value={effort} onChange={setEffort} />
-
-            {voice && (
-              <>
-                <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-                <IconButton label="Dictate">
-                  <Mic className="size-4" />
-                </IconButton>
-                <IconButton label="Voice mode">
-                  <GraphicEq className="size-4" />
-                </IconButton>
-              </>
-            )}
 
             {busy && onStop ? (
               <button

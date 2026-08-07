@@ -209,16 +209,15 @@ export const PROMPTBAR_PROPS: PropDoc[] = [
     description: "lg for a page-level prompt, sm inside the chat modal.",
   },
   {
-    name: "voice",
-    type: "boolean",
-    default: "true",
-    description: "Mic and waveform buttons. Off inside the modal.",
+    name: "model / onModelChange",
+    type: "ChatModel · (m) => void",
+    description:
+      "Optional. Left uncontrolled it manages its own, defaulting to Craigson Lambda 2.0.",
   },
   {
-    name: "model / effort",
-    type: "ChatModel · Effort",
-    description:
-      "Both optional and both uncontrolled by default. Effort is low | medium | high.",
+    name: "busy / onStop",
+    type: "boolean · () => void",
+    description: "While busy the send button becomes a stop button.",
   },
   {
     name: "footnote",

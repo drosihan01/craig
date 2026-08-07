@@ -91,7 +91,6 @@ export function ChatModal({
       <div className="border-t border-border p-3">
         <PromptBar
           size="sm"
-          voice={false}
           autoFocus
           placeholder="Ask anything about this workflow…"
           model={model}

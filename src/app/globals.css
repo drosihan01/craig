@@ -316,6 +316,33 @@
   }
 }
 
+/* --- App shell columns ---------------------------------------------------- */
+/* The panel widths are user-draggable, so they live in CSS variables set on the
+   shell root (see app-shell.tsx). Declared here as real classes rather than as
+   Tailwind arbitrary values: a header cell and its column must resolve to the
+   exact same width for the vertical rule to line up, and this keeps that
+   guarantee in one place.
+
+   Only above the lg breakpoint — below it the panels don't render and the
+   header cells size to their content. */
+
+@media (min-width: 64rem) {
+  .craig-col-nav {
+    width: var(--craig-nav-w);
+  }
+  .craig-col-aside {
+    width: var(--craig-aside-w);
+  }
+  /* Panel contents track the *open* width, so they don't reflow while the
+     collapse animation runs — the panel slides out at full width. */
+  .craig-panel-nav {
+    width: var(--craig-nav-open-w);
+  }
+  .craig-panel-aside {
+    width: var(--craig-aside-open-w);
+  }
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
