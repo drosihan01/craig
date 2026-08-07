@@ -8,25 +8,26 @@ import { cn } from "@/lib/cn";
  * hardcoded charcoal — so it inherits from whatever it sits in and survives the
  * dark-mode flip without a second asset.
  *
- * The stroke does NOT hold up on its own at small sizes. Width is in the 256
- * user-unit space, so a 7 renders as 7/256 of the final size — about half a
- * pixel at 20px, which anti-aliases into a grey smudge. Hence `strokeWidth`:
- * keep 7 for display sizes, go heavier as the mark gets smaller. See SIZES.
+ * ONE stroke weight at every size. An earlier version scaled it per size to
+ * keep small renders legible, which worked but redrew the mark heavier as it
+ * shrank — so it read as a slightly different logo depending on where it
+ * appeared. Consistency wins: 9 was picked by rendering the mark from 16px to
+ * 80px at several weights — heavy enough to hold at 20px, light enough to keep
+ * the drawing's character at 80px.
+ *
+ * The trade is a floor, not a weight change: below ~20px the drawing has more
+ * detail than there are pixels to carry it, whatever the stroke. Use the
+ * wordmark alone under that.
  */
 
-/** Suggested stroke weight per render size. */
-export const MARK_STROKE = {
-  /** 40px and up — the drawn weight. */
-  lg: 7,
-  /** 24–40px. */
-  md: 10,
-  /** Under 24px, e.g. beside the wordmark in the header. */
-  sm: 14,
-} as const;
+/** The mark's stroke weight, in its own 256-unit space. Don't vary it. */
+export const MARK_STROKE = 9;
+/** Below this the detail collapses regardless of weight — use the wordmark. */
+export const MARK_MIN_SIZE = 20;
 
 export function CraigMark({
   className,
-  strokeWidth = MARK_STROKE.lg,
+  strokeWidth = MARK_STROKE,
   title,
   ...props
 }: React.SVGProps<SVGSVGElement> & { strokeWidth?: number; title?: string }) {
@@ -93,10 +94,7 @@ export function CraigLockup({
 }) {
   return (
     <span className={cn("flex items-center gap-1.5", className)}>
-      <CraigMark
-        strokeWidth={MARK_STROKE.sm}
-        className={cn("size-5", markClassName)}
-      />
+      <CraigMark className={cn("size-5", markClassName)} />
       <span className="font-semibold tracking-[-0.01em]">Craig.</span>
     </span>
   );

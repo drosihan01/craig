@@ -354,9 +354,9 @@ export const MARK_PROPS: PropDoc[] = [
   {
     name: "strokeWidth",
     type: "number",
-    default: "MARK_STROKE.lg (7)",
+    default: "MARK_STROKE (9)",
     description:
-      "In the mark's own 256-unit space, so it scales with the render size. Use .lg at 40px+, .md from 24–40px, .sm below — a 7 lands at about half a pixel at 20px.",
+      "Don't vary it. One weight at every size is what keeps the mark the same mark; the size floor is MARK_MIN_SIZE (20px), below which the wordmark goes alone.",
   },
   {
     name: "className",

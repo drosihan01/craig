@@ -22,7 +22,6 @@ import {
   BackLink,
   CraigLockup,
   CraigMark,
-  MARK_STROKE,
   Badge,
   Button,
   Callout,
@@ -307,15 +306,10 @@ export default function DesignSystemPage() {
         <Demo title="Mark" note="stroked, drawn in currentColor">
           <div className="flex items-end gap-7">
             <CraigMark className="size-20 text-text" />
-            <CraigMark className="size-12 text-text" />
-            <CraigMark
-              strokeWidth={MARK_STROKE.md}
-              className="size-8 text-text"
-            />
-            <CraigMark
-              strokeWidth={MARK_STROKE.sm}
-              className="size-5 text-text"
-            />
+            <CraigMark className="size-14 text-text" />
+            <CraigMark className="size-10 text-text" />
+            <CraigMark className="size-8 text-text" />
+            <CraigMark className="size-5 text-text" />
           </div>
         </Demo>
 
@@ -329,29 +323,35 @@ export default function DesignSystemPage() {
 
         <Demo title="On accent" className="gap-6">
           <span className="flex size-14 items-center justify-center rounded-xl bg-accent text-accent-fg">
-            <CraigMark strokeWidth={MARK_STROKE.md} className="size-9" />
+            <CraigMark className="size-9" />
           </span>
           <span className="flex size-14 items-center justify-center rounded-xl bg-accent-subtle text-accent-subtle-fg">
-            <CraigMark strokeWidth={MARK_STROKE.md} className="size-9" />
+            <CraigMark className="size-9" />
           </span>
           <span className="flex size-14 items-center justify-center rounded-xl border border-border bg-surface text-text">
-            <CraigMark strokeWidth={MARK_STROKE.md} className="size-9" />
+            <CraigMark className="size-9" />
           </span>
         </Demo>
 
         <Api component="CraigMark" props={MARK_PROPS} />
         <Usage>{`import { CraigMark, CraigLockup, MARK_STROKE } from "@/components/ui";`}</Usage>
 
-        <Callout tone="info" icon={<Info />} title="Stroke weight is not one value">
+        <Callout tone="info" icon={<Info />} title="One stroke weight, and a floor">
           <p>
-            The stroke is measured in the mark&apos;s own 256-unit space, so it
-            scales with the render size — a 7 lands at about half a pixel at
-            20px and anti-aliases into a grey smudge. Use{" "}
-            <code className="font-mono text-xs">MARK_STROKE.lg</code> at 40px
-            and up, <code className="font-mono text-xs">.md</code> from 24–40px
-            and <code className="font-mono text-xs">.sm</code> below that. The
-            eyes are filled rather than stroked so they stay solid as the weight
-            changes.
+            The mark uses{" "}
+            <code className="font-mono text-xs">MARK_STROKE</code> (9) at every
+            size — never vary it. An earlier version scaled the weight per size
+            to keep small renders legible; it worked, but it redrew the mark
+            heavier as it shrank, so it read as a slightly different logo
+            depending on where it appeared. 9 was chosen by rendering the mark
+            from 16px to 80px at several weights: heavy enough to hold at 20px,
+            light enough to keep the drawing&apos;s character at 80px.
+          </p>
+          <p className="mt-2">
+            The trade is a floor rather than a weight change. Below{" "}
+            <code className="font-mono text-xs">MARK_MIN_SIZE</code> (20px) the
+            drawing carries more detail than there are pixels to render it,
+            whatever the stroke — use the wordmark alone down there.
           </p>
         </Callout>
       </Section>
