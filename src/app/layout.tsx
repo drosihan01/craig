@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { themeScript } from "@/components/ui/theme-toggle";
 import "./globals.css";
 
@@ -20,9 +21,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           type="font/woff2"
           crossOrigin="anonymous"
         />
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {/* Sets the theme class before first paint, so a dark-mode user never
+            sees a white flash.
+
+            next/script with beforeInteractive rather than a raw <script>: React
+            refuses to execute script tags it renders on the client, and warns
+            about them. This one only ever needs to run from the server-rendered
+            HTML, but the warning is legitimate — Next hoists this into the
+            document properly instead. */}
+        <Script id="craig-theme" strategy="beforeInteractive">
+          {themeScript}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

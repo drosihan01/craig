@@ -45,8 +45,8 @@ public/fonts/            Google Sans Flex, self-hosted (see README)
 scripts/gen-icons.py     vendors Material Symbols into components/ui/icons.tsx
 ```
 
-Routes: `/design-system` (the showcase), `/builder` (the workflow builder),
-`/sign-in`. `/` redirects to the showcase until there's an app to land on.
+Routes: `/` (admin home), `/builder` (the workflow builder), `/design-system`
+(the showcase), `/sign-in`.
 
 ## Design system
 
