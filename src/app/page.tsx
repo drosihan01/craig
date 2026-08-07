@@ -104,14 +104,6 @@ function Home({ fresh }: { fresh: boolean }) {
       fill={empty && drafting}
       asideTitle="Katalis"
       aside={<HomeAside fresh={fresh} />}
-      actions={
-        empty ? undefined : (
-          <Button size="sm" onClick={() => setAdding(true)}>
-            <PersonAdd />
-            Add someone
-          </Button>
-        )
-      }
     >
       {empty ? (
         <DraftSession onStart={() => setDrafting(true)} />
