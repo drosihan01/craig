@@ -468,3 +468,53 @@ export const BACKLINK_PROPS: PropDoc[] = [
       "Name the destination — 'Back to design system', not 'Back'. It sits in the content column, above the page title.",
   },
 ];
+
+export const TOAST_PROPS: PropDoc[] = [
+  {
+    name: "title",
+    type: "ReactNode",
+    required: true,
+    description: "The whole message, if it fits in one line. Keep it short.",
+  },
+  {
+    name: "tone",
+    type: '"neutral" | "success" | "warning" | "danger"',
+    default: '"neutral"',
+    description:
+      "danger renders role=alert with aria-live=assertive so it interrupts; the rest are polite.",
+  },
+  {
+    name: "duration",
+    type: "number",
+    default: "5000",
+    description:
+      "ms. Pass 0 to require an explicit dismiss — use it for anything the user must actually read.",
+  },
+  {
+    name: "action",
+    type: "{ label, onClick }",
+    description:
+      "One action, e.g. Undo. Dismisses the toast after firing.",
+  },
+];
+
+export const NOTIFICATION_PROPS: PropDoc[] = [
+  {
+    name: "items",
+    type: "AppNotification[]",
+    required: true,
+    description:
+      "id, kind, title, timestamp, and optionally description, actor, read and href.",
+  },
+  {
+    name: "onSelect",
+    type: "(id: string) => void",
+    description:
+      "Fired when one is opened. Marking read is the caller's call — the panel never does it on its own.",
+  },
+  {
+    name: "onMarkAllRead",
+    type: "() => void",
+    description: "Omit it and the button doesn't render.",
+  },
+];

@@ -111,6 +111,13 @@ Notable choices:
   child offsets by its `top` immediately and never sticks, because that
   container doesn't scroll. In `AppShell` the `<aside>` owns width (and so the
   collapse animation) and an inner sticky wrapper owns clipping.
+- **Toasts and notifications are different jobs.** A toast confirms what just
+  happened and disappears; a notification persists because it's something the
+  user still has to act on. A missed toast is gone — so anything *owed* to
+  someone belongs in the feed, never in a toast. The panel also never marks
+  anything read on its own: "I opened the list" is not "I dealt with it", and
+  clearing the badge on open destroys the one signal saying an approval is
+  still outstanding.
 - **Auth components render and validate shape, nothing else.** Auth belongs on
   the server; a component that "signs you in" in the browser is a component
   that lies. `/sign-in` has no backend behind it yet.

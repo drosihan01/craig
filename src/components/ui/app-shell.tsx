@@ -13,6 +13,7 @@ import {
 } from "./icons";
 import { Avatar } from "./avatar";
 import { CraigMark } from "./craig-mark";
+import { NotificationBell, type AppNotification } from "./notifications";
 import { DropdownMenu } from "./dropdown";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/cn";
@@ -132,6 +133,9 @@ export function AppShell({
   asideTitle = "Details",
   account,
   actions,
+  notifications,
+  onNotificationSelect,
+  onMarkAllRead,
   children,
 }: {
   title?: React.ReactNode;
@@ -140,6 +144,11 @@ export function AppShell({
   asideTitle?: string;
   account?: AccountInfo;
   actions?: React.ReactNode;
+  /** Omit entirely to hide the bell — an empty array still shows it, correctly
+      reading as "you have none" rather than "this app has no notifications". */
+  notifications?: AppNotification[];
+  onNotificationSelect?: (id: string) => void;
+  onMarkAllRead?: () => void;
   children: React.ReactNode;
 }) {
   const [navOpen, toggleNav] = usePersistedPanel("craig-nav");
@@ -193,6 +202,13 @@ export function AppShell({
             )}
           >
             {actions}
+            {notifications && (
+              <NotificationBell
+                items={notifications}
+                onSelect={onNotificationSelect}
+                onMarkAllRead={onMarkAllRead}
+              />
+            )}
             <ThemeToggle />
             {aside && (
               <PanelToggle

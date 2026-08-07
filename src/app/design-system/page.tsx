@@ -61,6 +61,7 @@ import {
   ModelPickerDemo,
   PromptBarDemo,
 } from "./_components/chat-demo";
+import { NotificationDemo, ToastDemo } from "./_components/notify-demo";
 import {
   AuthDemo,
   CalendarDemo,
@@ -78,6 +79,8 @@ import {
   DROPDOWN_PROPS,
   PROMPTBAR_PROPS,
   BACKLINK_PROPS,
+  NOTIFICATION_PROPS,
+  TOAST_PROPS,
   BUILDER_PROPS,
   CANVASPANEL_PROPS,
   CANVAS_PROPS,
@@ -1022,6 +1025,36 @@ export default function DesignSystemPage() {
             </Button>
           </Tooltip>
         </Demo>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="notifications"
+        description="Two different jobs. Toasts confirm what just happened and disappear; notifications persist because they're things the user still has to act on. A toast that's missed is gone — so anything owed to someone belongs in the list, not in a toast."
+        title="Notifications"
+      >
+        <Demo title="Toasts" note="bottom-right, pause on hover">
+          <ToastDemo />
+        </Demo>
+        <Api component="useToast().toast(options)" props={TOAST_PROPS} />
+
+        <Demo title="Notification feed" className="items-start">
+          <NotificationDemo />
+        </Demo>
+        <Api
+          component="NotificationBell / NotificationList"
+          props={NOTIFICATION_PROPS}
+        />
+        <Usage>{`import { ToastProvider, useToast, NotificationBell } from "@/components/ui";`}</Usage>
+
+        <Callout tone="info" icon={<Info />} title="Opening the list isn't reading it">
+          <p>
+            The panel never marks anything read by itself. &ldquo;I opened the
+            list&rdquo; is not &ldquo;I dealt with it&rdquo;, and clearing the
+            badge on open throws away the one signal telling someone they still
+            owe an approval. Read state stays with the caller.
+          </p>
+        </Callout>
       </Section>
 
       {/* ---------------------------------------------------------------- */}

@@ -15,6 +15,7 @@ import {
   WorkflowBuilder,
   WorkflowCanvas,
   CanvasPanel,
+  type AppNotification,
   type BlockKind,
   type WorkflowBlock,
 } from "@/components/ui";
@@ -61,6 +62,32 @@ const INITIAL: WorkflowBlock[] = [
     title: "Send the welcome email",
     owner: "People & Culture",
     incomplete: "No template chosen",
+  },
+];
+
+const NOTIFICATIONS: AppNotification[] = [
+  {
+    id: "n1",
+    kind: "approval",
+    title: "Priya Nair needs your sign-off",
+    description: "Hiring manager confirms readiness",
+    timestamp: new Date(Date.now() - 4 * 60_000),
+    actor: "Priya Nair",
+  },
+  {
+    id: "n2",
+    kind: "overdue",
+    title: "Right-to-work check is overdue",
+    description: "Was due 3 days before start date",
+    timestamp: new Date(Date.now() - 90 * 60_000),
+  },
+  {
+    id: "n3",
+    kind: "complete",
+    title: "IT completed \u201cOrder laptop and store login\u201d",
+    timestamp: new Date(Date.now() - 5 * 3_600_000),
+    actor: "Tom Walsh",
+    read: true,
   },
 ];
 
@@ -180,6 +207,7 @@ export default function BuilderPage() {
           )}
         </BlockInspector>
       }
+      notifications={NOTIFICATIONS}
       account={{
         name: "Dzaky Rosihan",
         email: "dzaky.rosihan@kmart.com.au",
