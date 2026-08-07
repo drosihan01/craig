@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# licensed fonts — see public/fonts/README.md
+# the repo is public; PP Mori is not redistributable
+/public/fonts/*.woff2
+/public/fonts/*.woff
+/public/fonts/*.otf
+/public/fonts/*.ttf

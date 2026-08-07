@@ -1,26 +1,302 @@
 @import "tailwindcss";
 
+/* -------------------------------------------------------------------------- */
+/*  Craig Design System — tokens                                              */
+/*                                                                            */
+/*  Three layers, in order:                                                   */
+/*    1. Palette   — raw values. Never used directly in components.           */
+/*    2. Semantic  — role-based vars that flip between light and dark.        */
+/*    3. @theme    — maps semantics onto Tailwind utilities (bg-surface, …).  */
+/*                                                                            */
+/*  Rule of thumb: components only ever reference layer 3.                    */
+/* -------------------------------------------------------------------------- */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* --- 1. Palette ----------------------------------------------------------- */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Accent — charcoal brown. Warm, low chroma, reads as near-black at 800+. */
+  --pp-accent-50: #faf7f4;
+  --pp-accent-100: #f2ece5;
+  --pp-accent-200: #e4d8cc;
+  --pp-accent-300: #cdbaa7;
+  --pp-accent-400: #ab9380;
+  --pp-accent-500: #877061;
+  --pp-accent-600: #6b584b;
+  --pp-accent-700: #53443a;
+  --pp-accent-800: #3d332c;
+  --pp-accent-900: #2b2420;
+  --pp-accent-950: #191513;
+
+  /* Neutral — greys pulled a few degrees warm so they sit with the accent. */
+  --pp-neutral-0: #ffffff;
+  --pp-neutral-50: #fafaf9;
+  --pp-neutral-100: #f5f4f2;
+  --pp-neutral-200: #ebe9e5;
+  --pp-neutral-300: #dbd8d2;
+  --pp-neutral-400: #b2ada6;
+  --pp-neutral-500: #86817a;
+  --pp-neutral-600: #66625c;
+  --pp-neutral-700: #4a4742;
+  --pp-neutral-800: #2f2d2a;
+  --pp-neutral-900: #1d1c1a;
+  --pp-neutral-950: #131211;
+
+  /* Status — desaturated to sit next to the warm neutrals without shouting. */
+  --pp-green-100: #dcf0e4;
+  --pp-green-500: #3f9a63;
+  --pp-green-700: #256b41;
+  --pp-amber-100: #fbeed3;
+  --pp-amber-500: #c58a1d;
+  --pp-amber-700: #8a5d0b;
+  --pp-red-100: #f9dedb;
+  --pp-red-500: #c2543f;
+  --pp-red-700: #8c3628;
+  --pp-blue-100: #dde7f4;
+  --pp-blue-500: #4a7bb0;
+  --pp-blue-700: #2e5580;
 }
+
+/* --- 2. Semantic (light) -------------------------------------------------- */
+
+:root {
+  --c-canvas: var(--pp-neutral-50);
+  --c-surface: var(--pp-neutral-0);
+  --c-surface-raised: var(--pp-neutral-0);
+  --c-surface-sunken: var(--pp-neutral-100);
+  --c-surface-hover: var(--pp-neutral-100);
+
+  --c-border: var(--pp-neutral-200);
+  --c-border-strong: var(--pp-neutral-300);
+
+  --c-text: var(--pp-neutral-900);
+  --c-text-muted: var(--pp-neutral-600);
+  --c-text-subtle: var(--pp-neutral-500);
+  --c-text-inverted: var(--pp-neutral-0);
+
+  --c-accent: var(--pp-accent-800);
+  --c-accent-hover: var(--pp-accent-900);
+  --c-accent-active: var(--pp-accent-950);
+  --c-accent-fg: var(--pp-neutral-0);
+  --c-accent-subtle: var(--pp-accent-100);
+  --c-accent-subtle-fg: var(--pp-accent-800);
+  --c-accent-ring: var(--pp-accent-400);
+
+  --c-success: var(--pp-green-700);
+  --c-success-subtle: var(--pp-green-100);
+  --c-warning: var(--pp-amber-700);
+  --c-warning-subtle: var(--pp-amber-100);
+  --c-danger: var(--pp-red-700);
+  --c-danger-subtle: var(--pp-red-100);
+  --c-info: var(--pp-blue-700);
+  --c-info-subtle: var(--pp-blue-100);
+
+  --c-elev-1: 0 1px 2px 0 rgb(25 21 19 / 0.05);
+  --c-elev-2: 0 1px 2px -1px rgb(25 21 19 / 0.08), 0 2px 6px -1px rgb(25 21 19 / 0.06);
+  --c-elev-3: 0 2px 4px -2px rgb(25 21 19 / 0.1), 0 8px 20px -4px rgb(25 21 19 / 0.1);
+  --c-elev-4: 0 4px 8px -4px rgb(25 21 19 / 0.12), 0 16px 40px -8px rgb(25 21 19 / 0.16);
+}
+
+/* --- 2b. Semantic (dark) -------------------------------------------------- */
+/* The accent inverts: charcoal brown is invisible on a dark canvas, so dark
+   mode promotes the light tan end of the ramp and flips the foreground. */
+
+.dark {
+  --c-canvas: var(--pp-neutral-950);
+  --c-surface: #1a1917;
+  --c-surface-raised: #232220;
+  --c-surface-sunken: #101010;
+  --c-surface-hover: #262523;
+
+  --c-border: #302e2b;
+  --c-border-strong: #423f3b;
+
+  --c-text: var(--pp-neutral-100);
+  --c-text-muted: var(--pp-neutral-400);
+  --c-text-subtle: var(--pp-neutral-500);
+  --c-text-inverted: var(--pp-neutral-950);
+
+  --c-accent: var(--pp-accent-300);
+  --c-accent-hover: var(--pp-accent-200);
+  --c-accent-active: var(--pp-accent-100);
+  --c-accent-fg: var(--pp-accent-950);
+  --c-accent-subtle: #332b25;
+  --c-accent-subtle-fg: var(--pp-accent-300);
+  --c-accent-ring: var(--pp-accent-500);
+
+  --c-success: #6cc48c;
+  --c-success-subtle: #17301f;
+  --c-warning: #dcae56;
+  --c-warning-subtle: #322616;
+  --c-danger: #dd8171;
+  --c-danger-subtle: #35201c;
+  --c-info: #7ea8d6;
+  --c-info-subtle: #1a2634;
+
+  --c-elev-1: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --c-elev-2: 0 1px 2px -1px rgb(0 0 0 / 0.4), 0 2px 6px -1px rgb(0 0 0 / 0.3);
+  --c-elev-3: 0 2px 4px -2px rgb(0 0 0 / 0.4), 0 8px 20px -4px rgb(0 0 0 / 0.45);
+  --c-elev-4: 0 4px 8px -4px rgb(0 0 0 / 0.5), 0 16px 40px -8px rgb(0 0 0 / 0.6);
+}
+
+/* --- 3. Tailwind theme ---------------------------------------------------- */
+/* `inline` keeps the var reference in the generated utility, so .dark cascades. */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-raised: var(--c-surface-raised);
+  --color-surface-sunken: var(--c-surface-sunken);
+  --color-surface-hover: var(--c-surface-hover);
+
+  --color-border: var(--c-border);
+  --color-border-strong: var(--c-border-strong);
+
+  --color-text: var(--c-text);
+  --color-text-muted: var(--c-text-muted);
+  --color-text-subtle: var(--c-text-subtle);
+  --color-text-inverted: var(--c-text-inverted);
+
+  --color-accent: var(--c-accent);
+  --color-accent-hover: var(--c-accent-hover);
+  --color-accent-active: var(--c-accent-active);
+  --color-accent-fg: var(--c-accent-fg);
+  --color-accent-subtle: var(--c-accent-subtle);
+  --color-accent-subtle-fg: var(--c-accent-subtle-fg);
+  --color-accent-ring: var(--c-accent-ring);
+
+  --color-success: var(--c-success);
+  --color-success-subtle: var(--c-success-subtle);
+  --color-warning: var(--c-warning);
+  --color-warning-subtle: var(--c-warning-subtle);
+  --color-danger: var(--c-danger);
+  --color-danger-subtle: var(--c-danger-subtle);
+  --color-info: var(--c-info);
+  --color-info-subtle: var(--c-info-subtle);
+
+  /* Raw ramps, exposed for the palette page and the odd bespoke surface. */
+  --color-accent-50: var(--pp-accent-50);
+  --color-accent-100: var(--pp-accent-100);
+  --color-accent-200: var(--pp-accent-200);
+  --color-accent-300: var(--pp-accent-300);
+  --color-accent-400: var(--pp-accent-400);
+  --color-accent-500: var(--pp-accent-500);
+  --color-accent-600: var(--pp-accent-600);
+  --color-accent-700: var(--pp-accent-700);
+  --color-accent-800: var(--pp-accent-800);
+  --color-accent-900: var(--pp-accent-900);
+  --color-accent-950: var(--pp-accent-950);
+
+  /* Type — app-density scale. Base is 14px, not 16px. */
+  --font-sans: "PP Mori", "Mori", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  --text-2xs: 0.6875rem; /* 11 */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem; /* 12 */
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem; /* 13 */
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.875rem; /* 14 */
+  --text-base--line-height: 1.25rem;
+  --text-md: 0.9375rem; /* 15 */
+  --text-md--line-height: 1.375rem;
+  --text-lg: 1rem; /* 16 */
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.125rem; /* 18 */
+  --text-xl--line-height: 1.625rem;
+  --text-2xl: 1.3125rem; /* 21 */
+  --text-2xl--line-height: 1.75rem;
+  --text-3xl: 1.5rem; /* 24 */
+  --text-3xl--line-height: 2rem;
+  --text-4xl: 2rem; /* 32 */
+  --text-4xl--line-height: 2.5rem;
+  --text-5xl: 2.5rem; /* 40 */
+  --text-5xl--line-height: 3rem;
+
+  /* Radius — tight. Linear territory, not pill-shaped. */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+
+  --shadow-e1: var(--c-elev-1);
+  --shadow-e2: var(--c-elev-2);
+  --shadow-e3: var(--c-elev-3);
+  --shadow-e4: var(--c-elev-4);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* --- Fonts ---------------------------------------------------------------- */
+/* Drop the licensed .woff2 files into /public/fonts — see the README there.
+   Until then these @font-face rules fail silently and the stack falls through
+   to system-ui, so nothing breaks. */
+
+@font-face {
+  font-family: "PP Mori";
+  src: url("/fonts/PPMori-Extralight.woff2") format("woff2");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "PP Mori";
+  src: url("/fonts/PPMori-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "PP Mori";
+  src: url("/fonts/PPMori-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- Base ----------------------------------------------------------------- */
+
+@layer base {
+  * {
+    border-color: var(--c-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--c-canvas);
+    color: var(--c-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04";
+  }
+
+  /* One focus treatment for the whole system. */
+  :focus-visible {
+    outline: 2px solid var(--c-accent-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--c-accent-subtle);
+    color: var(--c-accent-subtle-fg);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--c-border-strong) transparent;
+  }
 }

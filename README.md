@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# craig
 
-## Getting Started
+Onboarding workflow builder. An admin composes a workflow once; every new
+starter in that role gets walked through it.
 
-First, run the development server:
+Two seats:
+
+- **Admin** — build and publish onboarding workflows: ordered steps, owners,
+  due dates relative to the start date.
+- **New starter** — work through the assigned workflow, one stage at a time.
+
+## Status
+
+Front-end only, pre-MVP. What exists today is the design system at
+[`/design-system`](http://localhost:3000/design-system) — the primitives both
+seats will be built from.
+
+## Running it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`/` redirects to `/design-system` until there's an app to land on.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build   # production build
+npm run lint
+npx tsc --noEmit
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Layout
 
-## Learn More
+```
+src/
+  app/
+    globals.css          token layer — palette → semantics → Tailwind theme
+    design-system/       the browsable showcase (nav rail + specimens)
+  components/ui/         the design system itself
+  lib/cn.ts              clsx + tailwind-merge
+public/fonts/            drop licensed PP Mori files here (see README)
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Design system
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Next.js 16 (App Router) · React 19 · Tailwind v4 · TypeScript.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Tokens are layered in `src/app/globals.css`:
 
-## Deploy on Vercel
+1. **Palette** — raw values, never referenced by components.
+2. **Semantic** — role-based vars (`--c-accent`, `--c-surface`, …) that flip
+   between light and dark.
+3. **`@theme`** — maps semantics onto Tailwind utilities (`bg-surface`,
+   `text-text-muted`, …).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Components only ever touch layer 3, so retuning the accent is a one-line change.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Notable choices:
+
+- **Accent is charcoal brown**, and it inverts in dark mode. At 800 it's nearly
+  black, so on a dark canvas it would disappear — dark mode promotes the light
+  tan end of the ramp and flips the foreground, keeping the accent's role and
+  warmth at both ends.
+- **Base type is 14px**, not 16. App density.
+- **Selection controls are native inputs** under the hood — keyboard, form
+  submission and screen-reader behaviour come free; visuals are drawn by a
+  sibling driven off `peer`.
+- **`TASK_STATUS`** (`components/ui/badge.tsx`) is the single definition of the
+  workflow state machine. Both seats read from it so they can't drift apart.
+  It should move to a domain module once one exists.
+
+## Fonts
+
+PP Mori is licensed and deliberately not committed — `.gitignore` blocks font
+binaries because this repo is public. See
+[`public/fonts/README.md`](public/fonts/README.md). Without the files the app
+falls back to `system-ui` and still renders correctly.
