@@ -7,6 +7,7 @@ import {
   LeftPanelClose,
   LeftPanelOpen,
   Logout,
+  Menu,
   Person,
   RightPanelClose,
   Science,
@@ -17,6 +18,7 @@ import { Avatar } from "./avatar";
 import { CraigMark } from "./craig-mark";
 import { NotificationBell, type AppNotification } from "./notifications";
 import { DropdownMenu } from "./dropdown";
+import { DialogClose } from "./dialog";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/cn";
 
@@ -133,6 +135,32 @@ function usePersistedWidth(key: string) {
   return [width, setWidth] as const;
 }
 
+
+/**
+ * Whether the viewport is wide enough for the side columns.
+ *
+ * Read through useSyncExternalStore rather than an effect, matching how the
+ * panel state is read: setting state in an effect to answer "how wide is the
+ * window" is the exact pattern React 19 warns about.
+ *
+ * The server snapshot is `true` — desktop. Craig is a desktop tool with a
+ * canvas in it, so guessing desktop means the common case never flashes; a
+ * phone corrects itself on hydration.
+ */
+const DESKTOP = "(min-width: 64rem)";
+
+function useIsDesktop() {
+  return React.useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(DESKTOP);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(DESKTOP).matches,
+    () => true,
+  );
+}
+
 export function AppShell({
   title,
   nav,
@@ -169,6 +197,12 @@ export function AppShell({
   const [navW, setNavW] = usePersistedWidth("craig-nav-w");
   const [asideW, setAsideW] = usePersistedWidth("craig-aside-w");
 
+  const isDesktop = useIsDesktop();
+  /* Not persisted, unlike the column state. A drawer is a thing you opened a
+     second ago, not a preference. */
+  const [drawer, setDrawer] = React.useState<"nav" | "aside" | null>(null);
+  const closeDrawer = React.useCallback(() => setDrawer(null), []);
+
   const vars = {
     "--craig-nav-w": navOpen && nav ? `${navW}px` : "0px",
     "--craig-nav-open-w": `${navW}px`,
@@ -191,14 +225,21 @@ export function AppShell({
             <span className="truncate text-base font-semibold tracking-[-0.01em]">
               Craig.
             </span>
-            {nav && (
-              <PanelToggle
-                open={navOpen}
-                onToggle={toggleNav}
-                side="left"
-                className="ml-auto hidden lg:inline-flex"
-              />
-            )}
+            {nav &&
+              (isDesktop ? (
+                <PanelToggle
+                  open={navOpen}
+                  onToggle={toggleNav}
+                  side="left"
+                  className="ml-auto"
+                />
+              ) : (
+                <DrawerToggle
+                  label="Open menu"
+                  onClick={() => setDrawer("nav")}
+                  className="ml-auto"
+                />
+              ))}
           </div>
 
           {/* Centre cell: everything belonging to the page. Title and actions
@@ -231,14 +272,19 @@ export function AppShell({
                 asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
               )}
             >
-              {aside && (
-                <PanelToggle
-                  open={asideOpen}
-                  onToggle={toggleAside}
-                  side="right"
-                  className="hidden lg:inline-flex"
-                />
-              )}
+              {aside &&
+                (isDesktop ? (
+                  <PanelToggle
+                    open={asideOpen}
+                    onToggle={toggleAside}
+                    side="right"
+                  />
+                ) : (
+                  <DrawerToggle
+                    label="Open details"
+                    onClick={() => setDrawer("aside")}
+                  />
+                ))}
               {notifications && (
                 <NotificationBell
                   items={notifications}
@@ -253,7 +299,7 @@ export function AppShell({
       </header>
 
       <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1500px] border-x border-border">
-        {nav && (
+        {nav && isDesktop && (
           <Panel
             side="left"
             open={navOpen}
@@ -271,7 +317,7 @@ export function AppShell({
           {children}
         </main>
 
-        {aside && (
+        {aside && isDesktop && (
           <Panel
             side="right"
             open={asideOpen}
@@ -287,7 +333,144 @@ export function AppShell({
           </Panel>
         )}
       </div>
+
+      {/* Below lg the columns become drawers. Rendered here rather than
+          alongside the column so the panel's content exists exactly once — two
+          copies behind a `hidden` class would duplicate every landmark and
+          every focusable control for a screen reader. */}
+      {!isDesktop && (
+        <Drawer
+          side="left"
+          open={drawer === "nav"}
+          onClose={closeDrawer}
+          title="Menu"
+          footer={account ? <AccountMenu account={account} /> : undefined}
+        >
+          <div className="px-4 py-6">{nav}</div>
+        </Drawer>
+      )}
+
+      {!isDesktop && (
+        <Drawer
+          side="right"
+          open={drawer === "aside"}
+          onClose={closeDrawer}
+          title={asideTitle}
+        >
+          <div className="p-4">{aside}</div>
+        </Drawer>
+      )}
     </div>
+  );
+}
+
+/**
+ * A panel's small-screen form.
+ *
+ * Slides in over the content with a backdrop, rather than pushing it — at this
+ * width there isn't room to push anything, and a panel that squeezes the main
+ * column to nothing is worse than one that covers it.
+ *
+ * Escape closes, the backdrop closes, and the page behind can't scroll while
+ * it's open. Same obligations a dialog has, because at this size it is one.
+ */
+function Drawer({
+  side,
+  open,
+  onClose,
+  title,
+  footer,
+  children,
+}: {
+  side: "left" | "right";
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  React.useEffect(() => {
+    if (!open) return;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.body.style.overflow = overflow;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const isLeft = side === "left";
+
+  return (
+    <div className="fixed inset-0 z-50 lg:hidden">
+      <div
+        aria-hidden
+        onClick={onClose}
+        className="absolute inset-0 bg-accent-950/40 backdrop-blur-[2px] motion-safe:animate-[fade-in_150ms_ease-out]"
+      />
+
+      <aside
+        aria-label={title}
+        className={cn(
+          "absolute inset-y-0 flex w-[min(20rem,85vw)] flex-col bg-canvas shadow-e4",
+          isLeft
+            ? "left-0 border-r border-border"
+            : "right-0 border-l border-border",
+          "motion-safe:animate-[dialog-in_180ms_cubic-bezier(0.32,0.72,0,1)]",
+        )}
+      >
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border pl-4 pr-2">
+          <span className="flex-1 truncate text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            {title}
+          </span>
+          <DialogClose onClose={onClose} />
+        </div>
+
+        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+          {children}
+        </div>
+
+        {footer && (
+          <div className="shrink-0 border-t border-border p-2">{footer}</div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+/** The small-screen affordance for a panel that has become a drawer. */
+function DrawerToggle({
+  label,
+  onClick,
+  className,
+}: {
+  label: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-hover hover:text-text",
+        className,
+      )}
+    >
+      <Menu className="size-4" />
+    </button>
   );
 }
 

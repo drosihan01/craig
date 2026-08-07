@@ -100,6 +100,7 @@ ICONS = {
     "Link": "link",
     "Quiz": "quiz",
     "Chat": "chat",
+    "Menu": "menu",
 }
 
 HEADER = '''import * as React from "react";
