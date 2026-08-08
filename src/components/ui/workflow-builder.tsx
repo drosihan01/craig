@@ -265,6 +265,7 @@ export function WorkflowBuilder({
   onReorder,
   onDuplicate,
   reveal,
+  warningFor,
   className,
 }: {
   blocks: WorkflowBlock[];
@@ -291,6 +292,20 @@ export function WorkflowBuilder({
   onDuplicate?: (id: string) => void;
   /** Land the blocks one after another instead of all at once. */
   reveal?: boolean;
+  /**
+   * A warning the block cannot work out for itself.
+   *
+   * `setupWarning` answers "is anything missing *on this block*", which is the
+   * whole story for a step whose readiness is its own fields. It is not the
+   * whole story for a step that depends on something outside the canvas — a
+   * Google Workspace step is complete in every way this file can see and still
+   * unable to run, because nobody has connected a Workspace.
+   *
+   * A callback rather than a Google-shaped prop: this component is the design
+   * system's, used by three demos that have never heard of Google, and the
+   * screen that knows about connections is the one that should say so.
+   */
+  warningFor?: (block: WorkflowBlock) => string | null;
   className?: string;
 }) {
   /**
@@ -586,6 +601,7 @@ export function WorkflowBuilder({
               onRemove={isTrigger ? undefined : onRemove}
               onDuplicate={isTrigger ? undefined : onDuplicate}
               onMove={isTrigger ? undefined : onMove}
+              warning={warningFor?.(block) ?? undefined}
               canMoveUp={i > 1}
               canMoveDown={!isLast && i > 0}
               dragging={draggingId === block.id}
@@ -796,6 +812,7 @@ function BlockCard({
   onDragOver,
   onDrop,
   arrival,
+  warning: given,
 }: {
   block: WorkflowBlock;
   index: number;
@@ -814,11 +831,17 @@ function BlockCard({
   onDragOver?: React.DragEventHandler<HTMLDivElement>;
   onDrop?: React.DragEventHandler<HTMLDivElement>;
   arrival?: Arrival;
+  /** Overrides the derived one — see `warningFor` above. */
+  warning?: string;
 }) {
   const type = blockLabel(block);
   const Icon = type.icon;
   const isTrigger = block.kind === "trigger";
-  const warning = setupWarning(block);
+  /* The given one wins. A step can be missing a field *and* be waiting on a
+     connection, and the connection is the one that stops it running at all —
+     telling somebody to answer a field on a step that could not run either way
+     sends them to fix the smaller of two problems. */
+  const warning = given ?? setupWarning(block);
   /* Null when nobody set one, which is most steps — a deadline is a decision
      somebody made, not a field every block has to carry. */
   const due = dueLabel(block.due);

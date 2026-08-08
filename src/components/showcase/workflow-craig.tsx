@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Warning } from "@/components/ui/icons";
 import {
   AgentPhase,
   CraigMark,
@@ -41,6 +42,8 @@ export function WorkflowCraig({
   published,
   seats,
   revealing,
+  attention = [],
+  onSelect,
 }: {
   chat: CraigChat;
   blocks: WorkflowBlock[];
@@ -49,6 +52,19 @@ export function WorkflowCraig({
   seats: number;
   /** The canvas is still laying itself out. */
   revealing?: boolean;
+  /**
+   * What is standing between this workflow and being publishable.
+   *
+   * Given rather than derived, because the two kinds don't come from the same
+   * place: a step missing an answer is knowable from the blocks, and a missing
+   * Google connection is a fact about the account. Working one out here and
+   * being handed the other would leave this list quietly wrong about half of
+   * what it claims to cover.
+   *
+   * `id` is a block to open, or null for something with nowhere to go.
+   */
+  attention?: { id: string | null; label: string }[];
+  onSelect?: (id: string) => void;
 }) {
   const { messages, phase, busy, error, send } = chat;
 
@@ -87,6 +103,49 @@ export function WorkflowCraig({
         <div className="flex items-center gap-2 pb-4">
           <CraigMark className="size-5 shrink-0 text-accent" />
           <AgentPhase label="Laying it out" />
+        </div>
+      )}
+
+      {/* Above the conversation, because it is the answer to the question
+          somebody arrives with — "what is left" — and making them read a
+          transcript to find it is making them do his job. It disappears
+          entirely when there is nothing outstanding rather than saying so:
+          a permanent panel reading "nothing needs your attention" is a row of
+          furniture that has to be scanned every time to discover it is empty. */}
+      {attention.length > 0 && (
+        <div className="mb-4 flex shrink-0 flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken p-3">
+          <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            Needs your attention
+          </p>
+
+          {attention.map((item) => {
+            const line = (
+              <span className="flex items-start gap-1.5">
+                <Warning className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                <span className="min-w-0 flex-1">{item.label}</span>
+              </span>
+            );
+
+            /* A button only when pressing it goes somewhere. An item with
+               nowhere to open is still worth listing — it is why the workflow
+               cannot be published — but dressing it as a control teaches
+               somebody that these are pressable and then breaks that on the
+               one that is not. */
+            return item.id && onSelect ? (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => onSelect(item.id as string)}
+                className="-mx-1 rounded-md px-1 py-0.5 text-left text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                {line}
+              </button>
+            ) : (
+              <span key={item.label} className="px-1 text-sm text-text-muted">
+                {line}
+              </span>
+            );
+          })}
         </div>
       )}
 

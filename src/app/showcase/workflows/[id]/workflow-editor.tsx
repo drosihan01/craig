@@ -453,6 +453,35 @@ function Editor({
   const needsGoogle = blocks.some((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
   const googleBlocked = needsGoogle && !googleConnected;
 
+  /**
+   * Everything standing between this workflow and a seat being given.
+   *
+   * Assembled here because it is the only place both halves are known: a step
+   * missing a required answer is derived from the blocks, and a missing Google
+   * connection is a fact about the account that the canvas cannot see. Craig's
+   * panel is handed the finished list rather than the parts, so there is one
+   * answer to "what is left" and not two that can disagree.
+   *
+   * The connection goes last. It is one action for the whole workflow, where
+   * each unconfigured step is its own — and putting the single item above a
+   * list of several reads as though it were the first of them.
+   */
+  const attention = React.useMemo(() => {
+    const items: { id: string | null; label: string }[] = blocks
+      .filter(isUnconfigured)
+      .map((b) => ({ id: b.id, label: `${b.title} — ${setupWarning(b)}` }));
+
+    if (googleBlocked) {
+      const step = blocks.find((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
+      items.push({
+        id: step?.id ?? null,
+        label: "Connect Google Workspace",
+      });
+    }
+
+    return items;
+  }, [blocks, googleBlocked]);
+
   const [inviting, setInviting] = React.useState(false);
   const [paywall, setPaywall] = React.useState(false);
 
@@ -498,7 +527,6 @@ function Editor({
             blocks={blocks}
             steps={steps}
             unconfigured={unconfigured}
-            googleBlocked={googleBlocked}
             onSelect={select}
             onDelete={onDelete}
           />
@@ -684,6 +712,8 @@ function Editor({
             revealing={revealing}
             published={workflow.published}
             seats={seats.length}
+            attention={attention}
+            onSelect={select}
           />
         )
       }
@@ -719,6 +749,19 @@ function Editor({
             <div className="px-10 py-12">
               <WorkflowBuilder
                 blocks={blocks}
+                /* The canvas can't work this one out for itself. Before the
+                   Google block's dead settings were removed it carried
+                   required fields, so an unconnected Workspace showed up here
+                   as "3 to set up" — accidentally, but it showed up. With
+                   nothing left to configure the step went quiet on the canvas
+                   while still being the reason the workflow can't publish, so
+                   the one screen that knows about connections says so on the
+                   block itself rather than only in the column beside it. */
+                warningFor={(block) =>
+                  block.preset === GOOGLE_WORKSPACE_PRESET && !googleConnected
+                    ? "Needs Google Workspace connected"
+                    : null
+                }
                 reveal={revealing}
                 selectedId={selectedId}
                 onSelect={select}
@@ -826,7 +869,6 @@ function EditorNav({
   blocks,
   steps,
   unconfigured,
-  googleBlocked,
   onSelect,
   onDelete,
 }: {
@@ -834,19 +876,11 @@ function EditorNav({
   blocks: WorkflowBlock[];
   steps: number;
   unconfigured: number;
-  /** Publish is shut because the account has no working Google connection. */
-  googleBlocked: boolean;
   onSelect: (id: string) => void;
   onDelete: () => void;
 }) {
   const open = blocks.filter(isUnconfigured);
   const manual = blocks.filter((b) => byHand(b)).length;
-
-  /* The Google step itself, so the sentence below can send somebody to the
-     panel holding the button rather than describing where it is. First one
-     only: two Google blocks in one workflow are the same missing connection,
-     and offering to open both would imply otherwise. */
-  const googleStep = blocks.find((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
 
   return (
     /* No way back at the top any more — it is above the canvas now, in the
@@ -918,33 +952,11 @@ function EditorNav({
           : "A workflow cannot be published while any step is unconfigured."}
       </p>
 
-      {/* Kept as its own sentence rather than folded into the one above, and
-          only while it is true. "A step needs an answer" and "Google isn't
-          connected" are different problems with different fixes, and a single
-          sentence covering both would send somebody hunting through steps that
-          are all perfectly fine — this is the harder of the two to guess at,
-          because nothing on the canvas is badged and every step looks done.
-
-          The link opens the block rather than describing where the button is,
-          because the button is in that block's own panel. */}
-      {!workflow.published && googleBlocked && (
-        <div className="flex flex-col gap-1 px-2">
-          <p className="text-xs leading-relaxed text-warning">
-            It also can&apos;t be published until your Google Workspace is
-            connected — until it is, the account this workflow would create
-            can&apos;t be created.
-          </p>
-          {googleStep && (
-            <button
-              type="button"
-              onClick={() => onSelect(googleStep.id)}
-              className="-mx-1.5 w-fit rounded-md px-1.5 py-1 text-left text-xs font-medium text-accent transition-colors hover:bg-surface-hover"
-            >
-              Connect it on {googleStep.title}
-            </button>
-          )}
-        </div>
-      )}
+      {/* No second sentence here about Google. The block itself is badged
+          "Needs Google Workspace connected" on the canvas and carries the
+          button in its own panel, so a paragraph in this column repeating it
+          was the third place saying the same thing — and the furthest of the
+          three from anything you can press. */}
 
       {/* Last in the column and nowhere near Publish. The two live at opposite
           ends of the screen on purpose — they are the two irreversible things

@@ -445,12 +445,7 @@ export function GoogleWorkspaceConnect({
       {state.status === "disconnected" && <NotConnected account={account} />}
 
       {state.status === "connected" && (
-        <Connected
-          state={state}
-          account={account}
-          busy={busy}
-          onDisconnect={disconnect}
-        />
+        <Connected state={state} busy={busy} onDisconnect={disconnect} />
       )}
 
       {/* Neither of these claims anything about the company's account, because
@@ -497,11 +492,8 @@ function Unavailable() {
         <Cloud className="size-4 text-text-subtle" />
         <span className="text-base font-medium">Not available yet</span>
       </div>
-      <p className="text-sm leading-relaxed text-text-muted">
-        Connecting Google Workspace isn&apos;t switched on for this account yet.
-        There is nothing wrong with your Workspace and nothing here for you to
-        fix — a step that would have created an account waits quietly rather
-        than failing, and starts working the moment this does.
+      <p className="text-sm text-text-muted">
+        Not switched on for this account yet. Nothing here for you to fix.
       </p>
     </div>
   );
@@ -527,30 +519,18 @@ function Unavailable() {
 function NotConnected({ account }: { account: WorkspaceAccount }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
-      <div className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <Google className="size-4" />
-          <span className="text-base font-medium">Not connected yet</span>
-        </div>
-        <p className="text-sm leading-relaxed text-text-muted">
-          This is where every account starts, and it isn&apos;t a problem — it
-          just has to happen before anything can create an account.
-        </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Google className="size-4" />
+        <span className="text-base font-medium">Not connected</span>
       </div>
 
+      {/* One line, not a panel. Which Craig account the Workspace lands against
+          is the fact that went unnoticed once already, with a real tenant — so
+          it stays. What went with it was three paragraphs explaining it, which
+          is how a two-fact screen became something nobody reads. */}
       <Attaching account={account}>
-        Whichever Google Workspace you sign in with on the next screen is
-        attached to this Craig account and to no other. If that isn&apos;t the
-        account you meant to attach it to, sign out and back in before you
-        connect.
+        Sign in to Google as a super admin.
       </Attaching>
-
-      <p className="text-sm leading-relaxed text-text-muted">
-        Sign in to Google as a super admin of your company&apos;s Workspace.
-        Consenting works without that privilege and then every account Craig
-        tries to create is refused weeks later — so it is worth checking before
-        rather than finding out on somebody&apos;s first morning.
-      </p>
 
       <ConnectLink label="Connect Google Workspace" />
     </div>
@@ -569,12 +549,10 @@ function NotConnected({ account }: { account: WorkspaceAccount }) {
  */
 function Connected({
   state,
-  account,
   busy,
   onDisconnect,
 }: {
   state: Extract<WorkspaceState, { status: "connected" }>;
-  account: WorkspaceAccount;
   busy: boolean;
   onDisconnect: () => void;
 }) {
@@ -603,24 +581,17 @@ function Connected({
         <p className="text-sm text-text-muted">
           {state.adminEmail
             ? `Granted by ${state.adminEmail} on ${readableWhen(state.connectedAt)}.`
-            : `Granted on ${readableWhen(state.connectedAt)}.`}{" "}
-          New starters&apos; accounts are created on {domain}.
+            : `Granted on ${readableWhen(state.connectedAt)}.`}
         </p>
       </div>
 
-      <Attaching account={account}>
-        This is the Craig account {domain} is attached to. Anybody else signed
-        in to Craig at your company has their own, and connecting from theirs
-        would not affect this one.
-      </Attaching>
-
+      {/* Kept, and short. A reconnect is the one state where somebody would
+          otherwise press the button again and again — the grant is gone at
+          Google's end and only granting it afresh fixes it. */}
       {state.needsReconnect && (
         <Callout tone="warning" title="This has stopped working">
-          The permission granted when this was connected is no longer valid —
-          somebody removed Craig from their Google account, an admin&apos;s
-          password changed, or the grant expired. Retrying won&apos;t fix it: a
-          Workspace admin has to grant it again. Until then, new starters
-          won&apos;t get accounts.
+          The permission was removed or expired. A Workspace admin has to grant
+          it again — until then, new starters won&apos;t get accounts.
         </Callout>
       )}
 
@@ -645,12 +616,8 @@ function Connected({
         </Button>
       </div>
 
-      <p className="text-xs leading-relaxed text-text-subtle">
-        Disconnecting deletes the permission rather than hiding it — afterwards
-        nothing here can create an account on {domain}, and accounts already
-        created are untouched. It doesn&apos;t remove the grant from
-        Google&apos;s side, because only its owner can do that, at
-        myaccount.google.com.
+      <p className="text-xs text-text-subtle">
+        Accounts already created are untouched.
       </p>
     </div>
   );
@@ -675,18 +642,10 @@ function Attaching({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-border bg-surface-sunken p-3">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="text-sm font-medium">{account.name}</span>
-        <span className="text-sm text-text-muted">{account.email}</span>
-        {account.company && (
-          <Badge size="sm" tone="neutral">
-            {account.company}
-          </Badge>
-        )}
-      </div>
-      <p className="text-sm leading-relaxed text-text-muted">{children}</p>
-    </div>
+    <p className="text-sm text-text-muted">
+      {children} It attaches to{" "}
+      <span className="font-medium text-text">{account.email}</span>.
+    </p>
   );
 }
 
