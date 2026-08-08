@@ -345,10 +345,16 @@ export function WorkflowAssistant({
           const block = blockFromPreset(preset, `b${Date.now()}`);
           onInsert(block);
           onSelect(block.id);
+          /* A preset can now have nothing to configure — the steps the new
+             starter answers themselves have no required fields at all — and
+             "It needs 0 things from you" was what this said when it met one.
+             Unreachable until those existed, which is why it read as safe. */
           const needs = preset.setup.filter((f) => f.required).length;
           add(
             "craig",
-            `Added ${preset.label} at the end. It needs ${count(needs, "thing")} from you — I've opened it.`,
+            needs === 0
+              ? `Added ${preset.label} at the end. Nothing to set up on it — I've opened it so you can see.`
+              : `Added ${preset.label} at the end. It needs ${count(needs, "thing")} from you — I've opened it.`,
             block.id,
           );
         },

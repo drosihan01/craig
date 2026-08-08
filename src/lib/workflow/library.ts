@@ -2,6 +2,7 @@ import {
   AltRoute,
   Apps,
   Badge,
+  CalendarMonth,
   Description,
   Draw,
   EventAvailable,
@@ -13,6 +14,7 @@ import {
   LaptopMac,
   Lock,
   Mail,
+  Person,
   Quiz,
   RocketLaunch,
   School,
@@ -286,26 +288,68 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
           WHO_PROVISIONS,
         ],
       },
+      /*
+       * Three blocks with nothing for the admin to fill in, and the empty
+       * `setup` is the decision rather than an omission.
+       *
+       * Every other preset here asks the admin something before it can run:
+       * which template, which channels, who countersigns. These three ask
+       * nobody anything at setup time, because doing the work *is* the answer.
+       * Only the new starter knows their middle name and only they can type
+       * their date of birth; the name tag is made by somebody at the company
+       * and then ticked off. A required `SetupField` on any of them would hold
+       * Publish shut — `missingRequired` is what that gate reads — until an
+       * admin had typed a stranger's birthday into the very step that exists
+       * to ask them for it. That's the question answered by the wrong person
+       * and the workflow unpublishable for having asked it. An optional field
+       * would be a control that changes nothing. So: no fields, Ready the
+       * moment the block lands, and the step is closed by whoever does the
+       * work.
+       *
+       * The ids are load-bearing beyond this file. `JOINER_FIELD_BY_PRESET`
+       * and `ADMIN_TICK_PRESETS` in the showcase contract key off these exact
+       * strings — one decides which form the new starter is shown, the other
+       * which steps the admin can tick. Rename one and the step still appears
+       * on somebody's screen, with nothing on it and no way to finish it.
+       *
+       * They sit next to each other because they are two halves of one idea:
+       * onboarding passes back and forth between the person arriving and the
+       * people expecting them. The titles carry which half, addressed to
+       * whoever acts — the new starter reads "provide your date of birth" on
+       * their own screen, the admin reads "make their name tag" on the canvas.
+       */
       {
-        id: "details",
-        label: "Details",
+        id: "middle-name",
+        label: "Provide middle name",
         description:
-          "One thing to collect from the new starter, where the rest is already on file.",
+          "The new starter types it in themselves. Nothing for you to set up.",
         kind: "document",
+        icon: Person,
+        title: "Provide your middle name",
+        summary: "They fill this in themselves",
+        setup: [],
+      },
+      {
+        id: "date-of-birth",
+        label: "Provide date of birth",
+        description:
+          "The new starter types it in themselves. Nothing for you to set up.",
+        kind: "document",
+        icon: CalendarMonth,
+        title: "Provide your date of birth",
+        summary: "They fill this in themselves",
+        setup: [],
+      },
+      {
+        id: "name-tag",
+        label: "Make a name tag",
+        description:
+          "Somebody here makes it and ticks it off. Nothing is asked of the new starter.",
+        kind: "task",
         icon: Badge,
-        title: "Details",
-        setup: [
-          {
-            id: "detail",
-            label: "What to collect",
-            kind: "select",
-            options: [
-              { id: "dob", label: "Date of birth" },
-              { id: "middle-name", label: "Middle name" },
-            ],
-            required: true,
-          },
-        ],
+        title: "Make their name tag",
+        summary: "Somebody here does this and ticks it off",
+        setup: [],
       },
       {
         id: "verify-identity",

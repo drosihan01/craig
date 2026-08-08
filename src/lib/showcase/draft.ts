@@ -170,15 +170,33 @@ export const blankTrigger = (): WorkflowBlock => ({ ...TRIGGER });
 const BY_HAND = "Craig can't run this one — somebody ticks it off.";
 
 /**
- * The single block a forced draft collapses to.
+ * The steps a forced draft collapses to, in the order they're asked.
  *
- * A preset rather than a hand-built block, so nothing about it is special: it
- * has one required select with two options, which is the shortest path from a
- * fresh account through draft, configure and publish that still exercises the
- * real gate. Somebody testing that path shouldn't have to talk to Craig for six
- * turns first.
+ * Presets rather than hand-built blocks, so nothing about them is special:
+ * they're built by `buildStep` like every other step, which is what keeps the
+ * canvas, the invitation and the new starter's own screen from needing to know
+ * this path exists.
+ *
+ * Three, interleaved, and the interleaving is the point. Middle name and date
+ * of birth are the new starter's to answer; the name tag is somebody here
+ * doing a thing and ticking it off. Sandwiching the company's step between two
+ * of theirs makes the shortest possible workflow still be a *plan that passes
+ * back and forth* rather than a form one person fills in — which is the thing
+ * worth looking at on both screens, and it can't be seen in a workflow where
+ * every step belongs to the same person.
+ *
+ * None of them has a required setup field, so this publishes the moment it
+ * lands. That is the trade this path now makes: it no longer exercises the
+ * Publish gate, which every other preset in the library exercises anyway, and
+ * in exchange somebody testing gets from a fresh account to a real invitation
+ * with a real thing to fill in, without six turns of conversation first.
+ *
+ * Exported because the prompt has to tell Craig what he's drafting *before* he
+ * drafts it — the substitution here only makes it true afterwards — and a
+ * prompt that names these steps in its own words is a prompt that goes stale
+ * the day this list changes.
  */
-const SIMPLE_PRESET = "details";
+export const SIMPLE_PRESETS = ["middle-name", "name-tag", "date-of-birth"];
 
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -434,16 +452,24 @@ export function parseDraft(raw: unknown, simple = false): Draft | undefined {
       ? (raw as { name?: unknown; steps?: unknown })
       : {};
 
-  /* The whole draft thrown away and replaced by one empty step. Everything
-     downstream is untouched, which is the point of doing it here: it is a real
-     preset with a real required field, so the badge, the counter and the
-     Publish gate are the ones under test rather than a special case beside
-     them. His own readback comes off these blocks too, so he describes what
-     actually landed. */
+  /* The whole draft thrown away and replaced by those three. Everything
+     downstream is untouched, which is the point of doing it here: they're real
+     presets built the real way, so the badge, the counter, the invitation and
+     the new starter's screen all read them as ordinary steps rather than as a
+     special case beside them. His own readback comes off these blocks too, so
+     he describes what actually landed.
+
+     All three or nothing: a preset this list has outlived would otherwise
+     leave a hole in the middle of the test workflow, and two thirds of it is
+     the worse failure — it still looks like the thing, so the missing half of
+     the hand-off gets read as a design rather than a bug. */
   if (simple) {
-    const block = buildStep(SIMPLE_PRESET, "step-1", undefined, undefined);
-    return block
-      ? { name: trimmed(name) || "Onboarding", blocks: [TRIGGER, block] }
+    const blocks = SIMPLE_PRESETS.flatMap((preset, i) => {
+      const block = buildStep(preset, `step-${i + 1}`, undefined, undefined);
+      return block ? [block] : [];
+    });
+    return blocks.length === SIMPLE_PRESETS.length
+      ? { name: trimmed(name) || "Onboarding", blocks: [TRIGGER, ...blocks] }
       : undefined;
   }
 

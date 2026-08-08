@@ -9,6 +9,7 @@ import {
   Dialog,
   Field,
   Input,
+  Select,
   toISODate,
 } from "@/components/ui";
 import { CheckCircle, Mail, Warning } from "@/components/ui/icons";
@@ -72,7 +73,23 @@ export function InviteStarter({
   onInvited?: (person: InvitedPerson) => void;
 }) {
   const { workflows } = useShowcase();
-  const workflow = workflows.find((w) => w.id === workflowId);
+
+  /**
+   * Which workflow they're being put through, chosen here rather than assumed.
+   *
+   * A seat exists because somebody was invited, and an invitation exists to
+   * start a particular plan — so the plan is part of the invitation and not a
+   * detail settled elsewhere. Before this the screen picked whichever workflow
+   * happened to be published first, which is fine while there is one and
+   * silently wrong the day there are two: the second hire goes through the
+   * first hire's onboarding and nothing on screen ever said so.
+   *
+   * Only published ones. A draft can be selected in the sense that a form
+   * would accept it, and then nothing runs.
+   */
+  const publishable = workflows.filter((w) => w.published);
+  const [chosenId, setChosenId] = React.useState(workflowId);
+  const workflow = publishable.find((w) => w.id === chosenId) ?? null;
 
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -88,7 +105,11 @@ export function InviteStarter({
   const ready =
     name.trim() !== "" &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
-    !!start;
+    !!start &&
+    /* No workflow, no invitation. Sending one anyway would give somebody a
+       seat with nothing behind it — an email promising a checklist, and an
+       empty page when they open it. */
+    !!workflow;
 
   function reset() {
     setName("");
@@ -124,8 +145,24 @@ export function InviteStarter({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...person,
-          workflowId,
+          workflowId: workflow?.id,
           workflowName: workflow?.name,
+          /* The steps go with the invitation, because the server has no way to
+             read them otherwise — a workflow lives in this browser and the
+             person being invited will open theirs somewhere else entirely.
+             What's sent is a snapshot: their onboarding is fixed at the moment
+             they're asked, so editing the workflow next week doesn't rewrite
+             the half they haven't done yet.
+
+             Only the four fields the server uses. Sending whole blocks would
+             put every field value the admin typed — names, addresses, whatever
+             a step collects — into a request that has no use for them. */
+          blocks: (workflow?.blocks ?? []).map((b) => ({
+            id: b.id,
+            kind: b.kind,
+            title: b.title,
+            preset: b.preset,
+          })),
         }),
       });
 
@@ -247,6 +284,36 @@ export function InviteStarter({
 
           <Field label="Start date" hint="The date the email will give them.">
             <DatePicker value={start} onChange={setStart} />
+          </Field>
+
+          {/* Full width, and last, because it's the one field that decides what
+              the other four are for. */}
+          <Field
+            label="Workflow"
+            hint="What they'll be put through. Only published ones can start."
+            className="sm:col-span-2"
+          >
+            <Select
+              value={chosenId}
+              onChange={(e) => setChosenId(e.target.value)}
+            >
+              {/* Shown even when there's only one, and shown even when it
+                  arrives already chosen. The caller knows which workflow you
+                  came from — you just published it, or it's the one running —
+                  so starting there saves a click that has no alternative. What
+                  it must not do is decide invisibly: the field is on screen,
+                  it names what they'll be put through, and it can be changed.
+
+                  The empty option stays for the case the caller's workflow
+                  isn't publishable, where the honest state is that nothing is
+                  selected and Send is shut. */}
+              <option value="">Choose a workflow</option>
+              {publishable.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </Select>
           </Field>
         </div>
 

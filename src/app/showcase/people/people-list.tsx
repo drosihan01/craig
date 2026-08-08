@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   AppShell,
   Avatar,
   Badge,
   Button,
-  Callout,
   EmptyState,
   List,
   ListItem,
@@ -18,14 +18,11 @@ import {
 } from "@/components/showcase/showcase-nav";
 import { CheckCircle, PersonAdd } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
-import {
-  InviteStarter,
-  type InvitedPerson,
-} from "@/components/showcase/invite-starter";
+import { InviteStarter } from "@/components/showcase/invite-starter";
 import { NewWorkflowDialog } from "@/components/showcase/new-workflow";
 import { FREE_SEATS, SeatPaywall } from "@/components/showcase/seat-paywall";
 import type { Session } from "@/lib/showcase/contract";
-import { invited, useShowcase } from "@/lib/showcase/store";
+import { useShowcase } from "@/lib/showcase/store";
 
 /**
  * Everyone with a seat, which on a new account is one person.
@@ -47,12 +44,60 @@ import { invited, useShowcase } from "@/lib/showcase/store";
  * and that lives a click away rather than being squeezed into a subtitle.
  */
 
-export function PeopleList({ user }: { user: Session }) {
+/**
+ * One row, flattened by the server from a joiner and their progress.
+ *
+ * Deliberately not the whole `Joiner`. The steps are the new starter's own
+ * business and their page is where those belong; a list only has to answer who
+ * has a seat and how far along they are.
+ */
+export interface SeatRow {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  startDate: string;
+  workflowName: string;
+  done: number;
+  total: number;
+  finished: boolean;
+  nextStep: string | null;
+}
+
+export function PeopleList({
+  user,
+  people,
+}: {
+  user: Session;
+  /**
+   * From the server, not from the browser's copy.
+   *
+   * This is the one part of the showcase two different people write to. The
+   * new starter fills their steps in on their own device; nothing they did
+   * could ever reach this page through `localStorage`, so who holds a seat and
+   * how far through they are is read on the server and handed down.
+   */
+  people: SeatRow[];
+}) {
   const state = useShowcase();
-  const guests = invited(state);
+  const guests = people;
 
   const [inviting, setInviting] = React.useState(false);
-  const [sent, setSent] = React.useState<InvitedPerson | null>(null);
+  /**
+   * The list is the confirmation, so there is nothing to announce.
+   *
+   * A green panel saying "Nils has been invited" sat above a list that didn't
+   * have Nils in it — the notice and the evidence disagreed, and the notice was
+   * the weaker of the two. The row is better in every way: it says the same
+   * thing, it says it in the place you'd look next, and it is still there
+   * tomorrow.
+   *
+   * So the invite refreshes the server data instead. `router.refresh()` re-runs
+   * the page that read the seats, which is what puts them on the list — and
+   * they arrive as a seat member with a step to their name, not as a message
+   * about something that happened.
+   */
+  const router = useRouter();
 
   /* The two reasons adding somebody can't go ahead, each with a screen of its
      own rather than a disabled button. Both are things the account can change,
@@ -132,37 +177,13 @@ export function PeopleList({ user }: { user: Session }) {
         {/* Kept on screen rather than flashed as a toast. This is the one action
             here that can't be undone, and "did that send?" is a question worth
             being able to answer by looking. */}
-        {sent && (
-          <Callout
-            tone="success"
-            icon={<CheckCircle />}
-            title={`${sent.name.split(" ")[0]} has been invited`}
-            className="mb-5"
-          >
-            Their first email is on its way to {sent.email}.
-          </Callout>
-        )}
 
+        {/* No row for whoever is reading this. They know who they are, and a
+            page about the people they've brought in shouldn't open with
+            themselves — the seat they hold isn't onboarding and has no progress
+            to show, so the row could only ever be a name with an empty half.
+            The account is in the corner of every screen already. */}
         <List>
-          <ListItem
-            leading={<Avatar name={user.name} size="md" />}
-            title={
-              <span className="flex flex-wrap items-center gap-2">
-                {user.name}
-                <Badge tone="neutral" size="sm">
-                  You
-                </Badge>
-              </span>
-            }
-            description={user.email}
-            /* No third line here, and deliberately none. Every other row
-               carries the role that person was given when they were added;
-               nobody gave this one a role, so a line under their name could
-               only be the page inventing a title for them — and it was
-               inventing it on the one row where the badge beside their name
-               has already said the only thing worth saying. */
-          />
-
           {guests.map((person) => (
             <ListItem
               key={person.id}
@@ -174,15 +195,34 @@ export function PeopleList({ user }: { user: Session }) {
               leading={<Avatar name={person.name} size="md" />}
               title={person.name}
               description={`${person.role} · ${person.email}`}
+              /* What's actually happening to them, not just when they arrive.
+                 A start date is the same line every day until it passes; the
+                 step they're waiting on is the thing that changed since you
+                 last looked, which is what anybody opens this page to find
+                 out. The date keeps its place beside it, because "how far
+                 along" only means something against "starting when". */
               footnote={
-                person.startDate
-                  ? `Starts ${readable(person.startDate)}`
-                  : undefined
+                person.finished
+                  ? `Finished · starts ${readable(person.startDate)}`
+                  : person.nextStep
+                    ? `${person.nextStep} · starts ${readable(person.startDate)}`
+                    : `Starts ${readable(person.startDate)}`
               }
               meta={
-                <Badge tone="accent" size="sm">
-                  Onboarding
-                </Badge>
+                person.finished ? (
+                  <Badge tone="success" size="sm">
+                    <CheckCircle />
+                    Done
+                  </Badge>
+                ) : (
+                  /* The count rather than the word "Onboarding". Everyone on
+                     this list is onboarding — a badge that says so on every
+                     row is a column of the same word, and it was sitting
+                     exactly where the one number worth reading could go. */
+                  <Badge tone="accent" size="sm">
+                    {person.done} of {person.total}
+                  </Badge>
+                )
               }
             />
           ))}
@@ -225,7 +265,7 @@ export function PeopleList({ user }: { user: Session }) {
           open={inviting}
           onClose={close}
           workflowId={live.id}
-          onInvited={setSent}
+          onInvited={() => router.refresh()}
         />
       )}
 

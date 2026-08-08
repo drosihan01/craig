@@ -440,7 +440,7 @@ const draftWorkflow = tool<typeof draftWorkflowParams, Notebook>({
          one, which is the product lying about its own output — the exact thing
          reading the holes off the blocks exists to stop. */
       notebook.simpleDraft
-        ? "None of the steps you asked for were used: every one was replaced by a single step, Details. Describe only that step. Do not mention any of the others."
+        ? "The steps you asked for were not used. This account's workflow is a fixed set, and it is what got built — describe the steps that are actually in the workflow above and no others."
         : "",
       open.length > 0
         ? `Still open, and you must name these: ${open.join("; ")}.`

@@ -95,7 +95,7 @@ export function ShowcaseReset() {
             />
           }
           label="Simple test workflow"
-          description="Whatever Craig drafts comes out as one step, Details, with a single required field — date of birth or middle name. Pick one and it publishes. It's the whole draft-configure-publish path without six turns of conversation first. Turn it off to get the workflow he actually wrote."
+          description="Whatever Craig drafts comes out as the same three steps — provide your middle name, make their name tag, provide your date of birth. Nothing needs setting up, so it publishes straight away and the invitation gives the new starter something they can actually fill in, with one step in the middle for somebody here to tick off. It's the whole path without six turns of conversation first. Turn it off to get the workflow he actually wrote."
         />
       </div>
 

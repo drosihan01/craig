@@ -99,7 +99,7 @@
  * something she never told him.
  */
 
-import { BLOCK_CATALOGUE } from "@/lib/showcase/draft";
+import { BLOCK_CATALOGUE, SIMPLE_PRESETS } from "@/lib/showcase/draft";
 import type { OpenWorkflow } from "@/lib/showcase/contract";
 
 /**
@@ -326,7 +326,7 @@ The workflow is on the screen beside you. Say what you changed in a line and ask
        out of three. The rule that stops it is that this one is complete, which
        is only true while the switch is on, so it is only said then. */
     simpleDraft
-      ? "\n\nThis workflow is finished at one step. Never add a second one, however incomplete it looks."
+      ? `\n\nThis workflow is finished at ${SIMPLE_PRESETS.length} steps. Never add another, however incomplete it looks.`
       : ""
   }`;
 }
@@ -344,7 +344,11 @@ The workflow is on the screen beside you. Say what you changed in a line and ask
  */
 export const SIMPLE_DRAFT_NOTE = `## The workflow for this account
 
-Their onboarding is one step and only one step: \`details\`. Call draft_workflow with that single step, nothing before it and nothing after it, whatever else you have been told. When you say what you built, say exactly that — one step, called Details, and it still needs somebody to choose what it collects. Never name a step that isn't in it, and don't say what it collects: nobody has decided yet.`;
+Their onboarding is exactly these three steps, in this order: ${SIMPLE_PRESETS.join(", ")}. Call draft_workflow with those three, nothing before them and nothing after them, whatever else you have been told.
+
+Two of them are the new starter's to answer — they type their middle name and their date of birth themselves. The one between is somebody at the company making a name tag and ticking it off. Nothing needs configuring, so do not say anything is missing or that anybody still has to choose something.
+
+When you say what you built, say those three and only those three. Never name a step that isn't in it.`;
 
 /**
  * Attachments arrive as names, because there's no upload yet.
