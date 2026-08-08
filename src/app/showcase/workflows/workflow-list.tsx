@@ -11,7 +11,10 @@ import {
   ListItem,
   Separator,
 } from "@/components/ui";
-import { ShowcaseNav } from "@/components/showcase/showcase-nav";
+import {
+  ShowcaseNav,
+  ShowcaseNavRail,
+} from "@/components/showcase/showcase-nav";
 import { NewWorkflowDialog } from "@/components/showcase/new-workflow";
 import { Add, AltRoute, Warning } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
@@ -53,6 +56,7 @@ export function WorkflowList({ user }: { user: Session }) {
     <AppShell
       title="Workflows"
       account={{ name: user.name, email: user.email }}
+      navRail={<ShowcaseNavRail />}
       nav={
         <ShowcaseNav>
           <ListNav total={workflows.length} ready={ready} />

@@ -14,7 +14,10 @@ import {
   ListItem,
   Separator,
 } from "@/components/ui";
-import { ShowcaseNav } from "@/components/showcase/showcase-nav";
+import {
+  ShowcaseNav,
+  ShowcaseNavRail,
+} from "@/components/showcase/showcase-nav";
 import { AltRoute, CheckCircle, PersonAdd } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import {
@@ -59,6 +62,7 @@ export function PeopleList({ user }: { user: Session }) {
     <AppShell
       title="People"
       account={{ name: user.name, email: user.email }}
+      navRail={<ShowcaseNavRail />}
       nav={
         <ShowcaseNav>
           <PeopleNav seats={guests.length + 1} onboarding={guests.length} />

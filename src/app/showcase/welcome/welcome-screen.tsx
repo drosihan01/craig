@@ -17,7 +17,10 @@ import {
 import { DraftStrength } from "@/components/showcase/draft-strength";
 import type { Session } from "@/lib/showcase/contract";
 import { useShowcase } from "@/lib/showcase/store";
-import { ShowcaseNav } from "@/components/showcase/showcase-nav";
+import {
+  ShowcaseNav,
+  ShowcaseNavRail,
+} from "@/components/showcase/showcase-nav";
 import { useCraigChat } from "@/lib/showcase/use-craig-chat";
 
 /**
@@ -130,6 +133,7 @@ export function WelcomeScreen({ user }: { user: Session }) {
          about somebody who has told us their name and nothing else. */
       account={{ name: user.name, email: user.email }}
       fill
+      navRail={<ShowcaseNavRail />}
       nav={
         /* The nav appears once there's somewhere to go. On a brand-new account
            Workflows and People are both empty, and offering them would be

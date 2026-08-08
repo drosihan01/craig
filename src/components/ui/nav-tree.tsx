@@ -58,6 +58,91 @@ export function NavTree({
   );
 }
 
+/**
+ * The nav with the panel collapsed: icons in a strip, no labels.
+ *
+ * Collapsing used to take the column to nothing, which is honest but throws
+ * away the thing a nav is for — you could no longer see where you were or move
+ * without opening it again, so the collapse was only useful if you meant to
+ * stop navigating. A strip of icons keeps both and still gives the page back
+ * most of the width.
+ *
+ * Opt-in at the shell rather than automatic, and this is why: a nav is
+ * arbitrary content — counts, prose, a stepper — and none of that survives
+ * being squeezed to 52px. A screen has to say what its rail is, and the ones
+ * that don't keep collapsing to nothing as before.
+ */
+export function NavRail({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn("flex flex-col items-center gap-1 px-2 py-6", className)}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One icon in that strip.
+ *
+ * Labelled by `title` and `aria-label` rather than the `Tooltip` component,
+ * which would be the obvious choice and is the wrong one here: the panel
+ * clips horizontally so it can slide shut without its contents spilling, and
+ * a tooltip wider than the strip would be cut off by that same rule.
+ */
+export function NavRailItem({
+  label,
+  icon,
+  href,
+  current,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  href?: string;
+  current?: boolean;
+  onClick?: () => void;
+}) {
+  const classes = cn(
+    "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors [&_svg]:size-[1.125rem]",
+    current
+      ? "bg-accent-subtle text-accent-subtle-fg"
+      : "text-text-muted hover:bg-surface-hover hover:text-text",
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        title={label}
+        aria-label={label}
+        aria-current={current ? "page" : undefined}
+        className={classes}
+      >
+        {icon}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={classes}
+    >
+      {icon}
+    </button>
+  );
+}
+
 export interface NavTreeItemProps {
   label: string;
   href?: string;

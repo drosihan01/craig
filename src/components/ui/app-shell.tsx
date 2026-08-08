@@ -57,6 +57,14 @@ import { cn } from "@/lib/cn";
  */
 
 const DEFAULT_W = 224;
+
+/**
+ * The collapsed nav's width, when a screen has given it a rail.
+ *
+ * Wide enough for a 36px target with 8px either side. Not resizable and not
+ * persisted: it's the width of an icon, so there is nothing to prefer.
+ */
+const RAIL_W = 52;
 const MIN_W = 176;
 const MAX_W = 440;
 /** Arrow-key step for the resize handle. */
@@ -163,6 +171,7 @@ function useIsDesktop() {
 export function AppShell({
   title,
   nav,
+  navRail,
   aside,
   asideTitle,
   asideFlushTop,
@@ -182,6 +191,17 @@ export function AppShell({
       what it is — a heading that repeats the thing under it is just a line of
       shouting. The drawer still gets a name, since a sheet with no title is
       unlabelled to a screen reader. */
+  /**
+   * The nav, collapsed to icons.
+   *
+   * Given it, the panel shuts to a strip instead of to nothing, and the header
+   * cell above shrinks to match — the two share a vertical rule and would part
+   * company if either moved alone. Omit it and collapsing behaves as it always
+   * has, which is why this is a prop and not a change to every screen at once:
+   * counts, prose and steppers don't survive being squeezed to 52px, so a
+   * screen has to say what its rail is.
+   */
+  navRail?: React.ReactNode;
   asideTitle?: string;
   /**
    * Drop the aside's top padding, keeping the bottom.
@@ -237,9 +257,19 @@ export function AppShell({
   const [drawer, setDrawer] = React.useState<"nav" | "aside" | null>(null);
   const closeDrawer = React.useCallback(() => setDrawer(null), []);
 
+  /* Collapsed, but still showing something. Everything that has to line up
+     with the nav column reads this rather than testing `navOpen` itself, so
+     the header cell, the column and the panel footer can't disagree. */
+  const railed = Boolean(nav && navRail && !navOpen);
+
   const vars = {
-    "--craig-nav-w": navOpen && nav ? `${navW}px` : "0px",
-    "--craig-nav-open-w": `${navW}px`,
+    "--craig-nav-w":
+      navOpen && nav ? `${navW}px` : railed ? `${RAIL_W}px` : "0px",
+    /* Panel contents normally track the *open* width so they don't reflow
+       mid-animation. A rail is different content at a different width, so
+       while it's showing this is the width it actually gets — otherwise the
+       account footer would lay itself out at 224px inside a 52px strip. */
+    "--craig-nav-open-w": railed ? `${RAIL_W}px` : `${navW}px`,
     "--craig-aside-w": asideOpen && aside ? `${asideW}px` : "0px",
     "--craig-aside-open-w": `${asideW}px`,
   } as React.CSSProperties;
@@ -251,21 +281,32 @@ export function AppShell({
           {/* Left cell — tracks the nav column's width, same rule. */}
           <div
             className={cn(
-              "flex shrink-0 items-center gap-1 pl-4 pr-2 lg:border-r lg:border-dotted lg:border-border",
-              navOpen && nav ? "craig-col-nav" : "lg:w-auto",
+              "flex shrink-0 items-center lg:border-r lg:border-dotted lg:border-border",
+              /* Centred and unpadded in rail mode: at 52px the wordmark is
+                 gone and the toggle is the only thing left, so it takes the
+                 cell rather than sitting at the end of one. */
+              railed ? "justify-center px-0" : "gap-1 pl-4 pr-2",
+              (navOpen || railed) && nav ? "craig-col-nav" : "lg:w-auto",
             )}
           >
-            <CraigMark className="size-5" />
-            <span className="truncate text-base font-semibold tracking-[-0.01em]">
-              Craig.
-            </span>
+            {/* The mark goes with the wordmark. A brand cell holding an icon
+                and a toggle at 52px reads as two controls, one of which does
+                nothing when you press it. */}
+            {!railed && (
+              <>
+                <CraigMark className="size-5" />
+                <span className="truncate text-base font-semibold tracking-[-0.01em]">
+                  Craig.
+                </span>
+              </>
+            )}
             {nav &&
               (isDesktop ? (
                 <PanelToggle
                   open={navOpen}
                   onToggle={toggleNav}
                   side="left"
-                  className="ml-auto"
+                  className={railed ? undefined : "ml-auto"}
                 />
               ) : (
                 <DrawerToggle
@@ -348,7 +389,12 @@ export function AppShell({
             open={navOpen}
             width={navW}
             onResize={setNavW}
-            footer={account ? <AccountMenu account={account} /> : undefined}
+            rail={navRail}
+            footer={
+              account ? (
+                <AccountMenu account={account} compact={railed} />
+              ) : undefined
+            }
           >
             <div className="craig-panel-nav px-4 py-6">{nav}</div>
           </Panel>
@@ -546,6 +592,7 @@ function Panel({
   open,
   width,
   onResize,
+  rail,
   footer,
   children,
 }: {
@@ -553,11 +600,14 @@ function Panel({
   open: boolean;
   width: number;
   onResize: (n: number) => void;
+  /** Shown instead of `children` while collapsed. Omit to collapse to nothing. */
+  rail?: React.ReactNode;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const isLeft = side === "left";
   const [dragging, setDragging] = React.useState(false);
+  const railed = Boolean(rail && !open);
 
   return (
     <aside
@@ -566,18 +616,20 @@ function Panel({
          is the one declaration a stray utility can't lose to. min-w-0 still
          matters: a flex item defaults to `min-width: auto`, which floors it at
          its content's min-content size and would stop it shrinking. */
-      style={{ width: open ? width : 0 }}
+      style={{ width: open ? width : railed ? RAIL_W : 0 }}
       className={cn(
         "hidden min-w-0 shrink-0 border-border lg:block",
         // Only animate the collapse — animating during a drag makes the panel
         // lag the cursor.
         !dragging && "transition-[width] duration-200 ease-out-quart",
-        open && (isLeft ? "border-r" : "border-l"),
+        /* The rule stays while the rail does. A strip of icons with no edge
+           on it reads as floating in the page rather than as a column. */
+        (open || railed) && (isLeft ? "border-r" : "border-l"),
       )}
     >
       <div className="sticky top-12 flex h-[calc(100vh-3rem)] flex-col overflow-x-hidden">
         <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-          {children}
+          {railed ? rail : children}
         </div>
 
         {footer && (
@@ -747,8 +799,85 @@ function PanelToggle({
  * button. Making the whole row a target would imply the name itself does
  * something.
  */
-function AccountMenu({ account }: { account: AccountInfo }) {
+/**
+ * One definition of the account menu, for both widths.
+ *
+ * The rail and the full row are the same menu on two different triggers, and
+ * two copies of this list is two places to add the next item to — one of which
+ * somebody will miss, leaving Sign out reachable at one panel width and not
+ * the other.
+ */
+function accountItems(
+  account: AccountInfo,
+  router: ReturnType<typeof useRouter>,
+) {
+  return [
+    {
+      id: "profile",
+      label: account.name,
+      description: account.email,
+      icon: <Person />,
+    },
+    { id: "settings", label: "Settings", icon: <Settings /> },
+    /* The sandbox is a builder's tool, not an admin's — it doesn't belong in
+       the product nav, but it has to be reachable from every screen. */
+    {
+      id: "sandbox",
+      label: "Sandbox",
+      description: "Builder hub",
+      icon: <Science />,
+      separatorBefore: true,
+      onSelect: () => router.push("/sandbox"),
+    },
+    {
+      id: "signout",
+      label: "Sign out",
+      icon: <Logout />,
+      destructive: true,
+      separatorBefore: true,
+    },
+  ];
+}
+
+function AccountMenu({
+  account,
+  compact,
+}: {
+  account: AccountInfo;
+  /** Rail width: the avatar only, and it becomes the menu's own trigger. */
+  compact?: boolean;
+}) {
   const router = useRouter();
+
+  /* At 52px there is no room for a name beside a chevron, and dropping the
+     name while keeping the chevron would leave the strip ending in a control
+     that looks like it belongs to nothing. So the avatar *is* the trigger —
+     which is what it already looks like, and what people press anyway. */
+  if (compact) {
+    return (
+      <div className="flex w-full justify-center">
+        <DropdownMenu
+          label="Account menu"
+          align="start"
+          side="top"
+          width="w-52"
+          /* A span, not a button — `DropdownMenu` wraps whatever it's given in
+             its own button, and nesting one inside it is invalid HTML that
+             React refuses to hydrate. The full-width trigger below is a span
+             for the same reason. */
+          trigger={
+            <span
+              title={account.name}
+              className="flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-surface-hover"
+            >
+              <Avatar name={account.name} size="md" />
+            </span>
+          }
+          items={accountItems(account, router)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full items-center gap-2.5 px-1.5 py-1">
@@ -775,32 +904,7 @@ function AccountMenu({ account }: { account: AccountInfo }) {
             <ExpandLess className="size-4" />
           </span>
         }
-        items={[
-          {
-            id: "profile",
-            label: account.name,
-            description: account.email,
-            icon: <Person />,
-          },
-          { id: "settings", label: "Settings", icon: <Settings /> },
-          /* The sandbox is a builder's tool, not an admin's — it doesn't belong
-             in the product nav, but it has to be reachable from every screen. */
-          {
-            id: "sandbox",
-            label: "Sandbox",
-            description: "Builder hub",
-            icon: <Science />,
-            separatorBefore: true,
-            onSelect: () => router.push("/sandbox"),
-          },
-          {
-            id: "signout",
-            label: "Sign out",
-            icon: <Logout />,
-            destructive: true,
-            separatorBefore: true,
-          },
-        ]}
+        items={accountItems(account, router)}
       />
     </div>
   );

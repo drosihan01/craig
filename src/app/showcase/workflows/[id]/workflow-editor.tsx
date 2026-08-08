@@ -4,7 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InviteStarter } from "@/components/showcase/invite-starter";
-import { ShowcaseNav } from "@/components/showcase/showcase-nav";
+import {
+  ShowcaseNav,
+  ShowcaseNavRail,
+} from "@/components/showcase/showcase-nav";
 import {
   AppShell,
   BackLink,
@@ -384,6 +387,7 @@ function Editor({
       /* Only while Craig has the panel. His transcript starts at the top rule
          and scrolls under it; a block's settings below still want the margin. */
       asideFlushTop={!selected}
+      navRail={<ShowcaseNavRail />}
       nav={
         <ShowcaseNav>
           <EditorNav

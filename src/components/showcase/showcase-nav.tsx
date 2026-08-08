@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { NavTree, NavTreeItem, Separator } from "@/components/ui";
+import {
+  NavRail,
+  NavRailItem,
+  NavTree,
+  NavTreeItem,
+  Separator,
+} from "@/components/ui";
 import { AltRoute, Groups } from "@/components/ui/icons";
 
 /**
@@ -66,5 +72,35 @@ export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * The same nav with the panel collapsed.
+ *
+ * Built from the same `ITEMS`, so a page added to one is a page added to both.
+ * The alternative — a second hand-written list — is how a rail ends up
+ * offering a route the expanded nav dropped months ago.
+ *
+ * No `children` here. The detail a page hangs under the nav is counts and
+ * prose, and neither has an icon; a rail that tried to keep them would be
+ * showing the parts of the column that survive squeezing rather than the parts
+ * that matter.
+ */
+export function ShowcaseNavRail() {
+  const pathname = usePathname();
+
+  return (
+    <NavRail>
+      {ITEMS.map((item) => (
+        <NavRailItem
+          key={item.href}
+          href={item.href}
+          label={item.label}
+          icon={item.icon}
+          current={pathname.startsWith(item.href)}
+        />
+      ))}
+    </NavRail>
   );
 }

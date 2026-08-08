@@ -121,6 +121,8 @@ export {
 export { BlockPicker } from "./block-picker";
 export { BlockSetup } from "./block-setup";
 export {
+  NavRail,
+  NavRailItem,
   NavTree,
   NavTreeGroup,
   NavTreeItem,
