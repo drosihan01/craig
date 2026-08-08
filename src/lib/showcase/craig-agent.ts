@@ -272,7 +272,10 @@ const draftWorkflowParams = z.object({
           .describe("The id of a block from the library. Exactly as listed."),
         owner: z
           .string()
-          .describe("Who does it — a named person, or the new starter."),
+          .optional()
+          .describe(
+            "Only when a named person at the company does it. Leave it out otherwise — most steps have no owner and need none, and a required-looking field taught the model that a step without one was unfinished: asked what needed attention it answered 'assign an owner' four times, about four steps that cannot have one.",
+          ),
         config: z
           .array(
             z.object({
@@ -322,7 +325,10 @@ const addStepParams = z.object({
     .describe("The id of a block from the library. Exactly as listed."),
   owner: z
     .string()
-    .describe("Who does it — a named person, or the new starter."),
+    .optional()
+    .describe(
+      "Only when a named person at the company does it. Leave it out otherwise — see draft_workflow's note; an owner is optional on every step.",
+    ),
   after: z
     .string()
     .optional()

@@ -156,63 +156,66 @@ export function WorkflowCraig({
             ),
           )
         )}
-
-        {/* His last word, rather than a panel above him. What is outstanding
-            is something Craig is telling you — it belongs in the conversation
-            where the rest of what he tells you lives, and reads as a turn he
-            has just taken rather than as furniture that was always there.
-
-            After the transcript for the same reason: it is the most recent
-            thing, and it changes as you fix things, so it has to sit where the
-            eye already is rather than above messages that came later. */}
-        {attention.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <CraigMark className="size-5 shrink-0 text-accent" />
-            </div>
-
-            <p className="text-sm leading-relaxed text-text">
-              {attention.length === 1
-                ? "One thing before you can publish this:"
-                : `${attention.length} things before you can publish this:`}
-            </p>
-
-            <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface-sunken p-2.5">
-              {attention.map((item) => {
-                const line = (
-                  <span className="flex items-start gap-1.5">
-                    <Warning className="mt-0.5 size-3.5 shrink-0 text-warning" />
-                    <span className="min-w-0 flex-1">{item.label}</span>
-                  </span>
-                );
-
-                /* A button only when pressing it goes somewhere. An item with
-                   nowhere to open is still worth listing — it is why the
-                   workflow cannot be published — but dressing it as a control
-                   teaches somebody these are pressable and then breaks that on
-                   the one that is not. */
-                return item.id && onSelect ? (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => onSelect(item.id as string)}
-                    className="-mx-1 rounded-md px-1 py-0.5 text-left text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-                  >
-                    {line}
-                  </button>
-                ) : (
-                  <span
-                    key={item.label}
-                    className="px-1 text-sm text-text-muted"
-                  >
-                    {line}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Above the composer and outside the transcript, so it holds still.
+          It was briefly a turn of his, which read well and behaved badly: it
+          scrolled away with the conversation, so the one thing standing
+          between somebody and publishing was wherever they had last left the
+          scrollbar. What stays in the dialogue is Craig saying it — the list
+          itself is a standing fact about the workflow, not something he said
+          once.
+
+          It disappears entirely when there is nothing outstanding rather than
+          saying so: a permanent strip reading "nothing needs your attention"
+          is furniture to be scanned every time to discover it is empty. */}
+      {attention.length > 0 && (
+        /* The same card the welcome screen uses to hand a draft over — same
+           slot above the composer, same shape — in warning rather than accent,
+           because that one is an invitation and this one is a hold-up. */
+        <div className="mb-3 flex shrink-0 flex-col gap-1.5 rounded-lg border border-warning bg-warning-subtle/30 p-2.5">
+          {/* One line, not a heading and a sentence. This sits permanently
+              above the composer in a ~300px column, so every line it takes is
+              a line of conversation it costs — and what it has to say is short
+              enough that explaining it twice was most of its height. */}
+          <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            {attention.length === 1
+              ? "Before you can publish"
+              : `Before you can publish · ${attention.length}`}
+          </p>
+
+          <div className="flex flex-col gap-0.5">
+            {attention.map((item) => {
+              const line = (
+                <span className="flex items-start gap-1.5">
+                  <Warning className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                </span>
+              );
+
+              /* A button only when pressing it goes somewhere. An item with
+               nowhere to open is still worth listing — it is why the workflow
+               cannot be published — but dressing it as a control teaches
+               somebody these are pressable and then breaks that on the one
+               that is not. */
+              return item.id && onSelect ? (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => onSelect(item.id as string)}
+                  className="-mx-1 rounded px-1 py-0.5 text-left text-sm text-text transition-colors hover:bg-surface-hover"
+                >
+                  {line}
+                </button>
+              ) : (
+                <span key={item.label} className="px-1 text-sm text-text">
+                  {line}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="flex shrink-0 flex-col gap-3">
         <CraigFault error={error} />

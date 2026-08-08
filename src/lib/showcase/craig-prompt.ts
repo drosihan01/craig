@@ -304,7 +304,13 @@ export function openWorkflowNote(
   const line = (s: OpenWorkflow["steps"][number]) =>
     [
       `- ${s.id} — ${s.title} (${s.preset})`,
-      s.owner ? `, ${s.owner} does it` : ", nobody named",
+      /* Silence when nobody is named, rather than "nobody named". Said out
+         loud on every step, that phrase reads as a list of omissions — and it
+         was: asked what needed attention he answered "assign an owner" four
+         times, for four steps that need no owner at all. An owner is optional
+         on every preset in this product, and the ones the new starter fills in
+         themselves can't have one. */
+      s.owner ? `, ${s.owner} does it` : "",
       s.open.length > 0
         ? ` — still empty: ${s.open.join(", ")}`
         : " — nothing empty",
@@ -324,7 +330,11 @@ ${
 
 ${workflow.outstanding.map((o) => `- ${o}`).join("\n")}
 
-This list is worked out by the screen and it is complete — some of it is about their account rather than their workflow, so do not try to derive it from the steps above and do not add to it. It is already shown beside you, so say it plainly and once if they ask what is left or try to publish, and do not repeat it every turn.
+This list is worked out by the screen and it is complete. Some of it is about their account rather than their workflow, so you cannot derive it from the steps above — and you must not add to it. If they ask what needs their attention, what is left, or why they cannot publish, this is the whole answer.
+
+If they ask what needs their attention, what is left, or why they cannot publish, **answer with exactly the items above and nothing else**. Not a longer version of them, not one more you thought of, not something you said earlier in this conversation.
+
+There is nothing else outstanding. A step with nobody named is finished — an owner is optional on every step, and the ones the new starter fills in themselves cannot have one, so never say somebody needs assigning. A step with nothing empty is finished. If the list above has one item, your answer has one item.
 
 Connecting Google Workspace is something only they can do, on this screen. You cannot do it for them and there is no tool for it.`
     : ""
