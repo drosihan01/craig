@@ -8,7 +8,7 @@ import {
   checkGoogleState,
 } from "@/lib/showcase/google-state";
 import {
-  sandboxGooglePath,
+  connectLandingPath,
   type ConnectOutcome,
 } from "@/lib/showcase/google-outcome";
 
@@ -46,16 +46,16 @@ import {
  * arrive and depart inside this function, and a debug line echoing either
  * would put one of them in a log aggregator permanently.
  *
- * Unverified: this deployment has no OAuth client and no Workspace to point
- * at, so no consent has ever come back through here. The parameter names
- * (`code`, `state`, `error`, `access_denied`) are from Google's OAuth 2.0
- * web-server documentation rather than from a request anybody has seen.
+ * Verified end to end against a real Google Workspace: a consent granted here
+ * created a real account on a real tenant. What that consent exposed is why
+ * this flow now starts and ends on `/showcase/settings` rather than in the
+ * builder's sandbox — see `connectLandingPath`.
  */
 
 const noStore = { "Cache-Control": "no-store" };
 
 /**
- * Back to the sandbox, with the state cookie cleared.
+ * Back to the settings screen, with the state cookie cleared.
  *
  * One helper for every exit, so "clear the cookie" cannot be forgotten on the
  * branch somebody adds next. Cleared with the same attributes it was set with:
@@ -64,7 +64,7 @@ const noStore = { "Cache-Control": "no-store" };
  */
 function done(request: Request, outcome: ConnectOutcome) {
   const response = NextResponse.redirect(
-    new URL(sandboxGooglePath(outcome), request.url),
+    new URL(connectLandingPath(outcome), request.url),
     { headers: noStore },
   );
   response.cookies.set(GOOGLE_STATE_COOKIE, "", {
@@ -157,7 +157,8 @@ export async function GET(request: NextRequest) {
        retried and nothing is half-written — the store refuses rather than
        writing a token it cannot encrypt — so the grant simply goes unused, and
        the customer can revoke it at myaccount.google.com if they would rather
-       it did not exist. The sandbox says what is missing. */
+       it did not exist. The settings screen says this one is ours to fix; the
+       sandbox is where the missing piece is named. */
     console.error("[google/callback] connection not stored");
     return done(request, "not-stored");
   }

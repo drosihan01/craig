@@ -1,3 +1,4 @@
+import { getAccount } from "@/lib/showcase/accounts";
 import { requireUser } from "@/lib/showcase/current-user";
 import { listJoiners } from "@/lib/showcase/joiners";
 import { WorkflowEditor } from "./workflow-editor";
@@ -39,5 +40,29 @@ export default async function ShowcaseWorkflowPage(
      one person's date of birth into the props of a page about a workflow. */
   const seats = listJoiners(user.email).map((joiner) => joiner.name);
 
-  return <WorkflowEditor id={id} user={user} seats={seats} />;
+  /**
+   * Whether a Google Workspace step could actually run for this account.
+   *
+   * A boolean, and deliberately only a boolean. `account.google` is already the
+   * public view — it cannot carry the refresh token, by construction — but the
+   * editor needs one bit and props on a client component are shipped to a
+   * browser, so it gets the bit. The panel inside the editor reads the rest for
+   * itself from `/api/google/connection` when somebody opens the block.
+   *
+   * `needsReconnect` counts as not connected here rather than as a separate
+   * state, because the question this answers is "would the step work", and a
+   * grant Google has revoked would not. The block's own panel draws the
+   * distinction, where there is room to say what happened and what fixes it.
+   */
+  const google = getAccount(user.email)?.google ?? null;
+  const googleConnected = Boolean(google) && !google?.needsReconnect;
+
+  return (
+    <WorkflowEditor
+      id={id}
+      user={user}
+      seats={seats}
+      googleConnected={googleConnected}
+    />
+  );
 }

@@ -39,6 +39,7 @@ import type {
   Session,
   StepActor,
 } from "@/lib/showcase/contract";
+import { SETTINGS_PATH } from "@/lib/showcase/google-outcome";
 import { readable } from "../people-list";
 import { dueDateFrom } from "@/lib/workflow/library";
 
@@ -565,37 +566,56 @@ function Detail({
       }
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 py-10">
-        <header className="flex items-start gap-4">
-          <Avatar name={person.name} size="lg" />
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-[-0.02em]">
-                {person.name}
-              </h1>
-              {progress.finished ? (
-                <Badge tone="success" size="sm">
-                  <CheckCircle />
-                  Done
-                </Badge>
-              ) : (
-                <Badge tone="accent" size="sm">
-                  Onboarding
-                </Badge>
-              )}
+        {/* The way out, above the name it returns you from.
+
+            It used to sit at the top of the nav column, which put the only
+            route back to People inside the one part of the frame that can be
+            shut — collapse the panel and it goes with it, leaving the browser's
+            back button. The column beside this page is for moving between
+            places; returning to the list you arrived from is part of *this*
+            page, and it is the thing you look for at the top-left of what you
+            are reading rather than in a panel. Grouped with the header at
+            `gap-4` rather than left to the container's `gap-8`, so it reads as
+            belonging to the name under it instead of floating above the page.
+
+            The workflow editor's back link moved to the same place for the same
+            reason, so the two screens keep one answer to "how do I get out of
+            here". */}
+        <div className="flex flex-col gap-4">
+          <BackLink href="/showcase/people">People</BackLink>
+
+          <header className="flex items-start gap-4">
+            <Avatar name={person.name} size="lg" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-semibold tracking-[-0.02em]">
+                  {person.name}
+                </h1>
+                {progress.finished ? (
+                  <Badge tone="success" size="sm">
+                    <CheckCircle />
+                    Done
+                  </Badge>
+                ) : (
+                  <Badge tone="accent" size="sm">
+                    Onboarding
+                  </Badge>
+                )}
+              </div>
+              <p className="text-md text-text-muted">
+                {person.role ? `${person.role} · ` : ""}
+                {person.email}
+              </p>
+              {/* The two dates that actually happened. Everything below is a
+                  plan until somebody completes it. */}
+              <p className="text-sm text-text-subtle">
+                {person.startDate && `Starts ${readable(person.startDate)}`}
+                {person.startDate && addedOn && " · "}
+                {addedOn && `Invited ${addedOn}`}
+              </p>
             </div>
-            <p className="text-md text-text-muted">
-              {person.role ? `${person.role} · ` : ""}
-              {person.email}
-            </p>
-            {/* The two dates that actually happened. Everything below is a plan
-                until somebody completes it. */}
-            <p className="text-sm text-text-subtle">
-              {person.startDate && `Starts ${readable(person.startDate)}`}
-              {person.startDate && addedOn && " · "}
-              {addedOn && `Invited ${addedOn}`}
-            </p>
-          </div>
-        </header>
+          </header>
+        </div>
 
         {/* Where the whole thing stands, said once at the top. Somebody opens
             this page with one question — is it moving, and is it moving without
@@ -1040,6 +1060,15 @@ function dressAutomated(
  * it is fine, because it is the one problem here with a deadline attached: the
  * account exists, the person doesn't know, and the only copy of the password is
  * gone.
+ *
+ * Two of these carry a way to fix them, and only two. A step waiting on a
+ * connection and a connection that has stopped working are the same act away
+ * from moving — somebody with the right privileges pressing Connect — and this
+ * page is one of the two places anybody ever discovers that, the other being
+ * the block's own settings. Telling somebody their new starter has no email
+ * address, naming the reason, and then leaving them to guess which screen holds
+ * the button is the failure this link exists to prevent. The other notices get
+ * none, because there is nothing here to send anybody to.
  */
 function SeatTrouble({ person, first }: { person: PersonView; first: string }) {
   const notices = person.steps.flatMap((step) => {
@@ -1053,6 +1082,8 @@ function SeatTrouble({ person, first }: { person: PersonView; first: string }) {
       icon: React.ReactNode;
       title: string;
       body: string;
+      /** Shown under the body when the fix is one screen away. */
+      fix?: string;
     }[] = [];
 
     if (state === "failed" && run?.message) {
@@ -1062,6 +1093,15 @@ function SeatTrouble({ person, first }: { person: PersonView; first: string }) {
         icon: <Warning />,
         title: `${step.title} didn't run`,
         body: run.message,
+        /* Only the one failure a person can act on from here. `needs-reconnect`
+           is a permission that has lapsed and needs granting again; every other
+           refusal — a full tenant, an address already taken, Google saying no —
+           is fixed somewhere else entirely, and a link to settings under those
+           would send somebody to a page that has nothing to do with it. */
+        fix:
+          run.problem === "needs-reconnect"
+            ? "Connect Google Workspace again"
+            : undefined,
       });
     }
 
@@ -1084,6 +1124,7 @@ function SeatTrouble({ person, first }: { person: PersonView; first: string }) {
         icon: <Cloud />,
         title: `${step.title} is waiting on a connection`,
         body: run.message,
+        fix: "Connect Google Workspace",
       });
     }
 
@@ -1112,6 +1153,19 @@ function SeatTrouble({ person, first }: { person: PersonView; first: string }) {
           title={notice.title}
         >
           {notice.body}
+          {notice.fix && (
+            /* A link rather than a button, and to the screen rather than to the
+               act. Connecting sends somebody to Google's consent screen, which
+               is not a thing to start from a notice on somebody else's page —
+               settings names the account it will be attached to first, which is
+               the check this product now insists on. */
+            <Link
+              href={SETTINGS_PATH}
+              className="mt-1 block w-fit font-medium underline underline-offset-4"
+            >
+              {notice.fix}
+            </Link>
+          )}
         </Callout>
       ))}
     </div>
@@ -1219,13 +1273,12 @@ function PersonNav({
   const craigLeft = progress.craig.total - progress.craig.done;
 
   return (
+    /* No way back at the top any more — it is above the name now, in the column
+       somebody is actually reading. What is left opens on "Their seat", which
+       `ShowcaseNav` already separates from the two rooms above it, so nothing
+       is orphaned and the column starts on a heading rather than on a rule with
+       nothing over it. */
     <div className="flex flex-col gap-5">
-      <BackLink href="/showcase/people" className="px-2">
-        People
-      </BackLink>
-
-      <Separator />
-
       <div className="flex flex-col gap-3 px-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Their seat
@@ -1331,6 +1384,22 @@ function Fact({ label, value }: { label: string; value: string }) {
  * person under the company's name, they read it, and nothing here can take that
  * back. Somebody removing a hire who fell through needs to know they still have
  * a message to send themselves.
+ *
+ * The third is newer and is the bigger of the two. Craig may have created this
+ * person a real Google Workspace account, and deleting the row does not delete
+ * it — so without this paragraph somebody rescinds an invitation, watches the
+ * row disappear, and is left with a live mailbox in their company belonging to
+ * a person who never joined, quietly billing them for a licence. The address is
+ * named rather than described, because "an account may exist" is a worry and
+ * "nils.hoffman@katalis.ai exists" is a thing somebody can go and deal with.
+ *
+ * There is deliberately no button here that deletes it. The consent this
+ * product holds is `admin.directory.user`, granted so that accounts can be
+ * created on somebody's first morning; using it to destroy a mailbox from a
+ * confirmation dialog is not what anybody agreed to, and doing it quietly as a
+ * side effect of tidying a list would be far worse than saying what remains.
+ * Naming what survives is the honest answer, and the Google Admin console is
+ * where it is somebody's decision rather than ours.
  */
 function ConfirmRemove({
   open,
@@ -1345,12 +1414,32 @@ function ConfirmRemove({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  /**
+   * Every account Craig actually created for this person, by address.
+   *
+   * From `seatEmail` on the run rather than from the step being complete, and
+   * that distinction is the whole point: a Google step is only *complete* once
+   * they have signed in and accepted, so a person who never turned up leaves a
+   * step sitting at "awaiting" with a perfectly real mailbox behind it — which
+   * is precisely the case this warning is for. `seatEmail` is written when
+   * Google confirms the account exists and at no other time, so it is the one
+   * field that means an account is out there.
+   *
+   * A list rather than one address, because a workflow can carry more than one
+   * of these and a dialog that named the first would be quietly wrong about the
+   * rest.
+   */
+  const created = person.steps
+    .map((step) => step.run?.seatEmail)
+    .filter((email): email is string => Boolean(email));
+
   return (
     <Dialog
       open={open}
       onClose={onCancel}
       /* Not `sm`. The title carries their full name and the body has two
-         paragraphs to say; 24rem wraps a three-word name onto two lines. */
+         paragraphs to say — three once there is a Google account to warn
+         about; 24rem wraps a three-word name onto two lines. */
       size="md"
       title={`Remove ${person.name}?`}
       description="This can't be undone."
@@ -1392,6 +1481,44 @@ function ConfirmRemove({
           after it and their link stops working — it can&apos;t take that email
           back.
         </p>
+
+        {/* Only when it is true. A standing warning about an account that was
+            never created would be noise on every removal, and the one time it
+            mattered nobody would read it. */}
+        {created.length > 0 && (
+          <Callout
+            tone="warning"
+            icon={<Warning />}
+            title={
+              created.length === 1
+                ? "Their Google account stays"
+                : "Their Google accounts stay"
+            }
+          >
+            <span className="flex flex-col gap-1">
+              <span>
+                {created.length === 1
+                  ? "I created "
+                  : "I created these accounts: "}
+                <span className="font-medium">{created.join(", ")}</span>
+                {created.length === 1
+                  ? " for them, and removing them here doesn't delete it."
+                  : ", and removing them here doesn't delete them."}{" "}
+                {created.length === 1 ? "It stays" : "They stay"} in your Google
+                Workspace — still receiving mail, still counting towards your
+                licences — until somebody removes{" "}
+                {created.length === 1 ? "it" : "them"} in the Google Admin
+                console.
+              </span>
+              <span>
+                I don&apos;t delete accounts, on purpose. You gave me permission
+                to create them, and taking somebody&apos;s mailbox away is a
+                decision for whoever runs your Workspace rather than something
+                that happens as a side effect of tidying this list.
+              </span>
+            </span>
+          </Callout>
+        )}
       </div>
     </Dialog>
   );

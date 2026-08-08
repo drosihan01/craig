@@ -40,6 +40,10 @@ import {
 import { NavStat } from "@/components/app-nav";
 import { SeatPaywall, outOfSeats } from "@/components/showcase/seat-paywall";
 import { WorkflowCraig } from "@/components/showcase/workflow-craig";
+import {
+  GoogleWorkspaceConnect,
+  type WorkspaceAccount,
+} from "@/components/showcase/google-workspace";
 import type { Session } from "@/lib/showcase/contract";
 import {
   deleteWorkflow,
@@ -54,6 +58,7 @@ import {
 import { useCraigChat } from "@/lib/showcase/use-craig-chat";
 import {
   DUE_OPTIONS,
+  GOOGLE_WORKSPACE_PRESET,
   blockFromPreset,
   findPreset,
 } from "@/lib/workflow/library";
@@ -104,9 +109,19 @@ export function WorkflowEditor({
   id,
   user,
   seats,
+  googleConnected,
 }: {
   id: string;
   user: Session;
+  /**
+   * Whether this account has a Google Workspace connection that would work.
+   *
+   * From the server, because a connection belongs to the account rather than to
+   * the workflow and this component cannot read it. It gates Publish — see
+   * `Editor` — which is the first time that gate has depended on anything
+   * outside the blocks on the canvas.
+   */
+  googleConnected: boolean;
   /**
    * Everyone holding a seat on this account, by name, read on the server.
    *
@@ -151,6 +166,7 @@ export function WorkflowEditor({
         workflow={workflow}
         user={user}
         seats={seats}
+        googleConnected={googleConnected}
         onDelete={() => setConfirming(true)}
       />
       <ConfirmDelete
@@ -236,12 +252,15 @@ function Editor({
   workflow,
   user,
   seats,
+  googleConnected,
   onDelete,
 }: {
   workflow: ShowcaseWorkflow;
   user: Session;
   /** Everyone holding a seat, by name, from the server. */
   seats: string[];
+  /** Whether a Google Workspace step could run for this account. */
+  googleConnected: boolean;
   onDelete: () => void;
 }) {
   const blocks = workflow.blocks;
@@ -411,6 +430,29 @@ function Editor({
   const steps = stepCount(blocks);
   const unconfigured = unconfiguredCount(blocks);
 
+  /**
+   * The one reason Publish can be shut that isn't about the blocks.
+   *
+   * Every other gate on this button is derived from the canvas: a step with a
+   * required field nobody answered, a workflow that is only a trigger. This one
+   * is about the account, and widening the gate that far is deliberate rather
+   * than an oversight — worth saying plainly, because it is the sort of thing
+   * somebody refactors away on the grounds that it doesn't fit the pattern.
+   *
+   * It exists because the Google Workspace block has no required setup fields
+   * left to fail on. Without this, a workflow whose Google step can never run
+   * publishes cleanly, with no warning badge on any step, and nothing goes
+   * wrong until a real person reaches it on their first morning and quietly
+   * stalls — which is precisely the class of failure the Publish gate is for.
+   *
+   * Only when the workflow actually contains one. A workflow with no Google
+   * step publishes exactly as it always did; making every workflow wait on a
+   * connection it never uses would be a gate about our integration rather than
+   * about their plan.
+   */
+  const needsGoogle = blocks.some((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
+  const googleBlocked = needsGoogle && !googleConnected;
+
   const [inviting, setInviting] = React.useState(false);
   const [paywall, setPaywall] = React.useState(false);
 
@@ -456,6 +498,7 @@ function Editor({
             blocks={blocks}
             steps={steps}
             unconfigured={unconfigured}
+            googleBlocked={googleBlocked}
             onSelect={select}
             onDelete={onDelete}
           />
@@ -472,7 +515,7 @@ function Editor({
              is unpublishable for a different reason to an unconfigured one. */
           <Button
             size="sm"
-            disabled={unconfigured > 0 || steps === 0}
+            disabled={unconfigured > 0 || steps === 0 || googleBlocked}
             onClick={publish}
           >
             Publish
@@ -505,6 +548,33 @@ function Editor({
               ) : (
                 <div className="flex flex-col gap-4">
                   <ByHandNote reason={byHand(selected)} />
+
+                  {/* The connection, in the space the block's three dead
+                      fields used to occupy — and this is the block's primary
+                      home rather than a pointer to one.
+
+                      The sibling of `ByHandNote`, and in the same slot for the
+                      same reason: both answer "will this step actually
+                      happen", which is the question somebody has before they
+                      have any question about its title. One says nobody
+                      automates this; this one says Craig does, and whether he
+                      currently can.
+
+                      Here rather than in a settings screen because this is the
+                      moment the need appears. Somebody putting a Google
+                      Workspace step into a workflow is, at that instant, a
+                      person who needs a Workspace connected; a step that will
+                      silently sit and wait with the fix two screens away is how
+                      a new starter's first morning quietly stalls. */}
+                  {selected.preset === GOOGLE_WORKSPACE_PRESET && (
+                    <GoogleStep
+                      account={{
+                        name: user.name,
+                        email: user.email,
+                        company: user.company,
+                      }}
+                    />
+                  )}
 
                   <Separator />
                   <Field label="Title">
@@ -618,28 +688,49 @@ function Editor({
         )
       }
     >
-      {/* Full bleed. The canvas is the page — a title and a paragraph above it
-          would repeat the header and steal the space the work needs. The
-          negative margins cancel the content column's padding. */}
-      <div className="-mx-4 h-[calc(100vh-3rem)] lg:-mx-8">
-        <WorkflowCanvas
-          className="h-full rounded-none border-0"
-          onBackgroundClick={() => select(null)}
-        >
-          <div className="px-10 py-12">
-            <WorkflowBuilder
-              blocks={blocks}
-              reveal={revealing}
-              selectedId={selectedId}
-              onSelect={select}
-              onInsert={insert}
-              onRemove={remove}
-              onDuplicate={duplicate}
-              onMove={move}
-              onReorder={reorder}
-            />
-          </div>
-        </WorkflowCanvas>
+      {/* Still full bleed. The canvas is the page — a title and a paragraph
+          above it would repeat the header and steal the space the work needs —
+          and one line is what it now gives up.
+
+          The way out used to sit at the top of the nav column, which put it in
+          the one part of the frame that can be shut: collapse the panel on a
+          narrow screen and the only route back to the list was the browser's
+          own button. Going back to where you came from is this page's story
+          rather than navigation between places, so it belongs in the column
+          you are reading. The person's page moved for the same reason and to
+          the same spot, because two pages disagreeing about where the way out
+          lives is worse than either arrangement.
+
+          It sits outside the negative margins so it lines up with the content
+          column's padding, and the canvas takes the rest of the height rather
+          than a fixed calc — `min-h-0` because a flex child's default
+          `min-height: auto` would floor it at its content and push the canvas
+          past the fold. */}
+      <div className="flex h-[calc(100vh-3rem)] flex-col">
+        <BackLink href="/showcase/workflows" className="shrink-0 pb-3 pt-4">
+          Workflows
+        </BackLink>
+
+        <div className="-mx-4 min-h-0 flex-1 lg:-mx-8">
+          <WorkflowCanvas
+            className="h-full rounded-none border-0"
+            onBackgroundClick={() => select(null)}
+          >
+            <div className="px-10 py-12">
+              <WorkflowBuilder
+                blocks={blocks}
+                reveal={revealing}
+                selectedId={selectedId}
+                onSelect={select}
+                onInsert={insert}
+                onRemove={remove}
+                onDuplicate={duplicate}
+                onMove={move}
+                onReorder={reorder}
+              />
+            </div>
+          </WorkflowCanvas>
+        </div>
       </div>
       <InviteStarter
         open={inviting}
@@ -659,6 +750,44 @@ function Editor({
         holder={seats[0]}
       />
     </AppShell>
+  );
+}
+
+/**
+ * The Google Workspace step's settings, which are its connection and nothing
+ * else.
+ *
+ * This block used to ask for an email domain, who provisions it and when — all
+ * three of which describe decisions that are no longer anybody's to make here.
+ * The domain is whatever Google says the connected Workspace is, because a
+ * domain somebody types is a domain somebody can typo and the failure is
+ * silent; who provisions it is Craig, which is the entire point of the block;
+ * and when is where the step sits in the workflow. Three inputs with no effect
+ * is worse than none, because an admin who fills them in reasonably expects
+ * them to matter.
+ *
+ * So the space they took is now the one thing about this step that genuinely is
+ * a decision. The sentence above the card is about the *step* rather than the
+ * account, because that is what somebody is looking at: a step that cannot run
+ * is a different worry to an account that hasn't connected something, even
+ * though they are the same fact.
+ */
+function GoogleStep({ account }: { account: WorkspaceAccount }) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-1">
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Connection
+        </p>
+        <p className="text-xs leading-relaxed text-text-muted">
+          I create the account in your company&apos;s Google Workspace, on
+          whatever domain it belongs to. Nothing else on this step needs
+          answering — but it can&apos;t run until that Workspace is connected.
+        </p>
+      </div>
+
+      <GoogleWorkspaceConnect account={account} />
+    </div>
   );
 }
 
@@ -697,6 +826,7 @@ function EditorNav({
   blocks,
   steps,
   unconfigured,
+  googleBlocked,
   onSelect,
   onDelete,
 }: {
@@ -704,20 +834,27 @@ function EditorNav({
   blocks: WorkflowBlock[];
   steps: number;
   unconfigured: number;
+  /** Publish is shut because the account has no working Google connection. */
+  googleBlocked: boolean;
   onSelect: (id: string) => void;
   onDelete: () => void;
 }) {
   const open = blocks.filter(isUnconfigured);
   const manual = blocks.filter((b) => byHand(b)).length;
 
+  /* The Google step itself, so the sentence below can send somebody to the
+     panel holding the button rather than describing where it is. First one
+     only: two Google blocks in one workflow are the same missing connection,
+     and offering to open both would imply otherwise. */
+  const googleStep = blocks.find((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
+
   return (
+    /* No way back at the top any more — it is above the canvas now, in the
+       column somebody is actually reading. What is left starts on Overview,
+       which `ShowcaseNav` already separates from the two rooms above it, so
+       nothing is orphaned and the column opens on a heading rather than on a
+       rule with nothing over it. */
     <div className="flex flex-col gap-5">
-      <BackLink href="/showcase/workflows" className="px-2">
-        Workflows
-      </BackLink>
-
-      <Separator />
-
       <div className="flex flex-col gap-3 px-2">
         {/* No name here — the header carries it, and the trigger is the first
             block on the canvas. A column that repeats what's already on screen
@@ -780,6 +917,34 @@ function EditorNav({
           ? "Published. Everyone given a seat from now on starts at step one and works down."
           : "A workflow cannot be published while any step is unconfigured."}
       </p>
+
+      {/* Kept as its own sentence rather than folded into the one above, and
+          only while it is true. "A step needs an answer" and "Google isn't
+          connected" are different problems with different fixes, and a single
+          sentence covering both would send somebody hunting through steps that
+          are all perfectly fine — this is the harder of the two to guess at,
+          because nothing on the canvas is badged and every step looks done.
+
+          The link opens the block rather than describing where the button is,
+          because the button is in that block's own panel. */}
+      {!workflow.published && googleBlocked && (
+        <div className="flex flex-col gap-1 px-2">
+          <p className="text-xs leading-relaxed text-warning">
+            It also can&apos;t be published until your Google Workspace is
+            connected — until it is, the account this workflow would create
+            can&apos;t be created.
+          </p>
+          {googleStep && (
+            <button
+              type="button"
+              onClick={() => onSelect(googleStep.id)}
+              className="-mx-1.5 w-fit rounded-md px-1.5 py-1 text-left text-xs font-medium text-accent transition-colors hover:bg-surface-hover"
+            >
+              Connect it on {googleStep.title}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Last in the column and nowhere near Publish. The two live at opposite
           ends of the screen on purpose — they are the two irreversible things

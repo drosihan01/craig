@@ -35,10 +35,12 @@ import type { GoogleConnection } from "@/lib/google/auth";
  * nothing that names the problem. It should be Google's own answer — the `hd`
  * claim on the id token, which `exchangeCode` already returns as
  * `ConnectedWorkspace.domain` — rather than a string somebody typed into a box.
- * The `google-workspace` block does have an "Email domain" field, and it is
- * deliberately not used for this: a workflow's blocks are snapshotted without
- * their config when somebody is invited, and a domain the admin typed is a
- * domain the admin can typo.
+ * The `google-workspace` block used to have an "Email domain" field, and this
+ * is why it no longer does: a workflow's blocks are snapshotted without their
+ * config when somebody is invited, and a domain the admin typed is a domain the
+ * admin can typo. A field nothing reads is worse than no field, because the
+ * admin who fills it in reasonably expects accounts to appear on the domain
+ * they wrote — so it was removed rather than left sitting there being ignored.
  */
 
 export interface AccountGoogle {

@@ -35,10 +35,24 @@
  */
 export const GOOGLE_CALLBACK_PATH = "/api/google/callback";
 
-/** The sandbox, and the section within it the flow belongs to. */
-export const SANDBOX_PATH = "/sandbox";
-export const SANDBOX_TAB_PARAM = "tab";
-export const SANDBOX_GOOGLE_TAB = "google";
+/**
+ * The screen a connect attempt begins and ends on.
+ *
+ * This used to be the sandbox, and moving it is the point of this file's
+ * change rather than a tidy-up. Connecting a company's own Google Workspace is
+ * something a customer does to their own account, and while it lived in the
+ * builder's hub the flow attached whatever Workspace was consented with to
+ * whichever account happened to be signed in there — which is exactly what
+ * went wrong once, with a real tenant and a throwaway test account. The
+ * settings screen is signed in, says whose account it is before anybody leaves
+ * for Google, and is the same screen the connection can be undone from.
+ *
+ * Guarded by the proxy, unlike the sandbox. That changes one exit for the
+ * better: a flow that ends with no session lands on sign-in carrying this path
+ * in `?next=`, so the outcome is read once they are signed in and the message
+ * is true when they read it.
+ */
+export const SETTINGS_PATH = "/showcase/settings";
 
 /** The query parameter carrying the code below. */
 export const CONNECT_OUTCOME_PARAM = "google";
@@ -91,10 +105,8 @@ export type ConnectOutcome =
  * assembled here would need a host from somewhere, and every source of a host
  * in a request is either configuration or attacker-controlled.
  */
-export function sandboxGooglePath(outcome?: ConnectOutcome): string {
-  const params = new URLSearchParams({
-    [SANDBOX_TAB_PARAM]: SANDBOX_GOOGLE_TAB,
-  });
-  if (outcome) params.set(CONNECT_OUTCOME_PARAM, outcome);
-  return `${SANDBOX_PATH}?${params}`;
+export function connectLandingPath(outcome?: ConnectOutcome): string {
+  if (!outcome) return SETTINGS_PATH;
+  const params = new URLSearchParams({ [CONNECT_OUTCOME_PARAM]: outcome });
+  return `${SETTINGS_PATH}?${params}`;
 }

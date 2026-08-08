@@ -49,12 +49,21 @@ import { SECTIONS } from "@/app/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
 import { ShowcaseReset } from "@/components/sandbox/showcase-reset";
 import { GoogleConnect } from "@/components/sandbox/google-connect";
-import {
-  CONNECT_OUTCOME_PARAM,
-  SANDBOX_GOOGLE_TAB,
-  SANDBOX_TAB_PARAM,
-} from "@/lib/showcase/google-outcome";
 import { cn } from "@/lib/cn";
+
+/**
+ * Which section `?tab=` opens, and the one section that used to be somewhere
+ * else's business.
+ *
+ * These lived in `google-outcome.ts` while the Google connect flow ended up
+ * back in this hub, because the redirect had to name a tab. It doesn't any
+ * more — a customer connecting their own Workspace lands on `/showcase/settings`
+ * — so a file about what an OAuth callback says has no reason to know how the
+ * sandbox lays its sections out. Local constants, for the only page that has
+ * ever read them.
+ */
+const SANDBOX_TAB_PARAM = "tab";
+const SANDBOX_GOOGLE_TAB = "google";
 
 /**
  * The builder's hub — not part of the product. Everything else under /src/app
@@ -486,10 +495,12 @@ export default function SandboxPage() {
 }
 
 /**
- * The Google connect flow leaves the site and comes back, so it has to be able
- * to say where it landed and what happened. Both arrive as query parameters
- * because a redirect from Google is the only way back in, and a redirect
- * carries nothing else.
+ * `?tab=` chooses which section this opens on, so a link can point at one.
+ *
+ * It used to carry a Google connect outcome too, because the OAuth callback
+ * landed here. It doesn't now — connecting a Workspace is a customer's act and
+ * ends on `/showcase/settings` — so the only parameter left is which section to
+ * show.
  */
 function SandboxWithParams() {
   const params = useSearchParams();
@@ -498,18 +509,11 @@ function SandboxWithParams() {
   return (
     <Sandbox
       initialSection={asked && SECTION_VALUES.has(asked) ? asked : "home"}
-      googleOutcome={params.get(CONNECT_OUTCOME_PARAM)}
     />
   );
 }
 
-function Sandbox({
-  initialSection,
-  googleOutcome,
-}: {
-  initialSection: string;
-  googleOutcome: string | null;
-}) {
+function Sandbox({ initialSection }: { initialSection: string }) {
   /* The URL only chooses where this opens. After that the section is ordinary
      state, so switching tabs doesn't push history entries nobody wants to walk
      back through. */
@@ -571,9 +575,7 @@ function Sandbox({
           {tab === "backend" && <BackendTab />}
           {tab.startsWith("demo") && <DemoTab run={tab} />}
           {tab === "showcase" && <ShowcaseReset />}
-          {tab === SANDBOX_GOOGLE_TAB && (
-            <GoogleConnect outcome={googleOutcome} />
-          )}
+          {tab === SANDBOX_GOOGLE_TAB && <GoogleConnect />}
           {tab === "mail" && <MailTab />}
         </div>
       </div>

@@ -839,7 +839,25 @@ function accountItems(
       description: account.email,
       icon: <Person />,
     },
-    { id: "settings", label: "Settings", icon: <Settings /> },
+    /* Somewhere at last. This row has been decorative since the shell was
+       written, and the one thing that has since needed a permanent address —
+       the Google Workspace connection — is exactly the kind of thing it was
+       always going to hold. Wired here rather than passed in per screen so
+       there is one destination: a `settingsHref` prop would be five call sites
+       to keep in step, and the screen that forgot it would be the screen where
+       Settings quietly stops working again.
+
+       The sandbox gets the same row, pointing at the same customer screen, and
+       that is the right answer rather than an oversight. A builder pressing
+       Settings there lands on a page that opens by naming which account they
+       are signed in as — which is precisely the check that was missing when a
+       real Workspace was attached to a throwaway test account. */
+    {
+      id: "settings",
+      label: "Settings",
+      icon: <Settings />,
+      onSelect: () => router.push("/showcase/settings"),
+    },
     /* The sandbox is a builder's tool, not an admin's — it doesn't belong in
        the product nav, but it has to be reachable from every screen. */
     {

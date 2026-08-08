@@ -9,7 +9,7 @@ import {
   mintGoogleState,
 } from "@/lib/showcase/google-state";
 import {
-  sandboxGooglePath,
+  connectLandingPath,
   type ConnectOutcome,
 } from "@/lib/showcase/google-outcome";
 
@@ -32,18 +32,19 @@ import {
  * and press a button. The route that *does* change something is the callback,
  * and it is guarded by the state this one mints.
  *
- * Every exit is a redirect back to the sandbox rather than a JSON error,
- * because this is reached by navigation. A browser that followed a link and
- * received `{"ok":false}` shows the customer raw JSON with no way back, which
- * is the worst possible rendering of what is usually "you aren't signed in".
+ * Every exit is a redirect back to the settings screen rather than a JSON
+ * error, because this is reached by navigation. A browser that followed a link
+ * and received `{"ok":false}` shows the customer raw JSON with no way back,
+ * which is the worst possible rendering of what is usually "you aren't signed
+ * in".
  */
 
 const noStore = { "Cache-Control": "no-store" };
 
-/** Back to the sandbox, saying why nobody went to Google. */
+/** Back to the settings screen, saying why nobody went to Google. */
 function back(request: Request, outcome: ConnectOutcome) {
   return NextResponse.redirect(
-    new URL(sandboxGooglePath(outcome), request.url),
+    new URL(connectLandingPath(outcome), request.url),
     {
       headers: noStore,
     },
@@ -65,7 +66,8 @@ export async function GET(request: Request) {
      store a refresh token, and finding that out *after* somebody has read a
      page about letting us manage their company's users, chosen an account and
      pressed Allow is a uniquely bad experience — they have granted real
-     permission and we have thrown it away. The sandbox says what is missing. */
+     permission and we have thrown it away. The customer is told this simply
+     isn't available yet; the sandbox is where the missing piece is named. */
   const storage = googleStorageStatus();
   if (!storage.ready) return back(request, "no-key");
 

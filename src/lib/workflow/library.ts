@@ -174,6 +174,18 @@ const UNAVAILABLE: Record<string, string> = {
   "custom-app": "Coming soon",
 };
 
+/**
+ * The one preset wired to a real API, named rather than spelled out.
+ *
+ * Three places have to agree on this string: the preset itself, the set of
+ * blocks the showcase will actually run, and the block settings panel, which
+ * shows whether the customer's Google Workspace is connected only for this
+ * one. A literal in each is three chances to typo one and get silence — the
+ * panel would simply never appear, on the block where being told is the whole
+ * point.
+ */
+export const GOOGLE_WORKSPACE_PRESET = "google-workspace";
+
 /** An account on a third-party service. */
 function account(
   id: string,
@@ -505,42 +517,43 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
     description:
       "One block per service. They're provisioned in different places by different people and they fail independently.",
     presets: [
-      account(
-        "google-workspace",
-        "Google Workspace",
-        "Company email and calendar. Almost everything else keys off this account existing.",
-        Google,
-        [
-          {
-            id: "domain",
-            label: "Email domain",
-            kind: "text",
-            hint: "katalis.ai",
-            required: true,
-          },
-          {
-            id: "groups",
-            label: "Groups to add them to",
-            kind: "multiselect",
-            options: [
-              { id: "everyone", label: "everyone@" },
-              { id: "eng", label: "engineering@" },
-              { id: "alerts", label: "alerts@" },
-            ],
-          },
-          {
-            id: "license",
-            label: "Licence",
-            kind: "select",
-            options: [
-              { id: "starter", label: "Business Starter" },
-              { id: "standard", label: "Business Standard" },
-              { id: "plus", label: "Business Plus" },
-            ],
-            required: true,
-          },
-        ],
-      ),
+      /**
+       * The one block that is wired to a real API, and therefore the one with
+       * nothing to configure.
+       *
+       * Written out rather than built by `account()`, because `account()`
+       * appends "who provisions it" and "when" to every service — the right
+       * default for thirty blocks nobody automates, and wrong for this one. All
+       * three fields it used to carry described decisions that have since been
+       * taken somewhere better:
+       *
+       * - **Email domain** comes from Google's `hd` claim on the Workspace that
+       *   was actually connected. That is deliberate and argued at length in
+       *   `google-connection.ts`: a domain somebody typed is a domain somebody
+       *   can typo, and the failure mode is silent — accounts appear on a
+       *   domain nobody asked for, weeks later, on a real person's first
+       *   morning.
+       * - **Who provisions it** is Craig, which is the entire point of the
+       *   block existing.
+       * - **When** is where it sits in the workflow; it runs when the step
+       *   above it completes.
+       *
+       * So the fields were three inputs with no effect, and the worst kind: not
+       * clutter, but a screen inviting somebody to configure something and then
+       * ignoring what they said. What takes their place in the panel is the
+       * connection state, which is the one thing about this block that is
+       * genuinely still a decision.
+       */
+      {
+        id: GOOGLE_WORKSPACE_PRESET,
+        label: "Google Workspace",
+        description:
+          "Company email and calendar. Almost everything else keys off this account existing.",
+        kind: "task",
+        icon: Google,
+        title: "Google Workspace",
+        setup: [],
+      },
       account(
         "slack",
         "Slack",
@@ -1364,7 +1377,7 @@ export const SHOWCASE_PRESETS = new Set<string>([
   "middle-name",
   "name-tag",
   "date-of-birth",
-  "google-workspace",
+  GOOGLE_WORKSPACE_PRESET,
 ]);
 
 /* Applied after the library is built, so each preset keeps whatever reason it
