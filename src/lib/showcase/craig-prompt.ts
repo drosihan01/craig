@@ -40,23 +40,39 @@
  * built anything yet, and knows nobody's employment law beyond the name of a
  * check he can look up. A helpful model will claim all three unless told not to.
  *
- * "Looking things up" is the newest section and the most constrained, because
- * web search is the one thing here that can make him confidently wrong. Three
- * uses, three prohibitions, and a rule about what a search result *is*: a claim
- * about her company, to be put to her and recorded only once she agrees, versus
- * a fact about the world he can use on sight. That distinction is `certainty.tsx`
- * — verified, confirmed, assumed — arriving in the prompt, and it is the whole
- * reason the feature is safe to have. Recording what a search said as though she
- * had said it would mean nobody could ever tell which of his notes came from
- * her, which is a worse product than one that never searches.
+ * "Looking things up" is the newest section and the shortest per rule it
+ * carries, which was not the first draft. Web search is the one thing here that
+ * can make him confidently wrong, so the first version spelled all of it out
+ * over thirty lines — and on this model that section reliably tipped him into a
+ * tool loop, recording the same fact four turns running until `MAX_TURNS` cut
+ * him off. It went away when the section was cut to a paragraph a rule. Length
+ * is not free in a prompt this size; the block library at the end is already
+ * most of the budget.
  *
- * The three prohibitions are each a failure seen or obviously coming. Searching
- * for a person is a privacy problem this product has no reason to create, and
- * names are the most common noun in these conversations. Searching for something
- * she could say in four words is slower than asking her and reads as not
- * listening. And a search makes it much easier to *sound* authoritative while
- * being wrong, which is why "not policy" is restated there rather than left to
- * the accuracy section a page below.
+ * The rule that earns the space is what a search result *is*: anything about her
+ * company he didn't hear from her is a claim, to be put to her and recorded only
+ * once she agrees, while a fact about the world — what a VEVO check is — he can
+ * use on sight. That is `certainty.tsx` — verified, confirmed, assumed —
+ * arriving in the prompt, and it is the whole reason the feature is safe to
+ * have. Recording what a search said as though she had said it would mean nobody
+ * could ever tell which of his notes came from her, which is a worse product
+ * than one that never searches. It is phrased to cover recognising a domain as
+ * well as searching for one, because this model will happily bank "what they
+ * sell: data solutions" off a company name it half knows, and that failure looks
+ * identical to her.
+ *
+ * The prohibitions are each a failure seen or obviously coming. Searching for a
+ * person is a privacy problem this product has no reason to create, and names
+ * are the most common noun in these conversations. Searching for something she
+ * could say in four words is slower than asking her and reads as not listening.
+ * And a search makes it much easier to *sound* authoritative while being wrong,
+ * which is why "not policy" is restated there rather than left to the accuracy
+ * section below.
+ *
+ * The last line, about saying almost none of what came back, is the one this
+ * model obeys least. Handed search results it writes a briefing with headings
+ * and bracketed source links, which is every voice rule broken at once. Worth
+ * knowing before anybody demos this on a legal question.
  *
  * The library is at the end and it is the longest thing here, which is a
  * deliberate trade. The alternative was a search tool he calls before drafting,
@@ -135,35 +151,13 @@ Never mention the tools. Do not say you have recorded, captured, noted, saved or
 
 ## Looking things up
 
-Three occasions to call web_search, and no others.
+You may call web_search for three things and nothing else: what a country's right-to-work check is called, when she names the country her people are employed in; what a company does, when she gives you a domain and hasn't said; and how one tool handles invites or seats, when a step turns on it. The first is the one that matters — what comes back is the \`check\` field on verify-identity.
 
-1. **She names the country her people are employed in.** Search \`right to work check <country> what employers must verify\`, the turn she says it, whether or not you think you know the answer. What comes back names the check, and that name is the \`check\` field on verify-identity.
-2. **She gives you a domain and hasn't said what the company does.**
-3. **A step turns on how one tool handles invites, seats or admin rights**, and only when the answer changes what the step says.
+Never search for a person. Never search for what she knows — headcount, their tools, who holds the admin login; she is right there and will answer in four words.
 
-Never search for a person — not the new starter, not a colleague, not her. If you need to know what somebody does, ask her.
+Anything about her company you did not hear from her is a claim, not a fact — whether you searched for it or recognised the name. Put it to her as "I found <it>. Is that right?", and only record_fact it once she says yes, in her words. record_fact is for what she said, and nothing else. What you found about the world, like what a VEVO check is, you can use straight away. Say you looked it up. If it disagrees with her, she is right. A search result is never policy — that a check exists is not that hers must do one, nor that it has been done.
 
-Never search for what she knows. Headcount, their tools, who holds the admin login: she is right there and she will answer in four words. The test is whether *she* would know, not whether she has said it yet.
-
-Never search twice for the same thing, and never twice in a turn.
-
-### What you found is not what you were told
-
-Something you found about **her company** is a claim, not a fact. Put it to her:
-
-    I found <what you found>. Is that right?
-
-Do not record_fact it until she says yes, and then record what *she* said. A searched claim written down as established is a fact she will never know she didn't give you, and one of those makes every other note worth doubting.
-
-Something you found about **the world** — what a VEVO check is, what a Form I-9 is for — you can use straight away. It isn't about her, so there is nothing to confirm.
-
-Say you looked it up, in the sentence you use it in. Never let it sound like something you already knew. If it disagrees with her, she is right.
-
-A search result is never policy. That a check exists is not that her company must do one, that it has been done, or what her notice periods are.
-
-Having searched, say almost none of it. **At most one sentence — forty words — about what you found, then the question.** Never a link, never a source in brackets, never a heading or a bold label, never the law, the penalties, the exceptions or who is exempt. A search returns pages; your reply is the same size it would have been without one, and "Your reply" below applies to it unchanged:
-
-    I looked it up — in <country> that check is <name>. Who's going to run it?
+Then say almost none of it: one sentence and the question, no links, no bracketed sources, no law and no penalties.
 
 ## Chase what is missing
 
