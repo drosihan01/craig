@@ -10,9 +10,11 @@ import {
 import { currentUser } from "@/lib/showcase/current-user";
 import {
   craig,
+  describeCitation,
   describeToolCall,
   describeWebSearch,
   seedNotebook,
+  splitCitations,
 } from "@/lib/showcase/craig-agent";
 import {
   MAX_TURNS,
@@ -20,7 +22,14 @@ import {
   rateLimit,
 } from "@/lib/showcase/rate-limit";
 import { attachmentNote } from "@/lib/showcase/craig-prompt";
-import type { ChatEvent, ChatRequest, ChatTurn } from "@/lib/showcase/contract";
+import {
+  MAX_MESSAGES,
+  type ChatEvent,
+  type ChatRequest,
+  type ChatTurn,
+  type OpenStep,
+  type OpenWorkflow,
+} from "@/lib/showcase/contract";
 
 /**
  * Craig, actually answering.
@@ -44,18 +53,23 @@ import type { ChatEvent, ChatRequest, ChatTurn } from "@/lib/showcase/contract";
  *
  * `MAX_MESSAGES` counts the conversation, not the agent's planning loop — those
  * are different numbers with the same instinct behind them, and they were both
- * called `MAX_TURNS` until the two ended up in this file together. A
- * conversation this long is already past the point where Craig should have
- * produced a workflow, so the cap costs nothing real and stops a tab left open
- * overnight from replaying its whole history on every turn.
+ * called `MAX_TURNS` until the two ended up in this file together. It moved to
+ * the contract when the thread started spanning two screens: the client is the
+ * only side that can choose *which* turns to drop, so it trims to the newest
+ * and this stays as the check that the trimming happened.
  */
-const MAX_MESSAGES = 40;
 const MAX_CHARS_PER_TURN = 8_000;
 const MAX_CHARS_TOTAL = 60_000;
 const MAX_ATTACHMENTS = 12;
 /** Per list — gaps and facts are capped separately. */
 const MAX_NOTES = 40;
 const MAX_NOTE_CHARS = 300;
+/** The open workflow. Bigger than any real onboarding, small enough to bill. */
+const MAX_STEPS = 40;
+/** Ids, presets and field names — none of them prose. */
+const MAX_ID_CHARS = 64;
+/** Titles and owners, which do reach the prompt as words. */
+const MAX_LABEL_CHARS = 120;
 
 /* --- The wire ------------------------------------------------------------- */
 
@@ -108,12 +122,15 @@ function parse(body: unknown):
       messages: ChatTurn[];
       attachments: string[];
       known: { gaps: string[]; facts: string[] };
+      workflow?: OpenWorkflow;
+      simpleDraft: boolean;
     }
   | { ok: false; reason: string } {
   if (typeof body !== "object" || body === null)
     return { ok: false, reason: "Expected an object." };
 
-  const { messages, attachments, known } = body as ChatRequest;
+  const { messages, attachments, known, workflow, simpleDraft } =
+    body as ChatRequest;
 
   if (!Array.isArray(messages) || messages.length === 0)
     return { ok: false, reason: "Expected at least one message." };
@@ -156,7 +173,57 @@ function parse(body: unknown):
       gaps: notes(known?.gaps),
       facts: notes(known?.facts),
     },
+    workflow: openWorkflow(workflow),
+    simpleDraft: simpleDraft === true,
   };
+}
+
+const label = (value: unknown, limit: number) =>
+  typeof value === "string"
+    ? value.replace(/\s+/g, " ").slice(0, limit).trim()
+    : "";
+
+/**
+ * The workflow the client says is open, believed only as far as it is checked.
+ *
+ * Capped like `known` and for the same reason — the titles and owners in here
+ * are printed into the prompt, so an unbounded list is an unbounded bill, and a
+ * title carrying newlines is a title that can write its own instructions. What
+ * it is *not* is trusted: nothing here decides anything on its own. Craig can
+ * only name a step the client sent, and the client only applies an edit to a
+ * step it still has, so a lie in this payload costs the liar their own canvas.
+ */
+function openWorkflow(value: unknown): OpenWorkflow | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const { id, steps } = value as OpenWorkflow;
+  const workflowId = label(id, MAX_ID_CHARS);
+  if (!workflowId || !Array.isArray(steps)) return undefined;
+
+  const kept = steps.slice(0, MAX_STEPS).flatMap((raw): OpenStep[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const step = raw as OpenStep;
+    const stepId = label(step.id, MAX_ID_CHARS);
+    const preset = label(step.preset, MAX_ID_CHARS);
+    if (!stepId || !preset) return [];
+
+    return [
+      {
+        id: stepId,
+        preset,
+        title: label(step.title, MAX_LABEL_CHARS) || preset,
+        owner: label(step.owner, MAX_LABEL_CHARS) || undefined,
+        open: Array.isArray(step.open)
+          ? step.open
+              .slice(0, MAX_STEPS)
+              .map((f) => label(f, MAX_ID_CHARS))
+              .filter(Boolean)
+          : [],
+      },
+    ];
+  });
+
+  return { id: workflowId, steps: kept };
 }
 
 /**
@@ -175,6 +242,21 @@ function notes(value: unknown): string[] {
     .slice(0, MAX_NOTES)
     .map((n) => n.replace(/\s+/g, " ").slice(0, MAX_NOTE_CHARS).trim())
     .filter(Boolean);
+}
+
+/**
+ * The site a citation points at, and the thing two citations are the same by.
+ *
+ * A `URL` that won't parse is not a source anybody can be sent to, so it
+ * doesn't become a chip. `www.` comes off because it's the same site and a
+ * person reading two chips shouldn't have to work that out.
+ */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
 }
 
 /* --- Failure -------------------------------------------------------------- */
@@ -318,6 +400,11 @@ export async function POST(request: Request) {
   const notebook = seedNotebook(
     session.name?.split(" ")[0] || "there",
     parsed.known,
+    parsed.workflow,
+    parsed.simpleDraft,
+    /* Their turns only. His own replies are full of plausible values he wrote
+       himself, and a check that reads them back would agree with anything. */
+    parsed.messages.flatMap((t) => (t.role === "user" ? [t.content] : [])),
   );
 
   /* Cancelling stops the meter when somebody closes the tab or sends again.
@@ -351,6 +438,47 @@ export async function POST(request: Request) {
         }
       };
 
+      /**
+       * The edits an editing tool made, on their way to the canvas.
+       *
+       * Drained rather than read off the call's arguments, because an edit only
+       * means anything against a workflow — which step, which fields survived
+       * the filters — and the notebook is the only thing here holding one. So
+       * `execute` does the work once and this ships what it did.
+       */
+      const flushEdits = () => {
+        const workflowId = notebook.editing?.id;
+        if (!workflowId) return;
+        for (const edit of notebook.edits.splice(0))
+          send({ type: "edit", workflowId, edit });
+      };
+
+      /**
+       * The answer, one chunk behind itself.
+       *
+       * A citation is written into the prose and the annotation naming it
+       * arrives afterwards, so there is no correcting it once sent — the only
+       * place to remove one is before it goes. `splitCitations` hands back
+       * what's safe to send and holds anything that might still be closing,
+       * which is at most a few dozen characters and lands with the next chunk.
+       */
+      let held = "";
+      const sendText = (text: string) => {
+        const { text: ready, hold } = splitCitations(held + text);
+        held = hold;
+        if (ready) send({ type: "delta", text: ready });
+      };
+      /* Whatever never became a citation is still something he said. */
+      const flushText = () => {
+        const { text } = splitCitations(held);
+        held = "";
+        if (text) send({ type: "delta", text });
+      };
+
+      /* One chip per site. The model cites the same page for three sentences
+         running, and three identical chips read as three sources. */
+      const cited = new Set<string>();
+
       try {
         const result = await run(craig, input, {
           stream: true,
@@ -363,7 +491,7 @@ export async function POST(request: Request) {
           if (event.type === "raw_model_stream_event") {
             if (event.data.type === "output_text_delta" && event.data.delta) {
               clearPhase();
-              send({ type: "delta", text: event.data.delta });
+              sendText(event.data.delta);
             }
 
             /* The hosted web search, which is the one tool that doesn't run
@@ -394,6 +522,21 @@ export async function POST(request: Request) {
                   state: search.state,
                 });
               }
+
+              /* The page a sentence came from. Sent as its own event so the
+                 sentence doesn't have to carry it. */
+              const citation = describeCitation(event.data.event);
+              if (citation) {
+                const host = hostOf(citation.url);
+                if (host && !cited.has(host)) {
+                  cited.add(host);
+                  send({
+                    type: "source",
+                    url: citation.url,
+                    title: citation.title || host,
+                  });
+                }
+              }
             }
             continue;
           }
@@ -410,7 +553,11 @@ export async function POST(request: Request) {
                done, so it's handled off the raw stream above instead. */
             if (raw?.type !== "function_call") continue;
 
-            const activity = describeToolCall(raw.name, raw.arguments);
+            const activity = describeToolCall(
+              raw.name,
+              raw.arguments,
+              notebook,
+            );
             if (!activity) continue;
 
             send({ type: "phase", label: activity.phase });
@@ -421,11 +568,11 @@ export async function POST(request: Request) {
               label: activity.label,
               state: "running",
             });
-            if (activity.note)
+            for (const note of activity.notes ?? [])
               send({
                 type: "note",
-                kind: activity.note.kind,
-                text: activity.note.text,
+                kind: note.kind,
+                text: note.text,
               });
             if (activity.workflow)
               send({
@@ -445,15 +592,23 @@ export async function POST(request: Request) {
               label: "",
               state: "done",
             });
+            /* After the tool finished rather than when it was called: the edit
+               is what `execute` decided, and half of what he asks for gets
+               dropped by the filters on the way through. */
+            flushEdits();
           }
         }
 
         /* Nothing is awaited on the result after the loop: iterating it to
            completion is what finishes the run, and `completed` would only
            matter if we'd stopped reading early. */
+        flushText();
         clearPhase();
         send({ type: "done" });
       } catch (error) {
+        /* Held text is his, whatever went wrong afterwards. Dropping it would
+           truncate a sentence the person was halfway through reading. */
+        flushText();
         clearPhase();
 
         /* Three ways to arrive here and they need telling apart, because two of

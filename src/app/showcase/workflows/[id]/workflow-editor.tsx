@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { InviteStarter } from "@/components/showcase/invite-starter";
 import {
   AppShell,
   BackLink,
@@ -9,7 +10,6 @@ import {
   BlockInspector,
   BlockSetup,
   Button,
-  CraigMark,
   EmptyState,
   Field,
   Input,
@@ -29,9 +29,10 @@ import {
   ChevronLeft,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
-import { cn } from "@/lib/cn";
+import { WorkflowCraig } from "@/components/showcase/workflow-craig";
 import type { Session } from "@/lib/showcase/contract";
 import {
+  markRevealed,
   publishWorkflow,
   setWorkflowBlocks,
   stepCount,
@@ -40,6 +41,7 @@ import {
   type ShowcasePerson,
   type ShowcaseWorkflow,
 } from "@/lib/showcase/store";
+import { useCraigChat } from "@/lib/showcase/use-craig-chat";
 import { blockFromPreset, findPreset } from "@/lib/workflow/library";
 import type { BlockPreset } from "@/lib/workflow/library";
 
@@ -58,10 +60,27 @@ import type { BlockPreset } from "@/lib/workflow/library";
  * canvas, fills the worklist in the left column and disables Publish. Nothing
  * is stored, nothing is counted twice, and the three surfaces cannot disagree
  * about how finished this is.
+ *
+ * The right column is him, still talking. The conversation that produced this
+ * draft carries on here — same thread, same store — and what he says now edits
+ * the canvas rather than describing what he would edit. He is held in `Editor`
+ * rather than in the panel because selecting a block replaces the panel with
+ * that block's settings, and a conversation that unmounts mid-answer is a
+ * conversation you have to start again.
  */
 
 /** Every step is somebody's, and the most common somebody is the person arriving. */
 const NEW_STARTER = "The new hire";
+
+/**
+ * How long the canvas is still assembling itself.
+ *
+ * A ceiling rather than a measurement — the blocks' own entrances are staggered
+ * in CSS and a twenty-step workflow would outrun this. It only governs the line
+ * in Craig's panel, and a line that ends slightly early is better than one that
+ * hangs there after the last block has landed.
+ */
+const REVEAL_MS = 2200;
 
 /**
  * Why Craig can't run this step himself, if he can't.
@@ -77,10 +96,8 @@ const byHand = (block: WorkflowBlock) =>
 let seq = 0;
 const nextId = () => `b${Date.now()}-${seq++}`;
 
-const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
-
 export function WorkflowEditor({ id, user }: { id: string; user: Session }) {
-  const { workflows, people, gaps } = useShowcase();
+  const { workflows, people } = useShowcase();
   const workflow = workflows.find((w) => w.id === id);
 
   if (!workflow) return <NoWorkflow user={user} />;
@@ -93,7 +110,6 @@ export function WorkflowEditor({ id, user }: { id: string; user: Session }) {
       workflow={workflow}
       user={user}
       people={people}
-      gaps={gaps}
     />
   );
 }
@@ -102,14 +118,16 @@ function Editor({
   workflow,
   user,
   people,
-  gaps,
 }: {
   workflow: ShowcaseWorkflow;
   user: Session;
   people: ShowcasePerson[];
-  gaps: { id: string; text: string }[];
 }) {
   const blocks = workflow.blocks;
+
+  /* Given the workflow's id, so his turns carry it and his editing tools have
+     something to edit. Held here, above the panel that renders him. */
+  const chat = useCraigChat(workflow.id);
 
   /* Straight through to the store rather than into local state. A copy here
      would mean an answer given on this screen never reaching the list that
@@ -127,6 +145,39 @@ function Editor({
      before you've seen the shape of the thing is backwards. */
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
+
+  /**
+   * Whether this is the first time anybody has looked at it.
+   *
+   * Read once, into state, rather than off the workflow on every render — the
+   * effect below marks it seen immediately, and a reveal driven by the store
+   * value would be cancelled by its own bookkeeping a frame after it started.
+   */
+  const [revealing, setRevealing] = React.useState(() => !workflow.revealedAt);
+  const revealTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    markRevealed(workflow.id);
+    /* Ends the line in Craig's panel. The blocks need no timer — their
+       entrance is CSS and finishes on its own — but a phase that says he's
+       laying it out has to stop being true at some point. */
+    revealTimerRef.current = window.setTimeout(
+      () => setRevealing(false),
+      REVEAL_MS,
+    );
+    const timer = revealTimerRef.current;
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [workflow.id]);
+
+  /* Anything you do to the workflow ends the reveal. An animation you have to
+     wait out is worse than no animation, so touching a block stops it dead
+     rather than playing on underneath what you're now reading. */
+  function select(id: string | null) {
+    setSelectedId(id);
+    if (id) setRevealing(false);
+  }
 
   /**
    * Everyone a step can be assigned to.
@@ -160,11 +211,12 @@ function Editor({
   function insert(preset: BlockPreset, index: number) {
     const block = blockFromPreset(preset, nextId());
     setBlocks((prev) => [...prev.slice(0, index), block, ...prev.slice(index)]);
-    setSelectedId(block.id);
+    select(block.id);
   }
 
   function remove(id: string) {
     setBlocks((prev) => prev.filter((b) => b.id !== id));
+    setRevealing(false);
     setSelectedId((cur) => (cur === id ? null : cur));
   }
 
@@ -202,11 +254,19 @@ function Editor({
   const steps = stepCount(blocks);
   const unconfigured = unconfiguredCount(blocks);
 
+  const [inviting, setInviting] = React.useState(false);
+
   function publish() {
     publishWorkflow(workflow.id);
     /* Back to Craig, because what happens next is written in his panel and a
        block's settings would be sitting on top of it. */
-    setSelectedId(null);
+    select(null);
+    /* Straight into the invite. A published workflow that nobody is on does
+       nothing, and the next thing you want is never "look at it again" — so
+       the dialog opens rather than waiting to be found. Dismissing it leaves
+       the workflow published and the button on People, which is the same
+       act one screen later. */
+    setInviting(true);
   }
 
   return (
@@ -220,7 +280,7 @@ function Editor({
           blocks={blocks}
           steps={steps}
           unconfigured={unconfigured}
-          onSelect={setSelectedId}
+          onSelect={select}
         />
       }
       actions={
@@ -249,7 +309,7 @@ function Editor({
           <div className="flex flex-col gap-4">
             <button
               type="button"
-              onClick={() => setSelectedId(null)}
+              onClick={() => select(null)}
               className="-ml-1 flex w-fit items-center gap-1 rounded-md px-1 py-0.5 text-xs text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
             >
               <ChevronLeft className="size-3.5" />
@@ -337,10 +397,11 @@ function Editor({
             </BlockInspector>
           </div>
         ) : (
-          <CraigPanel
-            workflow={workflow}
+          <WorkflowCraig
+            chat={chat}
             blocks={blocks}
-            gaps={gaps}
+            revealing={revealing}
+            published={workflow.published}
             seats={people.filter((p) => !p.owner).length}
           />
         )
@@ -352,13 +413,14 @@ function Editor({
       <div className="-mx-4 h-[calc(100vh-3rem)] lg:-mx-8">
         <WorkflowCanvas
           className="h-full rounded-none border-0"
-          onBackgroundClick={() => setSelectedId(null)}
+          onBackgroundClick={() => select(null)}
         >
           <div className="px-10 py-12">
             <WorkflowBuilder
               blocks={blocks}
+              reveal={revealing}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              onSelect={select}
               onInsert={insert}
               onRemove={remove}
               onDuplicate={duplicate}
@@ -367,6 +429,11 @@ function Editor({
           </div>
         </WorkflowCanvas>
       </div>
+      <InviteStarter
+        open={inviting}
+        onClose={() => setInviting(false)}
+        workflowId={workflow.id}
+      />
     </AppShell>
   );
 }
@@ -506,112 +573,6 @@ function NavFact({ label, value }: { label: string; value: string }) {
       >
         {value}
       </span>
-    </div>
-  );
-}
-
-/**
- * Craig, with nothing selected.
- *
- * He drafted this, so the panel is him saying where it stands — how much of it
- * still needs an answer, and what he found that nobody had written down. Those
- * gaps came out of the conversation and they're the reason several of these
- * steps are unconfigured, so they belong next to the draft rather than back on
- * a screen you've left.
- *
- * After publishing it says what happens next, plainly. That's the one moment
- * on this page where somebody is entitled to ask "and then what?", and the
- * honest answer — it runs when somebody is given a seat, and nobody has one
- * yet — is better than a link to a screen that would have to be invented to
- * receive them.
- */
-function CraigPanel({
-  workflow,
-  blocks,
-  gaps,
-  seats,
-}: {
-  workflow: ShowcaseWorkflow;
-  blocks: WorkflowBlock[];
-  gaps: { id: string; text: string }[];
-  seats: number;
-}) {
-  const steps = stepCount(blocks);
-  const open = unconfiguredCount(blocks);
-  const manual = blocks.filter((b) => byHand(b)).length;
-
-  const status =
-    steps === 0
-      ? "Nothing in here but the trigger. Add a step from the line between the blocks and I'll tell you what it needs."
-      : open > 0
-        ? `${plural(open, "step")} still ${open === 1 ? "needs" : "need"} something from you before this can run. They're in the left column — open one and this panel becomes its settings.`
-        : `All ${steps} steps have what they need, so this one is ready to publish.`;
-
-  return (
-    <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <CraigMark className="size-5 shrink-0 text-accent" />
-        <span className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Craig
-        </span>
-      </div>
-
-      {workflow.published ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm leading-relaxed text-text-muted">
-            Published. This is the one I run from now on — the next person given
-            a seat starts at step one and works down it.
-          </p>
-          <p className="text-sm leading-relaxed text-text-subtle">
-            {seats === 0
-              ? "Nobody has a seat yet, so it hasn't run for anybody."
-              : "Anyone given a seat from here starts on it."}
-          </p>
-        </div>
-      ) : (
-        <p className="text-sm leading-relaxed text-text-muted">{status}</p>
-      )}
-
-      {manual > 0 && (
-        <p className="text-sm leading-relaxed text-text-muted">
-          {manual === 1 ? "One step here is" : `${manual} steps here are`} work
-          I don&apos;t run — somebody does {manual === 1 ? "it" : "them"} and
-          ticks {manual === 1 ? "it" : "them"} off. Still in the workflow, so
-          nobody forgets.
-        </p>
-      )}
-
-      {gaps.length > 0 && (
-        <>
-          <Separator />
-          <div className="flex flex-col gap-2">
-            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-              What nobody had written down
-            </p>
-            <ul className="flex list-disc flex-col gap-1.5 pl-4 marker:text-text-subtle">
-              {gaps.map((gap) => (
-                <li
-                  key={gap.id}
-                  className="text-sm leading-relaxed text-text-muted"
-                >
-                  {gap.text}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </>
-      )}
-
-      <Link
-        href="/showcase/welcome"
-        className={cn(
-          buttonVariants({ variant: "secondary", size: "sm" }),
-          "mt-auto w-fit",
-        )}
-      >
-        <AutoAwesome />
-        Tell Craig more
-      </Link>
     </div>
   );
 }

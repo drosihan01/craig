@@ -125,6 +125,7 @@ export { EmailPreview } from "./email-preview";
 export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";
 export {
   CraigMark,
+  TalkToCraig,
   CraigLockup,
   MARK_STROKE,
   MARK_MIN_SIZE,

@@ -159,6 +159,17 @@ const TRIGGER: WorkflowBlock = {
  */
 const BY_HAND = "Craig can't run this one — somebody ticks it off.";
 
+/**
+ * The single block a forced draft collapses to.
+ *
+ * A preset rather than a hand-built block, so nothing about it is special: it
+ * has one required select with two options, which is the shortest path from a
+ * fresh account through draft, configure and publish that still exercises the
+ * real gate. Somebody testing that path shouldn't have to talk to Craig for six
+ * turns first.
+ */
+const SIMPLE_PRESET = "details";
+
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /**
@@ -264,6 +275,140 @@ function configFrom(
 const trimmed = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
+/* --- Where a value came from ----------------------------------------------- */
+
+/**
+ * Everything the person has actually said, as one searchable string.
+ *
+ * Their turns and Craig's notes of them, because a conversation gets trimmed on
+ * the way to the model and a fact recorded on turn one is still something they
+ * said. Padded and stripped of punctuation so a phrase can be looked for whole:
+ * "bellwether.io" and "bellwether.io," are the same answer, and "eng" is not
+ * hiding inside "engineering".
+ */
+export const spoken = (parts: string[]) =>
+  ` ${parts
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()} `;
+
+const heard = (said: string, phrase: string) => {
+  const needle = phrase
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  return needle !== "" && said.includes(` ${needle} `);
+};
+
+/**
+ * Whether a stored value is one they gave him, or one he thought of.
+ *
+ * The filters above are about *shape* — is this a URL, is this one of the
+ * options, is this the word "TBD". They pass anything plausible, which is
+ * exactly what a helpful model produces: asked to finish the Slack step it
+ * writes `bellwetheranalytics.slack.com`, a perfectly well-formed workspace
+ * address for a workspace that may not exist. Shape cannot catch that. Only
+ * provenance can.
+ *
+ * So the value has to appear in what they said. Option-backed fields are
+ * checked against the id *and* the label, because "#engineering" is how a
+ * person writes the option stored as `eng`, and a person who says "member" has
+ * chosen `member`. A field this rejects stays empty, which is the outcome the
+ * whole product prefers: an empty field is a question somebody can answer, and
+ * a filled one is a decision nobody made.
+ */
+function grounded(f: SetupField, said: string, value: string): boolean {
+  const options = f.options ?? (f.kind === "when" ? WHEN_OPTIONS : undefined);
+  const option = options?.find((o) => o.id === value);
+  return option
+    ? heard(said, option.id) || heard(said, option.label)
+    : heard(said, value);
+}
+
+/** The config, less anything he made up. `said` empty means nothing is checked. */
+function onlyWhatTheySaid(
+  preset: BlockPreset,
+  config: Record<string, string | string[]>,
+  said: string,
+): Record<string, string | string[]> {
+  const kept: Record<string, string | string[]> = {};
+
+  for (const f of preset.setup) {
+    const value = config[f.id];
+    if (value === undefined) continue;
+
+    if (Array.isArray(value)) {
+      const heardOnes = value.filter((v) => grounded(f, said, v));
+      if (heardOnes.length > 0) kept[f.id] = heardOnes;
+      continue;
+    }
+    if (grounded(f, said, value)) kept[f.id] = value;
+  }
+
+  return kept;
+}
+
+/**
+ * One step, from a preset id and whatever he said about it.
+ *
+ * The same function whether it arrives in a twelve-step draft or on its own as
+ * "add a background check", which is the point: a step added in the editor gets
+ * the by-hand summary, the owner and the config filters identically, so the two
+ * routes into a workflow cannot produce two different kinds of block.
+ *
+ * `said` is only passed by the editing tools. Drafting is a different bargain —
+ * he is building the whole thing out of a conversation he has just had, and the
+ * prompt's field-by-field rule governs it; editing is one field at a time onto
+ * a step somebody is watching, and that is where a guess reads as an answer.
+ */
+export function buildStep(
+  presetId: unknown,
+  id: string,
+  owner: unknown,
+  rawConfig: unknown,
+  said?: string,
+): WorkflowBlock | undefined {
+  const preset =
+    typeof presetId === "string" ? findPreset(presetId) : undefined;
+  if (!preset) return undefined;
+
+  const config = configFrom(preset, rawConfig);
+
+  const block = blockFromPreset(preset, id);
+  return {
+    ...block,
+    summary: preset.unavailable ? BY_HAND : block.summary,
+    owner: trimmed(owner) || undefined,
+    config: said ? onlyWhatTheySaid(preset, config, said) : config,
+  };
+}
+
+/**
+ * The setup he said, for a step that already exists.
+ *
+ * Runs the same gauntlet a drafted step's config does — the placeholder list,
+ * the URL shape, the option ids, the fields the preset doesn't have — and then
+ * the one drafting doesn't: it has to be something they said. Filling a field
+ * here is the one action that makes a step *look* Ready, so it must not be the
+ * one action with the weaker filter.
+ */
+export function parseConfig(
+  presetId: string,
+  raw: unknown,
+  said: string,
+): Record<string, string | string[]> {
+  const preset = findPreset(presetId);
+  if (!preset) return {};
+  return onlyWhatTheySaid(preset, configFrom(preset, raw), said);
+}
+
+/** Required fields with nothing in them, by id — what he may usefully ask about. */
+export const stillOpen = (
+  presetId: string,
+  config: Record<string, string | string[]> | undefined,
+) => missingRequired(presetId, config).map((f) => f.id);
+
 /**
  * The draft, or nothing.
  *
@@ -273,9 +418,25 @@ const trimmed = (value: unknown) =>
  * library doesn't have is dropped rather than turned into a blank block; a
  * missing name falls back rather than shipping an untitled workflow.
  */
-export function parseDraft(raw: unknown): Draft | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const { name, steps } = raw as { name?: unknown; steps?: unknown };
+export function parseDraft(raw: unknown, simple = false): Draft | undefined {
+  const { name, steps } =
+    raw && typeof raw === "object"
+      ? (raw as { name?: unknown; steps?: unknown })
+      : {};
+
+  /* The whole draft thrown away and replaced by one empty step. Everything
+     downstream is untouched, which is the point of doing it here: it is a real
+     preset with a real required field, so the badge, the counter and the
+     Publish gate are the ones under test rather than a special case beside
+     them. His own readback comes off these blocks too, so he describes what
+     actually landed. */
+  if (simple) {
+    const block = buildStep(SIMPLE_PRESET, "step-1", undefined, undefined);
+    return block
+      ? { name: trimmed(name) || "Onboarding", blocks: [TRIGGER, block] }
+      : undefined;
+  }
+
   if (!Array.isArray(steps)) return undefined;
 
   const kept = steps.flatMap(
@@ -290,14 +451,14 @@ export function parseDraft(raw: unknown): Draft | undefined {
 
   /* Numbered after the dropping rather than during it, so a step that didn't
      survive doesn't leave a hole in the ids. */
-  const blocks = kept.map(({ preset, step }, i): WorkflowBlock => {
-    const block = blockFromPreset(preset, `step-${i + 1}`);
-    return {
-      ...block,
-      summary: preset.unavailable ? BY_HAND : block.summary,
-      owner: trimmed(step.owner) || undefined,
-      config: configFrom(preset, step.config),
-    };
+  const blocks = kept.flatMap(({ preset, step }, i) => {
+    const block = buildStep(
+      preset.id,
+      `step-${i + 1}`,
+      step.owner,
+      step.config,
+    );
+    return block ? [block] : [];
   });
 
   if (blocks.length === 0) return undefined;

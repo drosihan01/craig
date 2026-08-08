@@ -42,6 +42,47 @@ export interface ChatTurn {
   content: string;
 }
 
+/**
+ * How much conversation one request may carry.
+ *
+ * Shared rather than a number in the route, because the thread now runs across
+ * two screens — discovery, then the editor — and the client is the only side
+ * that can decide *which* turns to drop. It keeps the newest, because the early
+ * facts already travel separately in `known` and the recent ones are what the
+ * next answer follows from. The route still checks: a cap only the client
+ * enforces is a cap.
+ */
+export const MAX_MESSAGES = 40;
+
+/**
+ * One step of the workflow that's open in front of them.
+ *
+ * A summary rather than the block, and the difference is the point: Craig is
+ * being told what he may name, not handed a canvas to rewrite. `id` is how he
+ * addresses a step, `preset` is which of the library's fields it has, and
+ * `open` is the required ones still empty — the shortlist of what he could
+ * usefully close, derived from the same `missingRequired` the badge and the
+ * publish gate read.
+ *
+ * Config values are deliberately absent. He can't repeat back a Slack workspace
+ * he was never told, and a step's answers are the person's business rather than
+ * something to replay through a model on every turn.
+ */
+export interface OpenStep {
+  id: string;
+  preset: string;
+  title: string;
+  owner?: string;
+  /** Ids of required setup fields with no value yet. */
+  open: string[];
+}
+
+/** The workflow being edited, as much of it as Craig needs to change it. */
+export interface OpenWorkflow {
+  id: string;
+  steps: OpenStep[];
+}
+
 /** POST /api/chat */
 export interface ChatRequest {
   messages: ChatTurn[];
@@ -60,7 +101,47 @@ export interface ChatRequest {
    * makes the server's statelessness free rather than a memory leak upward.
    */
   known?: { gaps: string[]; facts: string[] };
+  /**
+   * The workflow open in the editor, when the turn came from there.
+   *
+   * Absent during discovery, and that absence is what tells him which job he's
+   * doing. Sent for the same reason `known` is — the route is stateless — but
+   * it buys something `known` can't: he cannot set a field on a step he can't
+   * name, and he shouldn't propose adding a step that's already on the canvas.
+   * Both of those need the workflow itself, not a memory of drafting it.
+   */
+  workflow?: OpenWorkflow;
+  /**
+   * Collapse whatever he drafts to the one-step test workflow.
+   *
+   * A builder's switch, off in the sandbox, and it travels on the request
+   * rather than living on the server because the sandbox and the chat client
+   * are both in the browser — a server-side flag would need a second endpoint
+   * to set it and would then apply to everybody at once. The substitution still
+   * happens on the server, where the blocks are built, so his own account of
+   * what he drafted matches what landed.
+   */
+  simpleDraft?: boolean;
 }
+
+/**
+ * One change to the open workflow, as Craig makes it.
+ *
+ * Granular rather than a new block list, because the server was only ever shown
+ * a summary — it doesn't hold the config values the person has typed, so it
+ * can't hand back a whole workflow without erasing them. Each of these is a
+ * change to apply on top of what the store already has.
+ */
+export type WorkflowEdit =
+  /** A real block, built from the library on the server. `after` is a step id. */
+  | { type: "step-added"; block: WorkflowBlock; after?: string }
+  /** Merged into the step's config. Only fields that survived the filters. */
+  | {
+      type: "step-set";
+      stepId: string;
+      config: Record<string, string | string[]>;
+    }
+  | { type: "step-removed"; stepId: string };
 
 /**
  * The stream is newline-delimited JSON, one object per line.
@@ -117,6 +198,32 @@ export type ChatEvent =
    * publish gate that had to be invented separately and could disagree.
    */
   | { type: "workflow"; name: string; blocks: WorkflowBlock[] }
+  /**
+   * Craig changing the workflow that's open, one edit at a time.
+   *
+   * The canvas moving while he works is the whole appeal of talking to him in
+   * the editor — "Priya provisions Slack" is four words against three
+   * deliberate acts of selecting, finding the field and typing. Emitted per
+   * edit rather than as a finished workflow so the change lands as it happens
+   * and the person can see which step it landed on.
+   *
+   * `workflowId` because a panel left open on one workflow must not have
+   * another one's edits applied to it.
+   */
+  | { type: "edit"; workflowId: string; edit: WorkflowEdit }
+  /**
+   * A page the web search actually used, one event per site.
+   *
+   * Carried beside the prose rather than left in it, and that is a fix rather
+   * than a decoration. The model writes its citations inline — a bracketed
+   * markdown link in the middle of a sentence — which breaks every voice rule
+   * this product has at once, and it does it after being told not to, because
+   * the behaviour lives in the provider's post-search generation rather than in
+   * anything a prompt reaches. Taking the citation out of the text and sending
+   * it as its own event solves that structurally: the sentence reads as a
+   * sentence, and where it came from is still one click away.
+   */
+  | { type: "source"; url: string; title: string }
   /** A chunk of the answer. Append. */
   | { type: "delta"; text: string }
   /** The turn is finished. */

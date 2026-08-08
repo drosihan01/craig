@@ -13,9 +13,9 @@ import {
   buttonVariants,
 } from "@/components/ui";
 import { ArrowForward, AutoAwesome, Description } from "@/components/ui/icons";
-import type { ShowcaseWorkflow } from "@/lib/showcase/store";
-import type { CraigMessage } from "@/lib/showcase/use-craig-chat";
+import type { CraigMessage, ShowcaseWorkflow } from "@/lib/showcase/store";
 import { CraigFault } from "./craig-fault";
+import { SourceChips, type Source } from "./source-chips";
 
 /**
  * The conversation, with a real model in the middle.
@@ -215,6 +215,7 @@ export function CraigConversation({
               text={m.content}
               streaming={m.streaming}
               phase={m.streaming ? phase : null}
+              sources={m.sources}
             />
           );
         })}
@@ -292,10 +293,12 @@ function CraigSaid({
   text,
   streaming,
   phase,
+  sources,
 }: {
   text: string;
   streaming?: boolean;
   phase: string | null;
+  sources?: Source[];
 }) {
   /* Only once he's finished. The question is the last thing to arrive, so
      lifting it out mid-stream would pull the sentence you were reading up into
@@ -318,6 +321,10 @@ function CraigSaid({
       {body.trim() !== "" && (
         <MessageBody content={body} streaming={streaming} />
       )}
+
+      {/* Under the prose and above the question, because they belong to what
+          he just said rather than to what he's about to ask. */}
+      <SourceChips sources={sources} />
 
       {question && <AgentQuestion className="mt-1">{question}</AgentQuestion>}
     </div>

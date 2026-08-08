@@ -54,12 +54,7 @@ const THREAD_TOP_IN_CARD = 54;
 /* -------------------------------------------------------------------------- */
 
 export type BlockKind =
-  | "trigger"
-  | "task"
-  | "approval"
-  | "notify"
-  | "branch"
-  | "document";
+  "trigger" | "task" | "approval" | "notify" | "branch" | "document";
 
 export interface BlockTypeDef {
   kind: BlockKind;
@@ -181,6 +176,32 @@ export function setupWarning(block: WorkflowBlock) {
 /*  Builder                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A workflow arriving rather than having always been there.
+ *
+ * Purely a delay on each block's entrance, and deliberately nothing else. The
+ * blocks are all rendered and all clickable from the first frame — what is
+ * staggered is when each becomes visible, so somebody who clicks a card
+ * halfway through gets the card they clicked. A reveal that withheld the
+ * blocks would also make the counter and the Publish gate briefly describe a
+ * workflow that doesn't exist, which is a lie told by an animation.
+ *
+ * `backwards` is what makes the delay mean anything: without it a card with a
+ * 700ms delay sits fully visible for 700ms and then fades in from nothing.
+ * `motion-safe` because somebody who has asked for less movement is asking for
+ * this, and the workflow is entirely legible without it.
+ */
+const ARRIVING =
+  "motion-safe:animate-[step-phase_320ms_cubic-bezier(0.25,1,0.5,1)_backwards]";
+
+/** Between one block and the next. Twelve steps in about a second and a half. */
+const REVEAL_BEAT = 110;
+
+const arriving = (delay?: number) =>
+  delay === undefined
+    ? undefined
+    : { className: ARRIVING, style: { animationDelay: `${delay}ms` } };
+
 export function WorkflowBuilder({
   blocks,
   selectedId,
@@ -189,6 +210,7 @@ export function WorkflowBuilder({
   onRemove,
   onMove,
   onDuplicate,
+  reveal,
   className,
 }: {
   blocks: WorkflowBlock[];
@@ -199,6 +221,8 @@ export function WorkflowBuilder({
   onRemove?: (id: string) => void;
   onMove?: (id: string, direction: -1 | 1) => void;
   onDuplicate?: (id: string) => void;
+  /** Land the blocks one after another instead of all at once. */
+  reveal?: boolean;
   className?: string;
 }) {
   return (
@@ -206,6 +230,7 @@ export function WorkflowBuilder({
       {blocks.map((block, i) => {
         const isTrigger = block.kind === "trigger";
         const isLast = i === blocks.length - 1;
+        const at = reveal ? i * REVEAL_BEAT : undefined;
 
         return (
           <React.Fragment key={block.id}>
@@ -219,14 +244,28 @@ export function WorkflowBuilder({
               onMove={isTrigger ? undefined : onMove}
               canMoveUp={i > 1}
               canMoveDown={!isLast && i > 0}
+              arrival={arriving(at)}
             />
 
-            <Connector onInsert={onInsert} index={i + 1} last={isLast} />
+            {/* Half a beat behind its card, so the thread grows out of the
+                block above rather than arriving ahead of it. */}
+            <Connector
+              onInsert={onInsert}
+              index={i + 1}
+              last={isLast}
+              arrival={arriving(at === undefined ? undefined : at + 55)}
+            />
           </React.Fragment>
         );
       })}
     </div>
   );
+}
+
+/** How a block is told to make an entrance. Undefined means it's just there. */
+interface Arrival {
+  className: string;
+  style: React.CSSProperties;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -242,15 +281,20 @@ function Connector({
   index,
   onInsert,
   last,
+  arrival,
 }: {
   index: number;
   onInsert?: (preset: BlockPreset, index: number) => void;
   last?: boolean;
+  arrival?: Arrival;
 }) {
   const [picking, setPicking] = React.useState(false);
 
   return (
-    <div className="group/conn relative h-14">
+    <div
+      className={cn("group/conn relative h-14", arrival?.className)}
+      style={arrival?.style}
+    >
       {/* Solid across the gap; dashed inside the cards above and below. Same
           thread, two treatments — see THREAD_X for why the offset is 33 here
           and 32 inside a card.
@@ -317,6 +361,7 @@ function BlockCard({
   onMove,
   canMoveUp,
   canMoveDown,
+  arrival,
 }: {
   block: WorkflowBlock;
   index: number;
@@ -327,6 +372,7 @@ function BlockCard({
   onMove?: (id: string, direction: -1 | 1) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  arrival?: Arrival;
 }) {
   const type = blockLabel(block);
   const Icon = type.icon;
@@ -354,7 +400,9 @@ function BlockCard({
         selected
           ? "border-accent ring-[3px] ring-accent-ring/25"
           : "border-border hover:border-border-strong hover:shadow-e2",
+        arrival?.className,
       )}
+      style={arrival?.style}
     >
       {/* Dashed from just under the icon to the card's bottom edge, where the
           solid gap segment picks it up. Absolute rather than a flex child so

@@ -74,6 +74,15 @@ export interface Outgoing {
   text: string;
   /** The display name. The address it pairs with comes from `SENDER`. */
   fromName: string;
+  /**
+   * A silent copy, for when somebody needs to see what actually went out.
+   *
+   * Blind rather than `cc`, and one send rather than two. A `cc` would put a
+   * stranger's address on a new starter's welcome email, which is a small
+   * privacy leak and a large "who is this?"; a second send could succeed while
+   * the first failed, leaving a copy of a message nobody received.
+   */
+  bcc?: string;
 }
 
 /** Resend's error envelope. Every field optional, because a 502 from something
@@ -201,6 +210,9 @@ export async function sendEmail(message: Outgoing): Promise<SendResult> {
            and the address is ours — see SENDER for why they differ. */
         from: `${message.fromName} <${SENDER.address}>`,
         to: [message.to],
+        /* Left out entirely when there isn't one, rather than sent as an empty
+           array — a field Resend has to interpret is a field it can refuse. */
+        ...(message.bcc ? { bcc: [message.bcc] } : {}),
         reply_to: SENDER.replyTo,
         subject: message.subject,
         html: message.html,

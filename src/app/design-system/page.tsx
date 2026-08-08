@@ -36,6 +36,7 @@ import {
   ListItem,
   NavTreeGroup,
   NavTreeItem,
+  TalkToCraig,
   Badge,
   BrandIcons,
   Button,
@@ -1216,6 +1217,14 @@ export default function DesignSystemPage() {
             <NavTreeItem label="Sign in" href="/sign-in" icon={<Person />} />
           </div>
           <NavItemButtonDemo />
+        </Demo>
+
+        <Demo
+          title="The mark as an AI affordance"
+          note="20px, not 16 — a button would size it below the mark's own floor"
+        >
+          <TalkToCraig />
+          <TalkToCraig>Ask Craig about this step</TalkToCraig>
         </Demo>
 
         <Api component="NavTreeGroup" props={NAV_TREE_PROPS} />

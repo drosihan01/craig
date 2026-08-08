@@ -67,13 +67,7 @@ import type { BlockKind, WorkflowBlock } from "@/components/ui";
  */
 
 export type FieldKind =
-  | "text"
-  | "url"
-  | "select"
-  | "multiselect"
-  | "person"
-  | "file"
-  | "when";
+  "text" | "url" | "select" | "multiselect" | "person" | "file" | "when";
 
 export interface SetupField {
   id: string;
@@ -293,6 +287,27 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         ],
       },
       {
+        id: "details",
+        label: "Details",
+        description:
+          "One thing to collect from the new starter, where the rest is already on file.",
+        kind: "document",
+        icon: Badge,
+        title: "Details",
+        setup: [
+          {
+            id: "detail",
+            label: "What to collect",
+            kind: "select",
+            options: [
+              { id: "dob", label: "Date of birth" },
+              { id: "middle-name", label: "Middle name" },
+            ],
+            required: true,
+          },
+        ],
+      },
+      {
         id: "verify-identity",
         label: "Verify employment eligibility",
         description:
@@ -309,7 +324,10 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             options: [
               { id: "uk-rtw", label: "UK right to work" },
               { id: "us-i9", label: "US Form I-9" },
-              { id: "de-aufenthalt", label: "Germany — residence and work permit" },
+              {
+                id: "de-aufenthalt",
+                label: "Germany — residence and work permit",
+              },
               { id: "au-vevo", label: "Australia — VEVO check" },
               { id: "other", label: "Something else" },
             ],
@@ -1152,7 +1170,12 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             hint: "Small enough to finish in the first week",
             required: true,
           },
-          { id: "owner", label: "Who assigns it", kind: "person", required: true },
+          {
+            id: "owner",
+            label: "Who assigns it",
+            kind: "person",
+            required: true,
+          },
         ],
       },
       {
@@ -1189,7 +1212,8 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       {
         id: "approval",
         label: "Approval",
-        description: "Hold everything after this until a named person signs off.",
+        description:
+          "Hold everything after this until a named person signs off.",
         kind: "approval",
         icon: HowToReg,
         title: "Approval",
@@ -1240,7 +1264,12 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         icon: TaskAlt,
         title: "New task",
         setup: [
-          { id: "what", label: "What has to happen", kind: "text", required: true },
+          {
+            id: "what",
+            label: "What has to happen",
+            kind: "text",
+            required: true,
+          },
           WHO_PROVISIONS,
           { id: "when", label: "When", kind: "when" },
         ],
@@ -1328,8 +1357,7 @@ export function describeSetup(
   if (!preset) return [];
 
   const labelFor = (f: SetupField, id: string) => {
-    const options =
-      f.options ?? (f.kind === "when" ? WHEN_OPTIONS : undefined);
+    const options = f.options ?? (f.kind === "when" ? WHEN_OPTIONS : undefined);
     // Free-list values and person names are already their own label.
     return options?.find((o) => o.id === id)?.label ?? id;
   };

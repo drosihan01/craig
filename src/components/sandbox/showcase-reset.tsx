@@ -2,10 +2,20 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Button, buttonVariants, Callout } from "@/components/ui";
+import {
+  Button,
+  buttonVariants,
+  Callout,
+  ControlRow,
+  Switch,
+} from "@/components/ui";
 import { ArrowForward, Refresh } from "@/components/ui/icons";
 import { AFTER_SIGN_IN } from "@/lib/showcase/contract";
-import { resetShowcase } from "@/lib/showcase/store";
+import {
+  resetShowcase,
+  setSimpleDraft,
+  useShowcase,
+} from "@/lib/showcase/store";
 
 /**
  * Wipe the showcase back to nothing.
@@ -28,6 +38,7 @@ import { resetShowcase } from "@/lib/showcase/store";
 export function ShowcaseReset() {
   const [state, setState] = React.useState<"idle" | "working" | "done">("idle");
   const [error, setError] = React.useState<string | null>(null);
+  const { simpleDraft } = useShowcase();
 
   async function nuke() {
     setState("working");
@@ -70,6 +81,22 @@ export function ShowcaseReset() {
           Signed out, this lands on sign-up — a showcase with no account has
           nothing to sign into.
         </span>
+      </div>
+
+      {/* Above the destructive half, because it's the one you touch often and
+          the switch belongs next to the run it changes rather than under the
+          button that ends one. */}
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <ControlRow
+          control={
+            <Switch
+              checked={simpleDraft}
+              onChange={(e) => setSimpleDraft(e.target.checked)}
+            />
+          }
+          label="Simple test workflow"
+          description="Whatever Craig drafts comes out as one step, Details, with a single required field — date of birth or middle name. Pick one and it publishes. It's the whole draft-configure-publish path without six turns of conversation first. Turn it off to get the workflow he actually wrote."
+        />
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-5">

@@ -83,6 +83,15 @@
  * rather than written out, so it cannot describe a library that no longer
  * exists.
  *
+ * The editing section at the bottom of this file is short for the same reason
+ * the search section is, and it was written second so it started there. What a
+ * step is, which fields it has and what a guess costs are all said already —
+ * once in the catalogue and once in "Last thing, before you draft" — and the
+ * only genuinely new facts when a workflow is open are that it exists, that it
+ * is what this turn changes, and which ids name its steps. Everything else
+ * about the editing tools lives in their descriptions, which cost nothing on a
+ * turn that doesn't use them.
+ *
  * He's given the founder's name and nothing else about her company. That's the
  * whole design of the screen: discovery is the thing being demonstrated, so a
  * prompt that already knows what Bellwether does produces a conversation that
@@ -91,6 +100,7 @@
  */
 
 import { BLOCK_CATALOGUE } from "@/lib/showcase/draft";
+import type { OpenWorkflow } from "@/lib/showcase/contract";
 
 /**
  * The model.
@@ -268,6 +278,67 @@ A field also means what its name says. A date does not go in "ship to", and a pe
 Two different people can be on one step and they're separate: \`owner\` is who does it, usually the new starter, while a setup field called \`owner\` or \`countersign\` inside the step is who provisions or signs it.
 `;
 }
+
+/**
+ * The workflow he's looking at, when he's looking at one.
+ *
+ * Appended to the prompt like "What you already know" is, and it does the same
+ * job for a different kind of state: without the ids he cannot address a step,
+ * and told only that a workflow exists he proposes adding what is already on
+ * the canvas.
+ *
+ * `open` is printed as field ids rather than labels because those ids are what
+ * `set_step_config` takes — a list he has to translate before he can use it is
+ * a list he translates wrongly.
+ */
+export function openWorkflowNote(
+  workflow: OpenWorkflow,
+  simpleDraft = false,
+): string {
+  const line = (s: OpenWorkflow["steps"][number]) =>
+    [
+      `- ${s.id} — ${s.title} (${s.preset})`,
+      s.owner ? `, ${s.owner} does it` : ", nobody named",
+      s.open.length > 0
+        ? ` — still empty: ${s.open.join(", ")}`
+        : " — nothing empty",
+    ].join("");
+
+  return `## The workflow they have open
+
+They are looking at it in the editor right now. It exists, so this turn is changing that workflow rather than discovery — use add_step, set_step_config and remove_step. Never draft_workflow; it would build them a second one. Change what they asked about and nothing else: a step nobody asked for is work they never agreed to, sitting in a workflow they are about to publish.
+
+These are its steps, and the id is how you name one:
+
+${workflow.steps.map(line).join("\n") || "- Nothing but the trigger yet."}
+
+A step counts as Ready the moment nothing is empty on it, so a field you fill with a plausible guess reads as decided when nobody has decided. Fill one only with something they said in a sentence you could point at. Otherwise leave it empty and ask.
+
+The workflow is on the screen beside you. Say what you changed in a line and ask about what is still empty; never read the whole thing back.${
+    /* A one-step workflow reads as unfinished, and told only to change what
+       was asked he still adds the paperwork he thinks is missing — three runs
+       out of three. The rule that stops it is that this one is complete, which
+       is only true while the switch is on, so it is only said then. */
+    simpleDraft
+      ? "\n\nThis workflow is finished at one step. Never add a second one, however incomplete it looks."
+      : ""
+  }`;
+}
+
+/**
+ * The forced draft, told to him before he plans it rather than after.
+ *
+ * The substitution in `parseDraft` guarantees what lands on the canvas, and for
+ * one version that was thought to be enough — the tool's result said plainly
+ * that everything had been replaced by one step. He ignored it twice running
+ * and described the twelve steps he had asked for over a canvas holding one,
+ * because by the time a result arrives the reply is already being composed out
+ * of the arguments. So the constraint has to be in front of him while he
+ * decides, and the substitution stays as the thing that makes it true.
+ */
+export const SIMPLE_DRAFT_NOTE = `## The workflow for this account
+
+Their onboarding is one step and only one step: \`details\`. Call draft_workflow with that single step, nothing before it and nothing after it, whatever else you have been told. When you say what you built, say exactly that — one step, called Details, and it still needs somebody to choose what it collects. Never name a step that isn't in it, and don't say what it collects: nobody has decided yet.`;
 
 /**
  * Attachments arrive as names, because there's no upload yet.
