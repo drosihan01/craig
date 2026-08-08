@@ -20,6 +20,7 @@ import {
   Textarea,
   WorkflowBuilder,
   WorkflowCanvas,
+  revealDuration,
   buttonVariants,
   isUnconfigured,
   setupWarning,
@@ -76,16 +77,6 @@ import type { BlockPreset } from "@/lib/workflow/library";
 
 /** Every step is somebody's, and the most common somebody is the person arriving. */
 const NEW_STARTER = "The new hire";
-
-/**
- * How long the canvas is still assembling itself.
- *
- * A ceiling rather than a measurement — the blocks' own entrances are staggered
- * in CSS and a twenty-step workflow would outrun this. It only governs the line
- * in Craig's panel, and a line that ends slightly early is better than one that
- * hangs there after the last block has landed.
- */
-const REVEAL_MS = 2200;
 
 /**
  * Why Craig can't run this step himself, if he can't.
@@ -257,6 +248,11 @@ function Editor({
    * value would be cancelled by its own bookkeeping a frame after it started.
    */
   const [revealing, setRevealing] = React.useState(() => !workflow.revealedAt);
+
+  /* The blocks there were when this opened, captured once. The reveal is about
+     those and only those — adding a step by hand ten minutes later must not
+     re-arm a timer that says Craig is still laying it out. */
+  const [revealCount] = React.useState(workflow.blocks.length);
   const revealTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -266,13 +262,17 @@ function Editor({
        laying it out has to stop being true at some point. */
     revealTimerRef.current = window.setTimeout(
       () => setRevealing(false),
-      REVEAL_MS,
+      /* Asked rather than guessed. This was a hardcoded ceiling with a comment
+         conceding a long workflow would outrun it — so the line saying he's
+         laying it out could stop while blocks were still landing. The builder
+         owns the timing and now says how long it needs. */
+      revealDuration(revealCount),
     );
     const timer = revealTimerRef.current;
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [workflow.id]);
+  }, [workflow.id, revealCount]);
 
   /* Anything you do to the workflow ends the reveal. An animation you have to
      wait out is worse than no animation, so touching a block stops it dead
@@ -377,6 +377,10 @@ function Editor({
       title={workflow.name}
       account={{ name: user.name, email: user.email }}
       fill
+      /* Wider than the default, and remembered separately. This panel holds
+         Craig's side of the conversation that wrote the workflow, not a list
+         of counts, and a transcript in 224px wraps every other line. */
+      asidePanel={{ key: "builder", width: 320 }}
       nav={
         <ShowcaseNav>
           <EditorNav

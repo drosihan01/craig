@@ -17,6 +17,7 @@ import {
   Warning,
 } from "./icons";
 import { Badge } from "./badge";
+import { Skeleton } from "./feedback";
 import { BlockPicker } from "./block-picker";
 import { DropdownMenu } from "./dropdown";
 import {
@@ -192,10 +193,45 @@ export function setupWarning(block: WorkflowBlock) {
  * this, and the workflow is entirely legible without it.
  */
 const ARRIVING =
-  "motion-safe:animate-[step-phase_320ms_cubic-bezier(0.25,1,0.5,1)_backwards]";
+  "motion-safe:animate-[step-phase_420ms_cubic-bezier(0.25,1,0.5,1)_backwards]";
 
-/** Between one block and the next. Twelve steps in about a second and a half. */
-const REVEAL_BEAT = 110;
+/**
+ * How long the column sits as placeholders before the first one resolves.
+ *
+ * The reveal used to be a fade and nothing else, which meant a two-block draft
+ * — which is what Craig writes most of the time — was over in about four
+ * hundred milliseconds. Not slow enough to read as anything, so the workflow
+ * simply appeared and the conversation's whole payoff went past unnoticed.
+ *
+ * A beat of empty cards first gives the sequence a shape: you see how many
+ * steps are coming before you can read any of them, which is the part worth
+ * watching, and it means the animation is telling you something rather than
+ * just taking time.
+ */
+const REVEAL_START = 340;
+
+/**
+ * Between one block resolving and the next.
+ *
+ * Scaled to the length, not fixed. A fixed beat has to be chosen for one size
+ * of workflow and is wrong for the other: slow enough to notice on a two-step
+ * draft is four seconds of waiting on a twelve-step one, and quick enough for
+ * twelve is invisible on two. So short lists get the full beat and long ones
+ * compress, which holds the whole reveal to roughly two seconds either way.
+ */
+const revealBeat = (count: number) =>
+  Math.max(120, Math.min(300, Math.round(1800 / Math.max(count, 1))));
+
+/**
+ * How long a reveal of `count` blocks takes, end to end.
+ *
+ * Exported because the editor draws a "laying it out" line for exactly as long
+ * as this runs, and it used to guess — a hardcoded ceiling with a comment
+ * admitting a long workflow would outrun it. Two places deriving the same
+ * duration from the same numbers cannot disagree about when it finished.
+ */
+export const revealDuration = (count: number) =>
+  REVEAL_START + count * revealBeat(count) + 420;
 
 const arriving = (delay?: number) =>
   delay === undefined
@@ -225,12 +261,59 @@ export function WorkflowBuilder({
   reveal?: boolean;
   className?: string;
 }) {
+  /* How many blocks have finished arriving. Everything past this is still a
+     placeholder. Starts at the full count when there's no reveal to run, so a
+     workflow you already know never flickers through skeletons on its way to
+     being itself. */
+  const [landed, setLanded] = React.useState(() =>
+    reveal ? 0 : blocks.length,
+  );
+
+  React.useEffect(() => {
+    if (!reveal) {
+      return;
+    }
+
+    const beat = revealBeat(blocks.length);
+    let i = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
+    /* setTimeout that re-arms rather than setInterval: the first gap is longer
+       than the rest, and an interval can only have one period. */
+    const step = () => {
+      i += 1;
+      setLanded(i);
+      if (i < blocks.length) timer = setTimeout(step, beat);
+    };
+    timer = setTimeout(step, REVEAL_START);
+
+    return () => clearTimeout(timer);
+  }, [reveal, blocks.length]);
+
   return (
     <div className={cn("mx-auto flex w-full max-w-xl flex-col", className)}>
       {blocks.map((block, i) => {
         const isTrigger = block.kind === "trigger";
         const isLast = i === blocks.length - 1;
-        const at = reveal ? i * REVEAL_BEAT : undefined;
+        const at = reveal ? i * revealBeat(blocks.length) : undefined;
+
+        /* Not yet resolved, so it's drawn as its own outline. Keyed the same as
+           the real card so React swaps the contents rather than remounting the
+           row — the connector below it stays put and the column doesn't jump
+           as each one lands. */
+        if (i >= landed) {
+          return (
+            <React.Fragment key={block.id}>
+              <BlockSkeleton />
+              <Connector
+                onInsert={undefined}
+                index={i + 1}
+                last={isLast}
+                arrival={undefined}
+              />
+            </React.Fragment>
+          );
+        }
 
         return (
           <React.Fragment key={block.id}>
@@ -258,6 +341,37 @@ export function WorkflowBuilder({
           </React.Fragment>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A block that exists but hasn't been drawn yet.
+ *
+ * Deliberately the card's own shell — same border, padding, icon square and
+ * two lines of text — rather than a generic grey box. The point is that the
+ * step is already there and is still resolving, and a placeholder shaped like
+ * something else would read as a different kind of thing entirely, then be
+ * replaced.
+ *
+ * No arrival animation. These are what the animation is arriving *to*.
+ */
+function BlockSkeleton() {
+  return (
+    <div
+      aria-hidden
+      className="relative flex items-start gap-3.5 rounded-xl border border-border bg-surface px-4 py-3.5 shadow-e1"
+    >
+      <span
+        aria-hidden
+        className="absolute bottom-0 w-px border-l border-dashed border-border-strong"
+        style={{ left: THREAD_X_IN_CARD, top: THREAD_TOP_IN_CARD }}
+      />
+      <Skeleton className="size-10 shrink-0 rounded-lg" />
+      <div className="flex min-w-0 flex-1 flex-col gap-2 py-1">
+        <Skeleton className="h-2 w-16" />
+        <Skeleton className="h-3 w-2/3" />
+      </div>
     </div>
   );
 }

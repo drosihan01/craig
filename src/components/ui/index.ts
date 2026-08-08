@@ -106,6 +106,7 @@ export {
 } from "./chat";
 export {
   WorkflowBuilder,
+  revealDuration,
   BlockInspector,
   BLOCK_TYPES,
   INSERTABLE,

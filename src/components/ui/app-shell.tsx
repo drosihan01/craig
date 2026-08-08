@@ -113,18 +113,18 @@ function usePersistedPanel(key: string) {
   return [open, toggle] as const;
 }
 
-function usePersistedWidth(key: string) {
+function usePersistedWidth(key: string, fallback = DEFAULT_W) {
   const width = React.useSyncExternalStore(
     subscribe,
     () => {
       try {
         const raw = localStorage.getItem(key);
-        return raw === null ? DEFAULT_W : clamp(Number(raw) || DEFAULT_W);
+        return raw === null ? fallback : clamp(Number(raw) || fallback);
       } catch {
-        return DEFAULT_W;
+        return fallback;
       }
     },
-    () => DEFAULT_W,
+    () => fallback,
   );
 
   const setWidth = React.useCallback(
@@ -165,6 +165,7 @@ export function AppShell({
   nav,
   aside,
   asideTitle,
+  asidePanel,
   account,
   actions,
   fill,
@@ -181,6 +182,19 @@ export function AppShell({
       shouting. The drawer still gets a name, since a sheet with no title is
       unlabelled to a screen reader. */
   asideTitle?: string;
+  /**
+   * A starting width for the right panel, and its own place to remember one.
+   *
+   * Both together, because either alone is broken. A wider default under the
+   * shared key lasts until somebody drags the panel on any other screen, and
+   * then the screen that needed the width silently loses it. A separate key
+   * with the shared default starts every builder at 224px again.
+   *
+   * The builder is the one screen where the panel is a conversation rather
+   * than a column of facts, and 224px is narrow enough that a placeholder
+   * wraps to two lines in it.
+   */
+  asidePanel?: { key: string; width: number };
   account?: AccountInfo;
   actions?: React.ReactNode;
   /** Omit entirely to hide the bell — an empty array still shows it, correctly
@@ -198,7 +212,10 @@ export function AppShell({
   const [navOpen, toggleNav] = usePersistedPanel("craig-nav");
   const [asideOpen, toggleAside] = usePersistedPanel("craig-aside");
   const [navW, setNavW] = usePersistedWidth("craig-nav-w");
-  const [asideW, setAsideW] = usePersistedWidth("craig-aside-w");
+  const [asideW, setAsideW] = usePersistedWidth(
+    asidePanel ? `craig-aside-w-${asidePanel.key}` : "craig-aside-w",
+    asidePanel?.width,
+  );
 
   const isDesktop = useIsDesktop();
   /* Not persisted, unlike the column state. A drawer is a thing you opened a
