@@ -106,49 +106,6 @@ export function WorkflowCraig({
         </div>
       )}
 
-      {/* Above the conversation, because it is the answer to the question
-          somebody arrives with — "what is left" — and making them read a
-          transcript to find it is making them do his job. It disappears
-          entirely when there is nothing outstanding rather than saying so:
-          a permanent panel reading "nothing needs your attention" is a row of
-          furniture that has to be scanned every time to discover it is empty. */}
-      {attention.length > 0 && (
-        <div className="mb-4 flex shrink-0 flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken p-3">
-          <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-            Needs your attention
-          </p>
-
-          {attention.map((item) => {
-            const line = (
-              <span className="flex items-start gap-1.5">
-                <Warning className="mt-0.5 size-3.5 shrink-0 text-warning" />
-                <span className="min-w-0 flex-1">{item.label}</span>
-              </span>
-            );
-
-            /* A button only when pressing it goes somewhere. An item with
-               nowhere to open is still worth listing — it is why the workflow
-               cannot be published — but dressing it as a control teaches
-               somebody that these are pressable and then breaks that on the
-               one that is not. */
-            return item.id && onSelect ? (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => onSelect(item.id as string)}
-                className="-mx-1 rounded-md px-1 py-0.5 text-left text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-              >
-                {line}
-              </button>
-            ) : (
-              <span key={item.label} className="px-1 text-sm text-text-muted">
-                {line}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
       <div
         ref={scrollRef}
         onScroll={() => {
@@ -199,6 +156,62 @@ export function WorkflowCraig({
             ),
           )
         )}
+
+        {/* His last word, rather than a panel above him. What is outstanding
+            is something Craig is telling you — it belongs in the conversation
+            where the rest of what he tells you lives, and reads as a turn he
+            has just taken rather than as furniture that was always there.
+
+            After the transcript for the same reason: it is the most recent
+            thing, and it changes as you fix things, so it has to sit where the
+            eye already is rather than above messages that came later. */}
+        {attention.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <CraigMark className="size-5 shrink-0 text-accent" />
+            </div>
+
+            <p className="text-sm leading-relaxed text-text">
+              {attention.length === 1
+                ? "One thing before you can publish this:"
+                : `${attention.length} things before you can publish this:`}
+            </p>
+
+            <div className="flex flex-col gap-1 rounded-lg border border-border bg-surface-sunken p-2.5">
+              {attention.map((item) => {
+                const line = (
+                  <span className="flex items-start gap-1.5">
+                    <Warning className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                    <span className="min-w-0 flex-1">{item.label}</span>
+                  </span>
+                );
+
+                /* A button only when pressing it goes somewhere. An item with
+                   nowhere to open is still worth listing — it is why the
+                   workflow cannot be published — but dressing it as a control
+                   teaches somebody these are pressable and then breaks that on
+                   the one that is not. */
+                return item.id && onSelect ? (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => onSelect(item.id as string)}
+                    className="-mx-1 rounded-md px-1 py-0.5 text-left text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+                  >
+                    {line}
+                  </button>
+                ) : (
+                  <span
+                    key={item.label}
+                    className="px-1 text-sm text-text-muted"
+                  >
+                    {line}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex shrink-0 flex-col gap-3">
@@ -221,7 +234,7 @@ export function WorkflowCraig({
           attachments={false}
           placeholder="Tell him what's missing…"
           onSubmit={send}
-          footnote={footnote(steps, open, published)}
+          footnote={footnote(steps, open, attention.length, published)}
         />
       </div>
     </div>
@@ -257,11 +270,26 @@ function opening(
   return `All ${steps} steps have what they need, so this one is ready to publish. Say what else it should do and I'll add it.`;
 }
 
-function footnote(steps: number, open: number, published?: boolean) {
+/**
+ * The line under the composer, which must not disagree with him.
+ *
+ * `blocked` is anything outstanding, not merely unanswered fields. Without it
+ * this said "Nothing is missing. Ready to publish." directly beneath Craig
+ * saying one thing had to happen first — the count it was derived from knows
+ * about steps and knows nothing about whether Google is connected.
+ */
+function footnote(
+  steps: number,
+  open: number,
+  blocked: number,
+  published?: boolean,
+) {
   if (published) return "Published. Changes here apply to the next person.";
   if (steps === 0) return "No steps yet.";
-  return open > 0
-    ? `${count(open, "step")} still ${open === 1 ? "needs" : "need"} an answer.`
+  if (open > 0)
+    return `${count(open, "step")} still ${open === 1 ? "needs" : "need"} an answer.`;
+  return blocked > 0
+    ? "Not ready to publish yet."
     : "Nothing is missing. Ready to publish.";
 }
 

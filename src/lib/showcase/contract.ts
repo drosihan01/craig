@@ -93,6 +93,19 @@ export interface OpenStep {
 export interface OpenWorkflow {
   id: string;
   steps: OpenStep[];
+  /**
+   * What is standing between this workflow and being publishable, in words.
+   *
+   * Sent to Craig rather than worked out by him, and the difference matters:
+   * half of it isn't knowable from the steps. A missing Google connection is a
+   * fact about the account, and a model asked to infer it from a list of blocks
+   * would either miss it or invent it. So the screen derives the list — where
+   * it cannot be wrong — and he is told, so that "what's left?" gets the same
+   * answer from him as from the interface beside him.
+   *
+   * Absent during discovery, when there is no workflow to be blocked.
+   */
+  outstanding?: string[];
 }
 
 /** POST /api/chat */

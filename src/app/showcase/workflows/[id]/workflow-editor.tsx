@@ -5,12 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InviteStarter } from "@/components/showcase/invite-starter";
 import {
-  ShowcaseNav,
-  ShowcaseNavRail,
-} from "@/components/showcase/showcase-nav";
-import {
   AppShell,
   BackLink,
+  NavRail,
+  NavRailItem,
   Badge,
   BlockInspector,
   BlockSetup,
@@ -32,6 +30,7 @@ import {
 } from "@/components/ui";
 import {
   AltRoute,
+  ArrowBack,
   AutoAwesome,
   Check,
   ChevronLeft,
@@ -267,7 +266,45 @@ function Editor({
 
   /* Given the workflow's id, so his turns carry it and his editing tools have
      something to edit. Held here, above the panel that renders him. */
-  const chat = useCraigChat(workflow.id);
+  /* A workflow that will try to create an account, on an account that can't.
+     Read by the attention list, the canvas badge and the Publish gate, so all
+     three answer from one derivation. */
+  const needsGoogle = blocks.some((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
+  const googleBlocked = needsGoogle && !googleConnected;
+
+  /**
+   * Everything standing between this workflow and a seat being given.
+   *
+   * Assembled here because it is the only place both halves are known: a step
+   * missing a required answer is derived from the blocks, and a missing Google
+   * connection is a fact about the account that the canvas cannot see. Craig's
+   * panel is handed the finished list rather than the parts, so there is one
+   * answer to "what is left" and not two that can disagree.
+   *
+   * The connection goes last. It is one action for the whole workflow, where
+   * each unconfigured step is its own — and putting the single item above a
+   * list of several reads as though it were the first of them.
+   */
+  const attention = React.useMemo(() => {
+    const items: { id: string | null; label: string }[] = blocks
+      .filter(isUnconfigured)
+      .map((b) => ({ id: b.id, label: `${b.title} — ${setupWarning(b)}` }));
+
+    if (googleBlocked) {
+      const step = blocks.find((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
+      items.push({
+        id: step?.id ?? null,
+        label: "Connect Google Workspace",
+      });
+    }
+
+    return items;
+  }, [blocks, googleBlocked]);
+
+  const chat = useCraigChat(
+    workflow.id,
+    attention.map((a) => a.label),
+  );
 
   /* Only to re-read the seats after an invitation goes out. They arrived as
      props from the server, so the page that read them is the only thing that
@@ -450,37 +487,6 @@ function Editor({
    * connection it never uses would be a gate about our integration rather than
    * about their plan.
    */
-  const needsGoogle = blocks.some((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
-  const googleBlocked = needsGoogle && !googleConnected;
-
-  /**
-   * Everything standing between this workflow and a seat being given.
-   *
-   * Assembled here because it is the only place both halves are known: a step
-   * missing a required answer is derived from the blocks, and a missing Google
-   * connection is a fact about the account that the canvas cannot see. Craig's
-   * panel is handed the finished list rather than the parts, so there is one
-   * answer to "what is left" and not two that can disagree.
-   *
-   * The connection goes last. It is one action for the whole workflow, where
-   * each unconfigured step is its own — and putting the single item above a
-   * list of several reads as though it were the first of them.
-   */
-  const attention = React.useMemo(() => {
-    const items: { id: string | null; label: string }[] = blocks
-      .filter(isUnconfigured)
-      .map((b) => ({ id: b.id, label: `${b.title} — ${setupWarning(b)}` }));
-
-    if (googleBlocked) {
-      const step = blocks.find((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
-      items.push({
-        id: step?.id ?? null,
-        label: "Connect Google Workspace",
-      });
-    }
-
-    return items;
-  }, [blocks, googleBlocked]);
 
   const [inviting, setInviting] = React.useState(false);
   const [paywall, setPaywall] = React.useState(false);
@@ -519,18 +525,32 @@ function Editor({
       /* Only while Craig has the panel. His transcript starts at the top rule
          and scrolls under it; a block's settings below still want the margin. */
       asideFlushTop={!selected}
-      navRail={<ShowcaseNavRail />}
-      nav={
-        <ShowcaseNav>
-          <EditorNav
-            workflow={workflow}
-            blocks={blocks}
-            steps={steps}
-            unconfigured={unconfigured}
-            onSelect={select}
-            onDelete={onDelete}
+      /* Collapsed, the column keeps the one thing it has: the way out. The
+         other screens' rails carry Workflows and People, and this one
+         deliberately doesn't offer those — so what's left is a back arrow,
+         which is the whole of this screen's navigation at either width. */
+      navRail={
+        <NavRail>
+          <NavRailItem
+            href="/showcase/workflows"
+            label="Workflows"
+            icon={<ArrowBack />}
           />
-        </ShowcaseNav>
+        </NavRail>
+      }
+      /* No Workflows and People here. The builder is one workflow, at length,
+         and a column offering two other rooms invites you out of it — the way
+         back to the list is the only navigation this screen owes anybody, and
+         it is the first thing in the column. */
+      nav={
+        <EditorNav
+          workflow={workflow}
+          blocks={blocks}
+          steps={steps}
+          unconfigured={unconfigured}
+          onSelect={select}
+          onDelete={onDelete}
+        />
       }
       actions={
         workflow.published ? (
@@ -737,10 +757,6 @@ function Editor({
           `min-height: auto` would floor it at its content and push the canvas
           past the fold. */}
       <div className="flex h-[calc(100vh-3rem)] flex-col">
-        <BackLink href="/showcase/workflows" className="shrink-0 pb-3 pt-4">
-          Workflows
-        </BackLink>
-
         <div className="-mx-4 min-h-0 flex-1 lg:-mx-8">
           <WorkflowCanvas
             className="h-full rounded-none border-0"
@@ -883,12 +899,18 @@ function EditorNav({
   const manual = blocks.filter((b) => byHand(b)).length;
 
   return (
-    /* No way back at the top any more — it is above the canvas now, in the
-       column somebody is actually reading. What is left starts on Overview,
-       which `ShowcaseNav` already separates from the two rooms above it, so
-       nothing is orphaned and the column opens on a heading rather than on a
-       rule with nothing over it. */
+    /* The way back opens the column, and it is the only navigation here — the
+       builder deliberately doesn't offer Workflows and People, because this
+       screen is one workflow at length and a list of other rooms invites you
+       out of it. Which makes this link load-bearing rather than decorative:
+       without it there is no way back except the browser's own button. */
     <div className="flex flex-col gap-5">
+      <BackLink href="/showcase/workflows" className="px-2">
+        Workflows
+      </BackLink>
+
+      <Separator />
+
       <div className="flex flex-col gap-3 px-2">
         {/* No name here — the header carries it, and the trigger is the first
             block on the canvas. A column that repeats what's already on screen

@@ -118,7 +118,18 @@ async function failureFrom(response: Response): Promise<string> {
   return "Craig couldn't be reached. Try again.";
 }
 
-export function useCraigChat(workflowId?: string): CraigChat {
+export function useCraigChat(
+  workflowId?: string,
+  /* What the screen already knows is blocking publication, so his answer to
+     "what's left?" is the same as the one on screen beside him. */
+  outstanding?: string[],
+): CraigChat {
+  /* Through a ref so `send` keeps one identity. It changes whenever a field is
+     answered, and rebuilding the callback on every keystroke would remount the
+     composer under whoever is typing into it. */
+  const outstandingRef = React.useRef(outstanding);
+  outstandingRef.current = outstanding;
+
   const { messages } = useShowcase();
   const [phase, setPhase] = React.useState<string | null>(null);
   const [notes, setNotes] = React.useState<CraigNote[]>([]);
@@ -180,7 +191,9 @@ export function useCraigChat(workflowId?: string): CraigChat {
               /* Only when there's one open. Its absence is what tells him this
                  is discovery, and it's what keeps the editing tools out of a
                  conversation that has nothing to edit. */
-              workflow: workflowId ? openWorkflow(workflowId) : undefined,
+              workflow: workflowId
+                ? openWorkflow(workflowId, outstandingRef.current)
+                : undefined,
               simpleDraft: store.simpleDraft,
             }),
           });

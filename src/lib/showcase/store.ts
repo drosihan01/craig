@@ -612,12 +612,20 @@ export const unconfiguredCount = (blocks: WorkflowBlock[]) =>
  * keep in step. The trigger is left out: it is the event, it has nothing to
  * configure, and offering it would only give him a way to get it wrong.
  */
-export function openWorkflow(id: string): OpenWorkflow | undefined {
+export function openWorkflow(
+  id: string,
+  /* Passed in rather than derived here, because half of it isn't in this
+     store: whether Google Workspace is connected is a fact about the account
+     that lives on the server. The screen holding both is the one that can say
+     what is outstanding. */
+  outstanding?: string[],
+): OpenWorkflow | undefined {
   const workflow = state.workflows.find((w) => w.id === id);
   if (!workflow) return undefined;
 
   return {
     id: workflow.id,
+    outstanding: outstanding?.length ? outstanding : undefined,
     steps: workflow.blocks.flatMap((b) =>
       b.kind === "trigger" || !b.preset
         ? []
