@@ -20,8 +20,8 @@ import type { GoogleConnection } from "@/lib/google/auth";
  * somebody has to connect Google Workspace. That path is the one anybody can
  * actually see right now, so it is the one that had to be good.
  *
- * Two things are needed and both are needed, which is why this returns a pair
- * rather than a connection:
+ * Two things are needed and both are needed, which is why this returns a
+ * record rather than a connection:
  *
  * The **connection** is what `src/lib/google/*` acts with. `accountId` keys the
  * access-token cache and is the reason a token minted for one customer can
@@ -53,6 +53,17 @@ export interface AccountGoogle {
   connection: GoogleConnection | null;
   /** Their Workspace domain, from Google. Null when nothing is connected. */
   domain: string | null;
+  /**
+   * A connection is on the record and this server cannot open it.
+   *
+   * Distinct from having none, and the distinction is the whole point of
+   * carrying it: both leave `connection` null, and they are opposites to the
+   * person reading the screen. "Nobody has connected yet" is answered by
+   * pressing Connect. "The stored connection can't be opened" is answered by
+   * looking at why — and pressing Connect there would throw away a grant a
+   * Workspace admin has already given, to fix a problem that was never theirs.
+   */
+  unreadable: boolean;
 }
 
 /**
@@ -83,7 +94,21 @@ export async function googleForAccount(
      distinction is drawn downstream by `oauthClient()`, where it belongs —
      that one is a fact about the environment and this function's answer is
      about one account. */
-  return found.ok
-    ? { connection: found.connection, domain: found.domain }
-    : { connection: null, domain: null };
+  if (found.ok) {
+    return {
+      connection: found.connection,
+      domain: found.domain,
+      unreadable: false,
+    };
+  }
+
+  /* The only refusal worth telling apart here. Everything else — no client on
+     this deployment, nobody consented — is "nothing connected", and which of
+     those it is gets decided downstream by `oauthClient()`, where the
+     environment is knowable. */
+  return {
+    connection: null,
+    domain: null,
+    unreadable: found.reason === "unreadable",
+  };
 }

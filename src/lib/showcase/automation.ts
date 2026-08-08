@@ -362,6 +362,11 @@ async function tellThem(
     html,
     text,
     fromName: SENDER.name(joiner.company),
+    /* The one email in this product that carries a live credential, so no
+       copy of it is kept anywhere — not in the development outbox, and not
+       in the run record. The password exists in this function, in that
+       message, and nowhere else. */
+    sensitive: true,
   });
 
   if (sent.ok) return undefined;
@@ -403,7 +408,24 @@ async function tellThem(
 async function createSeat(
   joiner: Joiner,
 ): Promise<Partial<StepRun> & { state: RunState }> {
-  const { connection, domain } = await googleForAccount(joiner.accountEmail);
+  const { connection, domain, unreadable } = await googleForAccount(
+    joiner.accountEmail,
+  );
+
+  /* Stored, and unopenable — which is not the same as absent and must not read
+     as it. "Nobody has connected yet" is answered by pressing Connect; this is
+     answered by finding out why, and pressing Connect here would discard a
+     grant a Workspace admin has already given to fix something that was never
+     theirs. Loud rather than calm, because new starters are stopped by it. */
+  if (unreadable) {
+    return {
+      state: "failed",
+      problem: "needs-reconnect",
+      message:
+        "The connection to Google Workspace is still there, but this server can't read it, so nothing was created. It needs looking at before anybody reconnects — reconnecting would throw the existing permission away.",
+      endedAt: now(),
+    };
+  }
 
   /* The probe. With nothing connected there is no address to build and no call
      worth making, but the *sentence* still has to come from the same place

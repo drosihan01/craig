@@ -75,6 +75,20 @@ export interface Outgoing {
   /** The display name. The address it pairs with comes from `SENDER`. */
   fromName: string;
   /**
+   * This message carries a credential, so no copy of its body is kept.
+   *
+   * The development outbox below writes every message to disk so whoever is
+   * building this can read what actually went out — which is the right trade
+   * for an invitation and the wrong one for a temporary password. That
+   * password is deliberately stored nowhere: it is generated, put in one
+   * email, and dropped. Writing the email to `.data/` would put it back,
+   * in the clear, in a directory nobody remembers is there.
+   *
+   * The envelope is still recorded, because "did it send, to whom, when" is
+   * the question the outbox exists to answer and none of it is the secret.
+   */
+  sensitive?: boolean;
+  /**
    * A silent copy, for when somebody needs to see what actually went out.
    *
    * Blind rather than `cc`, and one send rather than two. A `cc` would put a
