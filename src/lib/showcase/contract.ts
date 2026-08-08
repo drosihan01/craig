@@ -22,6 +22,18 @@ export interface Session {
   email: string;
   /** Display name, derived from the email when there's nothing better. */
   name: string;
+  /**
+   * The company they signed up as.
+   *
+   * Sign-up has always asked for this and the account has always stored it —
+   * it just stopped at the account, so every screen past the door had to talk
+   * about "your company" while holding the name of it. Craig especially: he
+   * opens by asking about a company he could have named.
+   *
+   * Optional because a session minted before this existed won't carry one, and
+   * a signed token can't be edited after the fact. Callers fall back.
+   */
+  company?: string;
   /** Unix seconds. */
   issuedAt: number;
 }

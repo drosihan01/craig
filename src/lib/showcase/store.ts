@@ -113,6 +113,19 @@ interface ShowcaseState {
    * run, not what happened in the last one.
    */
   simpleDraft: boolean;
+  /**
+   * Whose data this is.
+   *
+   * Everything above belongs to one account and none of it is on the server, so
+   * without this there is nothing tying the two together — sign up as somebody
+   * new and the browser keeps the last person's conversation, workflows and
+   * invitees, because signing up is a fetch and a client navigation rather than
+   * a page load and module state survives it. Craig then reads a transcript
+   * addressed to the previous account and carries on calling them by that name.
+   *
+   * Null before anyone has claimed it, and on the signed-out screens.
+   */
+  accountEmail: string | null;
 }
 
 /**
@@ -120,8 +133,8 @@ interface ShowcaseState {
  *
  * Not even the account holder: whoever signed up is known to the server, not
  * to this module, and hardcoding a person here would put a name on screen
- * before anybody had typed one. `identify()` fills it in once the session is
- * known, which is the only moment it's true.
+ * before anybody had typed one. Every screen reads the session for that, so
+ * there is nothing here to seed.
  */
 const initial = (): ShowcaseState => ({
   people: [],
@@ -131,6 +144,7 @@ const initial = (): ShowcaseState => ({
   facts: [],
   messages: [],
   simpleDraft: true,
+  accountEmail: null,
 });
 
 let state: ShowcaseState = initial();
@@ -340,6 +354,39 @@ export function createBlankWorkflow(): ShowcaseWorkflow {
   return workflow;
 }
 
+/**
+ * Taking a seat back.
+ *
+ * The mirror of `deleteWorkflow`, and it draws the same line from the other
+ * side: that one leaves the people alone because a person is not a detail of
+ * the plan that greeted them, and this one leaves the workflow alone for the
+ * same reason. Removing somebody is a change to who this account is paying
+ * attention to, not a change to how the company onboards.
+ *
+ * The account holder can't be removed, and the guard is here rather than only
+ * on the button. Nobody takes their own seat away in their own workspace —
+ * there would be nothing left to sign in to — and a rule that lives only in the
+ * component that renders the affordance is a rule the next screen gets to
+ * forget about.
+ *
+ * The activity line stays, and so does the email. What went out went out: the
+ * person on the other end has been welcomed to a company and told when they
+ * start, and no button in here can un-send that. Removing the row means this
+ * account stops tracking them, which is worth being precise about — the
+ * confirmation says it in as many words rather than letting "remove" imply a
+ * reach into somebody else's inbox.
+ */
+export function deletePerson(id: string) {
+  const person = state.people.find((p) => p.id === id);
+  if (!person || person.owner) return;
+
+  set({ people: state.people.filter((p) => p.id !== id) });
+  logActivity({
+    verb: "Removed",
+    what: `${person.name}'s seat — nothing more is sent to them`,
+  });
+}
+
 export function invitePerson(person: Omit<ShowcasePerson, "id">) {
   set({
     people: [...state.people, { ...person, id: crypto.randomUUID() }],
@@ -360,27 +407,29 @@ export function logActivity(entry: { verb: string; what: string }) {
 }
 
 /**
- * Tell the store who signed in.
+ * Tie the browser's copy to the account that's signed in, clearing it if that
+ * has changed.
  *
- * Called once the session is known. They hold the account rather than having
- * been invited to it, which is why this is separate from `invitePerson` and
- * why the row is marked `owner` — People should show them from the first load
- * and never show them as somebody's onboarding.
+ * This replaces an `identify()` that filled in the account holder's row and was
+ * never called by anything — People reads the session directly, so the row it
+ * added was never needed. What *was* needed is the half it didn't do: noticing
+ * when the person in front of it is somebody else.
+ *
+ * Signing up is a fetch followed by a client navigation, not a page load, so
+ * module state survives it. Without this, a second account inherits the first
+ * one's workflows, invitees and conversation — and Craig, handed a transcript
+ * addressed to the previous account, keeps using that person's name.
+ *
+ * Same account, or a re-render: nothing happens, so a page that renders twice
+ * doesn't wipe the conversation it's showing.
  */
-export function identify(person: { name: string; email: string }) {
-  if (state.people.some((p) => p.owner)) return;
-  set({
-    people: [
-      {
-        id: "owner",
-        name: person.name,
-        email: person.email,
-        role: "Founder",
-        owner: true,
-      },
-      ...state.people,
-    ],
-  });
+export function claimAccount(email: string | null) {
+  if (state.accountEmail === email) return;
+
+  /* The switch survives for the same reason `resetShowcase` keeps it: it says
+     how the next test should run, not what happened in the last one. */
+  state = { ...initial(), simpleDraft: state.simpleDraft, accountEmail: email };
+  listeners.forEach((l) => l());
 }
 
 /* ---------------------------------------------------------------------- */

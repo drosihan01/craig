@@ -399,6 +399,7 @@ export async function POST(request: Request) {
   /* Seeded from what the client kept, because this dies with the response. */
   const notebook = seedNotebook(
     session.name?.split(" ")[0] || "there",
+    session.company,
     parsed.known,
     parsed.workflow,
     parsed.simpleDraft,

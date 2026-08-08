@@ -98,6 +98,14 @@ export interface Notebook {
       person for everybody. */
   firstName: string;
   /**
+   * The company they signed up as, when the session carries one.
+   *
+   * Alongside `firstName` and for the same reason: he was told who he was
+   * talking to and nothing about where they worked, so he opened by asking
+   * about a company whose name was sitting in the account the whole time.
+   */
+  company?: string;
+  /**
    * The workflow open in the editor, or null during discovery.
    *
    * Mutated by the editing tools as they run, so a second call in the same turn
@@ -145,6 +153,7 @@ export interface Notebook {
  */
 export function seedNotebook(
   firstName: string,
+  company: string | undefined,
   known?: { gaps: string[]; facts: string[] },
   editing?: OpenWorkflow,
   simpleDraft = false,
@@ -155,6 +164,7 @@ export function seedNotebook(
     facts: (known?.facts ?? []).map((value) => ({ key: "", value })),
     workflow: null,
     firstName,
+    company,
     /* Their turns and his notes of them together: a conversation gets trimmed
        on the way here, and a fact recorded on turn one is still something they
        said. */
@@ -252,7 +262,7 @@ const draftWorkflowParams = z.object({
   name: z
     .string()
     .describe(
-      "What this workflow is for, in a few words — usually the role, like 'Engineer onboarding'.",
+      "What kind of hire this workflow is for, in a few words. Name the role or the company, never the person: 'Designer onboarding', 'Contractor onboarding', 'Magitech onboarding'. Never 'Onboarding for Priya Raman'. The workflow is run again for the next hire and the one after, so a person's name in it is wrong the moment they finish.",
     ),
   steps: z
     .array(
@@ -877,7 +887,8 @@ export function splitCitations(buffered: string): {
  * stay exactly as written and this is plainly a briefing note on top.
  */
 function instructionsFor(context: RunContext<Notebook>): string {
-  const { facts, gaps, firstName, editing, simpleDraft } = context.context;
+  const { facts, gaps, firstName, company, editing, simpleDraft } =
+    context.context;
 
   /* Each block appears once and only once. His notes are here and in `recall`,
      which is the same list read two ways rather than two lists; the workflow is
@@ -900,7 +911,7 @@ function instructionsFor(context: RunContext<Notebook>): string {
           .join("\n");
 
   return [
-    craigSystemPrompt(firstName),
+    craigSystemPrompt(firstName, company),
     known,
     /* Only while there's still a workflow to draft. Once one is open the
        editing note is the thing that governs, and a second instruction about

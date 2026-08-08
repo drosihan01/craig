@@ -106,11 +106,13 @@ export async function createSession(
      is documented as derived from the email "when there's nothing better", and
      since sign-up asks for it directly there usually is. */
   name?: string,
+  company?: string,
 ): Promise<string> {
   const issuedAt = Math.floor(Date.now() / 1000);
   const payload: Payload = {
     email,
     name: name?.trim() || nameFrom(email),
+    company: company?.trim() || undefined,
     issuedAt,
     expiresAt: issuedAt + SESSION_MAX_AGE,
   };
@@ -164,6 +166,9 @@ export async function readSession(
     return {
       email: payload.email,
       name: payload.name,
+      /* Absent on tokens minted before the field existed, which is why every
+         reader treats it as optional rather than trusting it to be there. */
+      company: payload.company,
       issuedAt: payload.issuedAt,
     };
   } catch {

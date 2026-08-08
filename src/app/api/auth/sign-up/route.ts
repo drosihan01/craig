@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   const response = NextResponse.json({ ok: true });
   response.cookies.set(
     SESSION_COOKIE,
-    await createSession(account.email, account.name),
+    await createSession(account.email, account.name, account.company),
     { ...SESSION_COOKIE_OPTIONS, maxAge: SESSION_MAX_AGE },
   );
   return response;
