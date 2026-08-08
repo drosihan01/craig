@@ -9,6 +9,8 @@ import { dirname, join } from "node:path";
    account store, for a shape that costs nothing at runtime. `import type` is
    erased entirely, so this is a promise about the shape and nothing more. */
 import type { GoogleConnection } from "@/lib/google/auth";
+import { SUBSCRIPTION_STATUSES } from "./contract";
+import type { Subscription, SubscriptionStatus } from "./contract";
 import { constantTimeEqual } from "./session";
 import { safeCompany } from "./sign-up";
 
@@ -75,6 +77,21 @@ export interface Account {
   createdAt: number;
   /** Null until a Workspace admin has consented. Never carries the token. */
   google: GoogleConnectionView | null;
+  /**
+   * What Stripe last told us, or null because nobody has ever paid.
+   *
+   * The whole record rather than a view of it, unlike `google` — and the
+   * difference is that there is nothing in a `Subscription` this file has to
+   * keep. A customer id and a subscription id address objects in a Stripe
+   * account that only our secret key can reach, so they are facts about the
+   * account rather than credentials, and the routes that manage a plan need
+   * them. If a secret ever does land on this record, it gets a view of its own
+   * and this field stops being a passthrough.
+   *
+   * Null rather than optional, so every reader has to face the case where
+   * somebody has not paid. That case is the common one.
+   */
+  subscription: Subscription | null;
 }
 
 /**
@@ -115,14 +132,21 @@ interface StoredGoogleConnection {
  * Writing it this way makes the compiler refuse a stored connection anywhere
  * an `Account` is expected, so the sealed token cannot be handed out by
  * somebody widening a return type.
+ *
+ * `subscription` is omitted for a duller reason and it is not a secret one:
+ * absent and null are the same fact here, and the file has records written
+ * before subscriptions existed. Optional on disk, null in memory, so nothing
+ * has to migrate and nothing has to remember to write a null.
  */
-interface StoredAccount extends Omit<Account, "google"> {
+interface StoredAccount extends Omit<Account, "google" | "subscription"> {
   /** Hex. Per-account, so two people choosing the same password don't collide. */
   salt: string;
   /** Hex. PBKDF2-SHA256 over the password with the salt above. */
   hash: string;
   /** Absent until somebody connects. Never leaves this file as it stands. */
   google?: StoredGoogleConnection;
+  /** Absent until somebody pays, and on records written before they could. */
+  subscription?: Subscription;
 }
 
 /**
@@ -200,7 +224,21 @@ function load(): Map<string, StoredAccount> {
            was only trying to say whether somebody is connected. Losing the
            connection costs one click to redo; losing the account costs
            everything they signed up with. */
-        .map((a) => [a.email, { ...a, google: readStoredGoogle(a.google) }]),
+        /* The subscription gets the same treatment for the same reason, with
+           one extra consequence worth naming: a record that fails this check
+           reads as no subscription, which drops the account to the free floor.
+           That is survivable in the only way that matters, because `seatLimit`
+           never returns fewer seats than are already taken — so a mangled row
+           costs somebody an upgrade prompt they can argue with, and costs
+           nobody who is half-way through onboarding their place. */
+        .map((a) => [
+          a.email,
+          {
+            ...a,
+            google: readStoredGoogle(a.google),
+            subscription: readStoredSubscription(a.subscription),
+          },
+        ]),
     );
   } catch {
     /* Missing is the normal first run, and unreadable is a file somebody
@@ -457,6 +495,68 @@ function readStoredGoogle(value: unknown): StoredGoogleConnection | undefined {
   };
 }
 
+/** Every status the union names, as a set, so a string off disk is checkable. */
+const KNOWN_STATUS = new Set<string>(SUBSCRIPTION_STATUSES);
+
+const isStatus = (value: unknown): value is SubscriptionStatus =>
+  typeof value === "string" && KNOWN_STATUS.has(value);
+
+/**
+ * A subscription off the disk, checked rather than trusted.
+ *
+ * The status is the field this exists for. Everything downstream branches on
+ * it, and an unrecognised one — a status Stripe added after this was written,
+ * or a hand-edited file — must not reach `entitles` as a string that happens
+ * not to match, because the record around it would then be quietly granting the
+ * seat count of a plan nobody can describe. Dropping the whole record is the
+ * conservative direction: the account falls back to the free floor, which
+ * `seatLimit` will not push below the number of seats already in use.
+ *
+ * The two ids are required for a duller reason: a subscription that cannot
+ * name its customer is one the billing routes can do nothing with, and an
+ * empty `cus_` handed to Stripe is a 400 raised somewhere far from here. The
+ * rest is normalised rather than required, because a missing period end costs
+ * a sentence on a screen and a missing seat count falls back to the floor —
+ * neither is worth taking a live plan away over.
+ */
+function readStoredSubscription(value: unknown): Subscription | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const stored = value as Partial<Subscription>;
+
+  if (
+    typeof stored.customerId !== "string" ||
+    !stored.customerId ||
+    typeof stored.subscriptionId !== "string" ||
+    !stored.subscriptionId ||
+    !isStatus(stored.status)
+  ) {
+    return undefined;
+  }
+
+  return {
+    customerId: stored.customerId,
+    subscriptionId: stored.subscriptionId,
+    status: stored.status,
+    /* Floored at zero rather than at `FREE_SEATS`, because this is reporting
+       what the record says and not deciding anything. The floor that protects
+       the customer belongs in `seatLimit`, where it is argued and where both
+       screens read it — a second, quieter floor here would be a place for the
+       two to disagree. */
+    seats:
+      typeof stored.seats === "number" && Number.isFinite(stored.seats)
+        ? Math.max(0, Math.floor(stored.seats))
+        : 0,
+    priceId: typeof stored.priceId === "string" ? stored.priceId : "",
+    currentPeriodEnd:
+      typeof stored.currentPeriodEnd === "number" &&
+      Number.isFinite(stored.currentPeriodEnd)
+        ? stored.currentPeriodEnd
+        : 0,
+    cancelAtPeriodEnd: stored.cancelAtPeriodEnd === true,
+    updatedAt: typeof stored.updatedAt === "string" ? stored.updatedAt : "",
+  };
+}
+
 /** Emails are matched the way mail servers match them, and stored that way. */
 const normalise = (email: string) => email.trim().toLowerCase();
 
@@ -492,6 +592,7 @@ const publicView = ({
   company,
   createdAt,
   google,
+  subscription,
 }: StoredAccount) =>
   ({
     name,
@@ -499,6 +600,7 @@ const publicView = ({
     company: safeCompany(company),
     createdAt,
     google: googleView(google),
+    subscription: subscriptionView(subscription),
   }) satisfies Account;
 
 /**
@@ -520,6 +622,35 @@ function googleView(
     scopes: [...stored.scopes],
     connectedAt: stored.connectedAt,
     needsReconnect: stored.needsReconnect === true,
+  };
+}
+
+/**
+ * The subscription, as anything outside this file sees it.
+ *
+ * Field by field rather than `{ ...stored }`, and there is nothing being
+ * withheld here — the copy is the point. What leaves this file is handed to
+ * pages and, through them, to props on a client component, and a shared
+ * reference would let a caller edit the store's own record by assigning to a
+ * field of something it was merely shown. Copying makes the record leaving here
+ * a statement of what was true, which is the same thing `googleView` does for
+ * the same reason.
+ *
+ * Absent becomes null, once, here. Every reader outside sees one shape.
+ */
+function subscriptionView(
+  stored: Subscription | undefined,
+): Subscription | null {
+  if (!stored) return null;
+  return {
+    customerId: stored.customerId,
+    subscriptionId: stored.subscriptionId,
+    status: stored.status,
+    seats: stored.seats,
+    priceId: stored.priceId,
+    currentPeriodEnd: stored.currentPeriodEnd,
+    cancelAtPeriodEnd: stored.cancelAtPeriodEnd,
+    updatedAt: stored.updatedAt,
   };
 }
 
@@ -873,6 +1004,105 @@ export function disconnectGoogle(email: string): boolean {
   return true;
 }
 
+/* --- The subscription ------------------------------------------------------ */
+
+/**
+ * Records what Stripe last said about this account's plan.
+ *
+ * The whole record replaces the whole record, never a merge. Stripe sends the
+ * subscription as it now stands, and merging would mean a field nobody
+ * mentioned this time keeping a value from last time — which is how an account
+ * ends up `active` with a cancelled subscription's seat count, or with the
+ * period end of a plan that has since been changed. There is exactly one
+ * authority on what a subscription looks like, and this is not it.
+ *
+ * `null` for an account that no longer exists, rather than a thrown error or a
+ * result type. This is called from a webhook and from the return leg of
+ * checkout, and "the account was deleted while somebody was paying" is a real
+ * outcome with nothing useful to say about it — there is one way to fail and no
+ * message the caller doesn't already have. The `Account` comes back on success
+ * because the caller usually wants to know what the plan now is, and reading it
+ * again would be a second lookup for a fact this function is holding.
+ *
+ * Nothing is logged. The ids are not secrets, but they are still somebody's
+ * billing relationship, and the routes that call this already log what they
+ * need with the context to make sense of it.
+ */
+export function saveSubscription(
+  email: string,
+  subscription: Subscription,
+): Account | null {
+  const { accounts } = store();
+  const account = accounts.get(normalise(email));
+  if (!account) return null;
+
+  /* Copied in, for the mirror of the reason `subscriptionView` copies out: the
+     caller built this object and may still be holding it, and a store whose
+     record is somebody else's mutable object is a store that changes without
+     anybody writing to it. */
+  account.subscription = {
+    customerId: subscription.customerId,
+    subscriptionId: subscription.subscriptionId,
+    status: subscription.status,
+    seats: subscription.seats,
+    priceId: subscription.priceId,
+    currentPeriodEnd: subscription.currentPeriodEnd,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+    updatedAt: subscription.updatedAt,
+  };
+
+  save(accounts);
+  return publicView(account);
+}
+
+/**
+ * The plan on this account, or null because there has never been one.
+ *
+ * Null covers both "no account" and "no subscription", and folding them is
+ * right here in a way it usually isn't: every caller is asking what this
+ * account may do, and an account that doesn't exist may do exactly what an
+ * account that has never paid may do. `getAccount` already distinguishes them
+ * for anything that needs to.
+ *
+ * Note what this does *not* do: ask Stripe. It is a synchronous read of what we
+ * were last told, and it has to be — it is called on the way to rendering a
+ * page that gates an invitation, and a payments provider having a bad afternoon
+ * must not become an onboarding tool that stops working.
+ */
+export function subscriptionFor(email: string): Subscription | null {
+  const account = store().accounts.get(normalise(email));
+  return subscriptionView(account?.subscription);
+}
+
+/**
+ * Forgets the plan on this account.
+ *
+ * For the webhook that hears a subscription has been deleted outright, and for
+ * anything else that has established there is nothing left to remember. Note
+ * that this is not the same act as a cancellation: a cancelled subscription is
+ * a record with `status: "canceled"`, which still knows the customer id and can
+ * still be shown to somebody asking what happened. This is for when the object
+ * itself is gone.
+ *
+ * Returns whether there was anything to forget, which is what lets a caller
+ * tell "cleared" from "already was" without either being an error — the same
+ * shape `disconnectGoogle` returns, for the same reason.
+ *
+ * What it does not do is take seats away from people who have them. Nothing in
+ * this file can: the limit is computed in `seatLimit`, which never returns
+ * fewer seats than are already in use, so the worst this can do is stop the
+ * next invitation.
+ */
+export function clearSubscription(email: string): boolean {
+  const { accounts } = store();
+  const account = accounts.get(normalise(email));
+  if (!account?.subscription) return false;
+
+  delete account.subscription;
+  save(accounts);
+  return true;
+}
+
 /**
  * Back to nothing. What the sandbox's reset button is for.
  *
@@ -886,6 +1116,13 @@ export function disconnectGoogle(email: string): boolean {
  * behaviour and worth saying out loud: a reset that emptied the account store
  * but left refresh tokens on disk would leave the most dangerous thing here
  * as the only survivor.
+ *
+ * Subscriptions go the same way, and that one is worth saying out loud for the
+ * opposite reason: this forgets a plan, it does not cancel one. Stripe keeps
+ * billing whoever was being billed, because Stripe is the record and this is
+ * only what we were told. Anybody wiring this button to a real payment account
+ * has to reckon with that; the honest fix is a cancellation at Stripe, not a
+ * deletion here.
  */
 export function clearAccounts(): void {
   store().accounts.clear();

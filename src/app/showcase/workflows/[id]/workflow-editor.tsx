@@ -37,13 +37,15 @@ import {
   Delete,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
-import { SeatPaywall, outOfSeats } from "@/components/showcase/seat-paywall";
+import { SeatPaywall } from "@/components/showcase/seat-paywall";
+import { useUpgrade } from "@/components/showcase/use-upgrade";
 import { WorkflowCraig } from "@/components/showcase/workflow-craig";
 import {
   GoogleWorkspaceConnect,
   type WorkspaceAccount,
 } from "@/components/showcase/google-workspace";
 import type { Session } from "@/lib/showcase/contract";
+import { outOfSeats, type SeatEntitlement } from "@/lib/showcase/seats";
 import {
   deleteWorkflow,
   markRevealed,
@@ -108,6 +110,7 @@ export function WorkflowEditor({
   id,
   user,
   seats,
+  entitlement,
   googleConnected,
 }: {
   id: string;
@@ -132,6 +135,17 @@ export function WorkflowEditor({
    * invitees, which never heard about a seat taken back on the server.
    */
   seats: string[];
+  /**
+   * How many seats there are to give, read on the server beside the list above.
+   *
+   * Separate from `seats` because they are different facts with different
+   * lifetimes — who is in a seat changes when somebody is invited, how many
+   * seats exist changes when a card is charged — and folding them into one
+   * number would put the paywall's copy at the mercy of a list of names. Both
+   * are read in the same render on the server, so the comparison this screen
+   * makes is the same comparison People makes, of the same two numbers.
+   */
+  entitlement: SeatEntitlement;
 }) {
   const { workflows } = useShowcase();
   const router = useRouter();
@@ -165,6 +179,7 @@ export function WorkflowEditor({
         workflow={workflow}
         user={user}
         seats={seats}
+        entitlement={entitlement}
         googleConnected={googleConnected}
         onDelete={() => setConfirming(true)}
       />
@@ -251,6 +266,7 @@ function Editor({
   workflow,
   user,
   seats,
+  entitlement,
   googleConnected,
   onDelete,
 }: {
@@ -258,6 +274,8 @@ function Editor({
   user: Session;
   /** Everyone holding a seat, by name, from the server. */
   seats: string[];
+  /** How many seats there are to give, from the server. */
+  entitlement: SeatEntitlement;
   /** Whether a Google Workspace step could run for this account. */
   googleConnected: boolean;
   onDelete: () => void;
@@ -491,6 +509,10 @@ function Editor({
   const [inviting, setInviting] = React.useState(false);
   const [paywall, setPaywall] = React.useState(false);
 
+  /* Shared with People's copy of this dialog, so publishing and inviting can't
+     end up handling a failed checkout differently. */
+  const upgrade = useUpgrade();
+
   function publish() {
     publishWorkflow(workflow.id);
     /* Back to Craig, because what happens next is written in his panel and a
@@ -509,7 +531,7 @@ function Editor({
        name and address would be a worse place to hear it. The workflow stays
        published either way: it is live and waiting, which is exactly what the
        paywall says happens if you decline. */
-    if (outOfSeats(seats.length)) setPaywall(true);
+    if (outOfSeats(seats.length, entitlement.limit)) setPaywall(true);
     else setInviting(true);
   }
 
@@ -800,13 +822,23 @@ function Editor({
       />
 
       {/* The same dialog People opens, for the same reason and with the same
-          number in it. Written once and used twice rather than a second
+          numbers in it. Written once and used twice rather than a second
           version of the offer here, because two paywalls are two chances to
-          quote a different price to the same person. */}
+          quote a different price to the same person — and now that the numbers
+          arrive as props, they are two chances to quote a different limit as
+          well. Both screens are handed the entitlement by the same function on
+          the server, which is what stops that being possible. */}
       <SeatPaywall
         open={paywall}
         onClose={() => setPaywall(false)}
+        onUpgrade={upgrade.start}
+        upgrading={upgrade.pending}
+        error={upgrade.error}
         holder={seats[0]}
+        seats={entitlement.limit}
+        paidSeats={entitlement.paidSeats}
+        price={entitlement.price}
+        subscribed={entitlement.subscribed}
       />
     </AppShell>
   );

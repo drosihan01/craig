@@ -1,5 +1,7 @@
+import { subscriptionFor } from "@/lib/showcase/accounts";
 import { requireUser } from "@/lib/showcase/current-user";
 import { listJoiners, progressOf } from "@/lib/showcase/joiners";
+import { seatEntitlement } from "@/lib/showcase/seats";
 import { PeopleList } from "./people-list";
 
 export const metadata = {
@@ -43,5 +45,18 @@ export default async function ShowcasePeoplePage() {
     };
   });
 
-  return <PeopleList user={user} people={people} />;
+  /* The seat limit, worked out where both halves of it are known.
+   *
+   * It used to be a constant the list imported, which was honest while every
+   * account had the same limit and is not any more: what somebody may have now
+   * depends on a subscription, and the browser is the last place that should be
+   * guessing at one. Computed here, against the same `people` this page just
+   * counted, so the number the button enforces and the number the paywall
+   * quotes come from one call rather than two opinions. */
+  const entitlement = seatEntitlement(
+    subscriptionFor(user.email),
+    people.length,
+  );
+
+  return <PeopleList user={user} people={people} entitlement={entitlement} />;
 }

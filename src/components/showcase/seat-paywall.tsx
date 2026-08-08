@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Dialog, Separator } from "@/components/ui";
+import { Button, Callout, Dialog, Separator } from "@/components/ui";
 
 /**
  * The one place this product asks for money.
@@ -22,41 +22,61 @@ import { Button, Dialog, Separator } from "@/components/ui";
  */
 
 /**
- * How many people the free plan can add, not counting whoever holds the account.
+ * The numbers used to live here, and the argument for that was a good one: the
+ * limit and the screen explaining the limit are the same fact, and a number
+ * raised in one place and described in the other is a dialog that argues with
+ * the button that opened it.
  *
- * Here rather than on a page that enforces it, because the number and the
- * screen that explains the number are the same fact — a limit raised in one
- * place and described in the other is a dialog that argues with the button that
- * opened it.
+ * It stopped being true when the limit stopped being a constant. What somebody
+ * may have is now a property of their subscription, which lives on the server
+ * and which a client component has no way to read — so the fact moved to
+ * `lib/showcase/seats`, where the entitlement rule is argued in full, and this
+ * dialog is *told* what to say. The old argument survives in a stronger form:
+ * the page that enforces the limit and the dialog that explains it are now
+ * given the same numbers by the same function, so they cannot disagree even in
+ * principle.
  */
-export const FREE_SEATS = 1;
-
-/**
- * Whether another person can be given a seat, asked the same way everywhere.
- *
- * Two screens offer an invitation — People, and the editor the moment you
- * publish — and the rule has to be one rule, or publishing becomes a way around
- * a limit that People enforces. So the comparison lives beside the number and
- * the dialog rather than being written out at each call site.
- *
- * `taken` is how many people hold a seat *now*, counted on the server. That is
- * the whole point: this used to be checked against whichever list the calling
- * screen happened to have in the browser, and a browser that had not heard
- * about a removal would go on refusing an invitation for a seat that was free.
- */
-export const outOfSeats = (taken: number) => taken >= FREE_SEATS;
-
-/** What the paid plan is, said once so the price and the promise can't drift. */
-const PRICE = "$49";
-const PAID_SEATS = 5;
-
 export function SeatPaywall({
   open,
   onClose,
+  onUpgrade,
+  upgrading = false,
+  error = null,
   holder,
+  seats,
+  paidSeats,
+  price,
+  subscribed = false,
 }: {
   open: boolean;
   onClose: () => void;
+  /**
+   * What the money button actually does, when anything does.
+   *
+   * Optional, and it falls back to `onClose` — which is what this button did
+   * before there was anywhere to send anybody, and is still the honest
+   * behaviour on a deployment with no payments configured. A button wired to a
+   * checkout that cannot exist would fail after the click, which is a worse
+   * place to find out than never having promised.
+   */
+  onUpgrade?: () => void;
+  /**
+   * True from the press until the browser has left for Stripe.
+   *
+   * The gap is a real one — creating a Checkout Session is a round trip to
+   * Stripe and back before anything visibly happens — and an unchanged button
+   * during it reads as a button that didn't work. The second press it invites
+   * would be a second session.
+   */
+  upgrading?: boolean;
+  /**
+   * Why the checkout didn't open, if it didn't.
+   *
+   * It belongs inside the dialog rather than on the page behind it. Whatever
+   * went wrong, the person is still standing here deciding whether to pay, and
+   * an explanation they have to close this to read is one they won't.
+   */
+  error?: string | null;
   /**
    * Whoever is using the free seat, if the page knows.
    *
@@ -66,55 +86,104 @@ export function SeatPaywall({
    * attention. Optional, since nothing here depends on it being there.
    */
   holder?: string;
+  /** How many seats they are entitled to now, from the server. */
+  seats: number;
+  /** How many the paid plan offers — the number sold, not the number held. */
+  paidSeats: number;
+  /** The price, already written the way it should be read. */
+  price: string;
+  /**
+   * Whether a live plan is what `seats` comes from.
+   *
+   * It changes what this dialog is. Pitching a plan to somebody who already
+   * bought it is the single most irritating thing a paywall can do, and it is
+   * also a lie — they are not one payment away from more seats, they are a
+   * change to an existing subscription away. Note it means *live*: a lapsed
+   * plan is not a plan, and somebody whose card finally failed should see the
+   * offer again rather than a description of something they no longer have.
+   */
+  subscribed?: boolean;
 }) {
+  /* The whole dialog turns on this one word, so it is derived once. `seats` is
+     the entitlement, which on the free plan is one — but not always, because
+     a lapsed plan leaves somebody entitled to however many people already
+     hold a seat, and telling that person "the free plan is one seat" while
+     four colleagues are onboarding would be flatly wrong. */
+  const plural = seats === 1 ? "seat" : "seats";
+
   return (
     <Dialog
       open={open}
       onClose={onClose}
       size="md"
       title="You're out of seats"
-      description={
-        holder
-          ? `The free plan is one seat, and ${holder.split(" ")[0]} has it.`
-          : "The free plan is one seat, and it's taken."
-      }
+      description={headline({ seats, subscribed, holder })}
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
             Not now
           </Button>
-          {/* Ends the flow rather than pretending to continue it. The word is
-              the offer, not a receipt — nothing here has taken anybody's money
-              and the button must never read as though it has. */}
-          <Button size="sm" onClick={onClose}>
-            Upgrade my seats
+          {/* The word is the offer, not a receipt — nothing at this point has
+              taken anybody's money and the button must never read as though it
+              has. Falling back to `onClose` keeps that true on a deployment
+              with no checkout behind it: the flow ends rather than pretending
+              to continue, which is what it did before there was an `onUpgrade`
+              to hand it. */}
+          <Button
+            size="sm"
+            onClick={onUpgrade ?? onClose}
+            disabled={upgrading}
+          >
+            {upgrading ? "Opening checkout…" : "Upgrade my seats"}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4 px-5 py-5">
+        {/* Above the pitch, because it is now the more important thing on the
+            screen: the offer is unchanged and they have already read it, and
+            what they don't know is why pressing it did nothing. */}
+        {error && <Callout tone="danger">{error}</Callout>}
+
         <p className="text-base leading-relaxed text-text-muted">
           Nothing has gone wrong — you&apos;ve just run out of room. Upgrade
           your seats and the next person can be added the same way as the first.
         </p>
 
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-sunken p-4">
-          {/* The number, at the size the number deserves — 32px, half again as
-              big as the page's own heading. `items-baseline` so "a month" sits
-              on the price's baseline rather than floating somewhere against
-              the middle of its 40px line box. */}
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-4xl font-semibold tracking-[-0.03em] text-text">
-              {PRICE}
-            </span>
-            <span className="text-md text-text-muted">a month</span>
-          </div>
+          {/* The price is the offer, so it is only shown to somebody who
+              hasn't taken it. Quoting a plan at the person already paying for
+              it is both irritating and untrue — they are not one payment away
+              from more seats, they are a change to a subscription away, and
+              this dialog is not where that change is priced. So the same panel
+              says what they have instead, and the half below it, which is
+              about what they keep, is identical either way. */}
+          {subscribed ? (
+            <p className="text-base leading-relaxed text-text-muted">
+              You&apos;re on {seats} {plural} already, and every one of them is
+              in use. More is a change to the plan you have rather than a new
+              one, so nothing here is bought twice.
+            </p>
+          ) : (
+            <>
+              {/* The number, at the size the number deserves — 32px, half again
+                  as big as the page's own heading. `items-baseline` so "a
+                  month" sits on the price's baseline rather than floating
+                  somewhere against the middle of its 40px line box. */}
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-4xl font-semibold tracking-[-0.03em] text-text">
+                  {price}
+                </span>
+                <span className="text-md text-text-muted">a month</span>
+              </div>
 
-          <p className="text-base leading-relaxed text-text-muted">
-            Up to {PAID_SEATS} seats, plus your own account, which doesn&apos;t
-            count against them — the person you&apos;re adding now and the next
-            few after them, at the same price.
-          </p>
+              <p className="text-base leading-relaxed text-text-muted">
+                Up to {paidSeats} seats, plus your own account, which
+                doesn&apos;t count against them — the person you&apos;re adding
+                now and the next few after them, at the same price.
+              </p>
+            </>
+          )}
 
           <Separator />
 
@@ -132,4 +201,44 @@ export function SeatPaywall({
       </div>
     </Dialog>
   );
+}
+
+/**
+ * The one line under the title, which is the only sentence here that can be
+ * factually wrong.
+ *
+ * Three cases rather than one, because the limit has three provenances and a
+ * single sentence covering all of them could only do it by saying nothing. The
+ * free-plan wording is the original, kept word for word: it is the case
+ * practically everybody hits, and "the free plan is one seat, and Priya has it"
+ * is the version of this that sounds like a product paying attention.
+ *
+ * The middle case is the one nobody would think to write. Somebody whose plan
+ * lapsed keeps the seats already in use — `seatLimit` refuses to take them —
+ * so they can be out of seats while entitled to four of them, and telling that
+ * person "the free plan is one seat" would contradict both the list they just
+ * came from and the panel below.
+ */
+function headline({
+  seats,
+  subscribed,
+  holder,
+}: {
+  seats: number;
+  subscribed: boolean;
+  holder?: string;
+}): string {
+  if (subscribed) {
+    return seats === 1
+      ? "Your plan is one seat, and it's taken."
+      : `Your plan is ${seats} seats, and they're all taken.`;
+  }
+
+  if (seats > 1) {
+    return `You're on ${seats} seats, and they're all taken.`;
+  }
+
+  return holder
+    ? `The free plan is one seat, and ${holder.split(" ")[0]} has it.`
+    : "The free plan is one seat, and it's taken.";
 }

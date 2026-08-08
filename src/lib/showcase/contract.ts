@@ -521,3 +521,90 @@ export const JOIN_PATH = "/showcase/join";
 export const JOINER_HOME = "/showcase/me";
 /** Separate from the admin's cookie: they are different people, possibly at once. */
 export const JOINER_COOKIE = "craig_joiner";
+
+/* --- The subscription ----------------------------------------------------- */
+
+/**
+ * Where a subscription stands, in Stripe's own words.
+ *
+ * Copied rather than simplified, and that is the decision worth defending. The
+ * obvious alternative — a boolean, or three names of our own — moves the
+ * translation to whoever writes the webhook, which is the one place it must not
+ * live: a status arrives as a string from Stripe, and code that has already
+ * decided "this one counts as active" has thrown away the only thing anybody
+ * could later check against Stripe's documentation.
+ *
+ * Note there is no `none`. An account nobody has ever paid for holds `null`,
+ * which is a different fact from any status here — Stripe has no opinion about
+ * a customer it has never met, and inventing one would put "never subscribed"
+ * and "subscribed and cancelled" in the same field, which are opposite
+ * sentences to the person reading the paywall.
+ */
+export type SubscriptionStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "incomplete"
+  | "incomplete_expired"
+  | "unpaid"
+  | "canceled"
+  | "paused";
+
+/**
+ * The same statuses as a value, so a record off disk can be checked.
+ *
+ * Written directly under the union and maintained with it — a new status goes
+ * in both or in neither. It is here rather than in the store because the union
+ * is what it enumerates, and a list of strings kept in a different file from
+ * the type it mirrors is a list that drifts silently: the compiler will catch a
+ * member that isn't in the union, and nothing but proximity will catch a member
+ * that is missing from the list.
+ */
+export const SUBSCRIPTION_STATUSES = [
+  "active",
+  "trialing",
+  "past_due",
+  "incomplete",
+  "incomplete_expired",
+  "unpaid",
+  "canceled",
+  "paused",
+] as const satisfies readonly SubscriptionStatus[];
+
+/**
+ * What this deployment remembers about a Stripe subscription.
+ *
+ * A snapshot, not a cache to be trusted forever: Stripe is the record and this
+ * is what it last told us. Everything here is either an identifier we need to
+ * ask Stripe about it again, or a fact a screen has to be able to state without
+ * a network call — because the screens that care are a paywall and a page
+ * gating an invitation, and neither can afford to wait on Stripe to find out
+ * whether somebody may add a colleague.
+ *
+ * Nothing in here is a credential. The two ids address objects in an account
+ * only our secret key can reach, so they are safe to hand to a screen, which is
+ * what lets the dialog say something true about a plan somebody already has.
+ */
+export interface Subscription {
+  /** `cus_…`. Stable across subscriptions, which is what makes it the key. */
+  customerId: string;
+  /** `sub_…`. */
+  subscriptionId: string;
+  status: SubscriptionStatus;
+  /**
+   * What the plan entitles them to.
+   *
+   * From Stripe rather than from our own constant, because these two can
+   * legitimately disagree — a price changes, somebody is on last year's plan,
+   * support grants an extra seat — and when they do, the number the customer is
+   * actually paying for is the true one. `PAID_SEATS` is what we offer; this is
+   * what they bought.
+   */
+  seats: number;
+  priceId: string;
+  /** Unix seconds. */
+  currentPeriodEnd: number;
+  cancelAtPeriodEnd: boolean;
+  /** ISO. When we last heard, so a stale record can be recognised as stale. */
+  updatedAt: string;
+}

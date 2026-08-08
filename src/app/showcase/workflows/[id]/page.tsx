@@ -1,6 +1,7 @@
 import { getAccount } from "@/lib/showcase/accounts";
 import { requireUser } from "@/lib/showcase/current-user";
 import { listJoiners } from "@/lib/showcase/joiners";
+import { seatEntitlement } from "@/lib/showcase/seats";
 import { WorkflowEditor } from "./workflow-editor";
 
 export const metadata = {
@@ -54,14 +55,32 @@ export default async function ShowcaseWorkflowPage(
    * grant Google has revoked would not. The block's own panel draws the
    * distinction, where there is room to say what happened and what fixes it.
    */
-  const google = getAccount(user.email)?.google ?? null;
+  const account = getAccount(user.email);
+  const google = account?.google ?? null;
   const googleConnected = Boolean(google) && !google?.needsReconnect;
+
+  /**
+   * How many seats there are to give, from the same account record.
+   *
+   * Publishing offers an invitation, so this screen enforces the same limit
+   * People does — and it has to be handed the same answer rather than a
+   * constant it imported, or publishing becomes a way round a limit the other
+   * screen applies. Read off the account already in hand: the plan and the
+   * Google connection are both facts about the account, and a second lookup for
+   * the second of them would be a second chance for the two to be read at
+   * different moments.
+   */
+  const entitlement = seatEntitlement(
+    account?.subscription ?? null,
+    seats.length,
+  );
 
   return (
     <WorkflowEditor
       id={id}
       user={user}
       seats={seats}
+      entitlement={entitlement}
       googleConnected={googleConnected}
     />
   );

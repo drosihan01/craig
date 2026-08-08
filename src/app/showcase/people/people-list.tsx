@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AppShell,
   Avatar,
   Badge,
   Button,
+  Callout,
   EmptyState,
   List,
   ListItem,
@@ -20,8 +21,10 @@ import { CheckCircle, PersonAdd } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { InviteStarter } from "@/components/showcase/invite-starter";
 import { NewWorkflowDialog } from "@/components/showcase/new-workflow";
-import { SeatPaywall, outOfSeats } from "@/components/showcase/seat-paywall";
+import { SeatPaywall } from "@/components/showcase/seat-paywall";
+import { useUpgrade } from "@/components/showcase/use-upgrade";
 import type { Session } from "@/lib/showcase/contract";
+import { outOfSeats, type SeatEntitlement } from "@/lib/showcase/seats";
 import { useShowcase } from "@/lib/showcase/store";
 
 /**
@@ -67,6 +70,7 @@ export interface SeatRow {
 export function PeopleList({
   user,
   people,
+  entitlement,
 }: {
   user: Session;
   /**
@@ -78,8 +82,25 @@ export function PeopleList({
    * how far through they are is read on the server and handed down.
    */
   people: SeatRow[];
+  /**
+   * How many seats this account may fill, computed on the server beside the
+   * count of who is in one.
+   *
+   * A prop for the same reason `people` is, and it is the same argument one
+   * step further on. The limit used to be a constant this file imported, which
+   * was fine while it was a fact about the product; it is now a fact about this
+   * account's subscription, and a subscription is exactly the kind of thing a
+   * browser learns about late — a plan bought in another tab, a card that
+   * failed this morning. Both halves of the comparison are read on the server,
+   * in the same render, so they cannot be out of step with each other.
+   */
+  entitlement: SeatEntitlement;
 }) {
   const state = useShowcase();
+
+  /* The money button, shared with the editor's copy of this dialog so the two
+     cannot handle a decline differently. */
+  const upgrade = useUpgrade();
 
   /* The server's list is already everyone except whoever is reading this: the
      account holder holds an account rather than a seat, so there is nothing to
@@ -140,10 +161,10 @@ export function PeopleList({
    * whose only outcome is another dialog.
    */
   const addPerson = React.useCallback(() => {
-    if (outOfSeats(guests.length)) setPaywall(true);
+    if (outOfSeats(guests.length, entitlement.limit)) setPaywall(true);
     else if (!live) setChoosing(true);
     else setInviting(true);
-  }, [guests.length, live]);
+  }, [guests.length, entitlement.limit, live]);
 
   const close = React.useCallback(() => setInviting(false), []);
 
@@ -182,6 +203,16 @@ export function PeopleList({
             </Button>
           )}
         </header>
+
+        {/* Coming back from Stripe.
+
+            An invitation needs no announcement because the row is the proof —
+            that argument is below and it still holds. A payment is the one
+            thing on this page where it doesn't. Money left their account on a
+            different site, and the evidence here is a seat count that looks
+            much the same as it did before; "did that go through" is not a
+            question anybody should have to answer by counting rows. */}
+        <BillingNotice />
 
         {/* Kept on screen rather than flashed as a toast. This is the one action
             here that can't be undone, and "did that send?" is a question worth
@@ -294,9 +325,77 @@ export function PeopleList({
       <SeatPaywall
         open={paywall}
         onClose={() => setPaywall(false)}
+        onUpgrade={upgrade.start}
+        upgrading={upgrade.pending}
+        error={upgrade.error}
         holder={guests[0]?.name}
+        seats={entitlement.limit}
+        paidSeats={entitlement.paidSeats}
+        price={entitlement.price}
+        subscribed={entitlement.subscribed}
       />
     </AppShell>
+  );
+}
+
+/**
+ * What Stripe sent them back with, said in one line.
+ *
+ * Four outcomes, and the three that aren't success matter more than the one
+ * that is. Somebody who has just typed a card number into another website and
+ * been bounced back here is owed a plain answer, and "nothing appears to have
+ * happened" is the answer that makes people pay twice.
+ *
+ * It reads the query string rather than being told by the server, because this
+ * is a fact about the journey rather than about the account — the account's own
+ * state is already on the page, in the seat count and the button. It is also
+ * deliberately not cleared afterwards: rewriting the URL to tidy it up would
+ * cost a navigation, and a refresh re-showing a true sentence harms nobody.
+ */
+function BillingNotice() {
+  const billing = useSearchParams().get("billing");
+  if (!billing) return null;
+
+  if (billing === "upgraded") {
+    return (
+      <Callout tone="success" className="mb-4" title="You're on the Team plan">
+        Your seats are available now — add the next person the same way as the
+        first.
+      </Callout>
+    );
+  }
+
+  /* Paid, but the money hasn't landed. Some payment methods take days to
+     settle and Stripe is honest about it, so this is honest about it too: no
+     seats yet, nothing wrong, and nothing for them to do. */
+  if (billing === "pending") {
+    return (
+      <Callout tone="warning" className="mb-4" title="Payment still clearing">
+        Your bank hasn&apos;t settled it yet. The seats appear here the moment
+        it goes through — there&apos;s nothing else to do, and no need to pay
+        again.
+      </Callout>
+    );
+  }
+
+  if (billing === "unavailable") {
+    return (
+      <Callout tone="neutral" className="mb-4">
+        Payments aren&apos;t set up on this deployment, so there was nothing to
+        take you to.
+      </Callout>
+    );
+  }
+
+  /* The one that must never be reassuring. We could not confirm what happened,
+     and the honest thing is to say we don't know and point at the record that
+     does — telling somebody they haven't been charged when we can't see is how
+     a duplicate payment gets made. */
+  return (
+    <Callout tone="danger" className="mb-4" title="We couldn't confirm that">
+      If you completed a payment, don&apos;t pay again — check your email for a
+      Stripe receipt, and it&apos;ll appear here once it comes through.
+    </Callout>
   );
 }
 
