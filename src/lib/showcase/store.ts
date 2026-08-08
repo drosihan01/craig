@@ -147,12 +147,93 @@ const initial = (): ShowcaseState => ({
   accountEmail: null,
 });
 
+/**
+ * Where a browser keeps its half of the showcase.
+ *
+ * Per account, because two people using one browser must not read each other's
+ * conversation — the same reason `claimAccount` exists at all.
+ */
+const keyFor = (email: string) => `craig-showcase:${email}`;
+
+/**
+ * localStorage rather than the server, deliberately.
+ *
+ * Everything in this state is already client-owned and already serialisable,
+ * and the alternative — posting each change to an endpoint — would put a
+ * network round trip in front of Craig recording a fact mid-sentence. What it
+ * buys is the thing that was actually painful: a reload no longer throws away
+ * the workflow you just spent a conversation producing.
+ *
+ * The switch is left out on purpose. It belongs to whoever is driving the
+ * sandbox, not to the account being demonstrated, and restoring it per account
+ * would mean a test run inheriting a setting from whoever signed in last.
+ */
+function persist() {
+  if (typeof window === "undefined" || !state.accountEmail) return;
+  try {
+    /* Listed rather than spread-minus-one, so this and `restore` below name
+       the same fields in the same order — a saver that quietly picks up every
+       new key and a loader that checks each one is how the two drift. */
+    localStorage.setItem(
+      keyFor(state.accountEmail),
+      JSON.stringify({
+        people: state.people,
+        workflows: state.workflows,
+        activity: state.activity,
+        gaps: state.gaps,
+        facts: state.facts,
+        messages: state.messages,
+      }),
+    );
+  } catch {
+    /* Quota, or a browser refusing storage. Losing the saved copy is not worth
+       breaking the write that was actually asked for — the app carries on with
+       what's in memory, which is what it did before any of this existed. */
+  }
+}
+
+function restore(email: string): ShowcaseState {
+  const fresh = {
+    ...initial(),
+    simpleDraft: state.simpleDraft,
+    accountEmail: email,
+  };
+  if (typeof window === "undefined") return fresh;
+
+  try {
+    const raw = localStorage.getItem(keyFor(email));
+    if (!raw) return fresh;
+    const parsed = JSON.parse(raw) as Partial<ShowcaseState>;
+
+    /* Shape-checked rather than trusted. This is a string a user can edit, and
+       it outlives any one version of the state — a field added next week is a
+       field the stored copy won't have. Anything unrecognised falls back to
+       the empty value for that key instead of failing the load. */
+    return {
+      ...fresh,
+      people: Array.isArray(parsed.people) ? parsed.people : [],
+      workflows: Array.isArray(parsed.workflows) ? parsed.workflows : [],
+      activity: Array.isArray(parsed.activity) ? parsed.activity : [],
+      gaps: Array.isArray(parsed.gaps) ? parsed.gaps : [],
+      facts: Array.isArray(parsed.facts) ? parsed.facts : [],
+      /* Any turn caught mid-stream when the tab closed is finished, not
+         resumed — there is no request still running to append to it. */
+      messages: Array.isArray(parsed.messages)
+        ? parsed.messages.map((m) => ({ ...m, streaming: false }))
+        : [],
+    };
+  } catch {
+    return fresh;
+  }
+}
+
 let state: ShowcaseState = initial();
 
 const listeners = new Set<() => void>();
 
 function set(next: Partial<ShowcaseState>) {
   state = { ...state, ...next };
+  persist();
   listeners.forEach((l) => l());
 }
 
@@ -426,9 +507,16 @@ export function logActivity(entry: { verb: string; what: string }) {
 export function claimAccount(email: string | null) {
   if (state.accountEmail === email) return;
 
-  /* The switch survives for the same reason `resetShowcase` keeps it: it says
+  /* Restored rather than merely cleared. Signing back in should find the
+     workflow and the conversation where you left them; it's the *other*
+     account's copy that must not be here, and reading this account's own is
+     how both hold at once.
+     
+     The switch survives for the same reason `resetShowcase` keeps it: it says
      how the next test should run, not what happened in the last one. */
-  state = { ...initial(), simpleDraft: state.simpleDraft, accountEmail: email };
+  state = email
+    ? restore(email)
+    : { ...initial(), simpleDraft: state.simpleDraft, accountEmail: null };
   listeners.forEach((l) => l());
 }
 
@@ -524,6 +612,13 @@ export function settleAnswers() {
 export const setSimpleDraft = (on: boolean) => set({ simpleDraft: on });
 
 export const resetShowcase = () => {
+  /* The saved copy goes too, or the next load would put it all back — which is
+     precisely what the button promises it won't. */
+  if (typeof window !== "undefined" && state.accountEmail) {
+    try {
+      localStorage.removeItem(keyFor(state.accountEmail));
+    } catch {}
+  }
   /* The switch survives, because it isn't part of what's being cleared. */
   state = { ...initial(), simpleDraft: state.simpleDraft };
   listeners.forEach((l) => l());

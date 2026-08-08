@@ -1,4 +1,6 @@
 import "server-only";
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { constantTimeEqual } from "./session";
 
@@ -64,6 +66,61 @@ const SALT_BYTES = 16;
  */
 const STORE_KEY = "__craig_showcase_accounts__";
 
+/**
+ * Where the accounts live between runs.
+ *
+ * The `globalThis` slot below survives a hot reload but not a restart, so
+ * until now every `next dev` signed everybody out and the account somebody
+ * made five minutes ago was gone. That's fine for a demo you drive once and
+ * indefensible for one somebody is actually using.
+ *
+ * A JSON file, not a database. There are at most a handful of accounts, the
+ * whole record is already serialisable, and a dependency would be a bigger
+ * decision than the problem deserves. What's stored is exactly what was in
+ * memory — the password is a PBKDF2 hash and its salt, never the password —
+ * so the file is no more sensitive than the process was, and it is ignored by
+ * git so it can't be committed by accident.
+ */
+const FILE = join(process.cwd(), ".data", "showcase-accounts.json");
+
+/** Everything but the Map, which JSON can't carry. */
+type Persisted = StoredAccount[];
+
+function load(): Map<string, StoredAccount> {
+  try {
+    const raw = readFileSync(FILE, "utf8");
+    const parsed = JSON.parse(raw) as Persisted;
+    /* Shape-checked for the same reason the global slot is: this file outlives
+       any one version of the record, and a half-written or older-shaped entry
+       should cost one account rather than every page that reads the store. */
+    if (!Array.isArray(parsed)) return new Map();
+    return new Map(
+      parsed
+        .filter(
+          (a): a is StoredAccount =>
+            typeof a?.email === "string" && typeof a?.hash === "string",
+        )
+        .map((a) => [a.email, a]),
+    );
+  } catch {
+    /* Missing is the normal first run, and unreadable is a file somebody
+       edited by hand. Neither is worth failing a request over — starting empty
+       is what would have happened anyway. */
+    return new Map();
+  }
+}
+
+function save(accounts: Map<string, StoredAccount>) {
+  try {
+    mkdirSync(dirname(FILE), { recursive: true });
+    writeFileSync(FILE, JSON.stringify([...accounts.values()], null, 2));
+  } catch {
+    /* Deliberately swallowed. A read-only disk should not turn signing up into
+       a 500 — the account still exists in memory and works for this run, which
+       is exactly the behaviour that existed before this file did. */
+  }
+}
+
 interface AccountStore {
   /** Keyed by lowercased, trimmed email. */
   accounts: Map<string, StoredAccount>;
@@ -84,7 +141,10 @@ function store(): AccountStore {
      rebuilds anything it doesn't recognise rather than trusting the key. */
   if (existing?.accounts instanceof Map) return existing as AccountStore;
 
-  const created: AccountStore = { accounts: new Map() };
+  /* Read from disk once per process, here rather than at module scope: this
+     runs on first use, so a build that only imports the module never touches
+     the filesystem. */
+  const created: AccountStore = { accounts: load() };
   scope[STORE_KEY] = created;
   return created;
 }
@@ -177,6 +237,7 @@ export async function createAccount(input: {
     hash,
   };
   accounts.set(email, account);
+  save(accounts);
 
   return publicView(account);
 }
@@ -215,4 +276,11 @@ export async function verifyCredentials(
  */
 export function clearAccounts(): void {
   store().accounts.clear();
+  /* The file goes with them. Clearing memory alone would put every account
+     back the next time the server started, which is the opposite of what the
+     button says — and the way somebody discovers that is by resetting, walking
+     away, and finding the showcase full again. */
+  try {
+    rmSync(FILE, { force: true });
+  } catch {}
 }

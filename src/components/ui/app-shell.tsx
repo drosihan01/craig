@@ -260,10 +260,14 @@ export function AppShell({
   /* Collapsed, but still showing something. Everything that has to line up
      with the nav column reads this rather than testing `navOpen` itself, so
      the header cell, the column and the panel footer can't disagree. */
-  /* `isDesktop` too. Below `lg` the nav is a drawer and there is no column to
-     shrink, but the header's brand cell reads this to size itself — so without
-     it the cell squeezed to 52px and centred its toggle on a viewport where
-     the panel it was describing didn't exist. */
+  /**
+   * Showing the strip rather than the full column. Desktop only.
+   *
+   * A narrow screen gets no rail: 52px of permanent chrome is a bigger share
+   * of a phone than of a laptop, and the drawer already shows the whole nav
+   * for the same press. So the narrow layout is the page, plus one control to
+   * open the nav over it.
+   */
   const railed = Boolean(nav && navRail && !navOpen && isDesktop);
 
   const vars = {
@@ -304,21 +308,21 @@ export function AppShell({
                 </span>
               </>
             )}
-            {nav &&
-              (isDesktop ? (
-                <PanelToggle
-                  open={navOpen}
-                  onToggle={toggleNav}
-                  side="left"
-                  className={railed ? undefined : "ml-auto"}
-                />
-              ) : (
-                <DrawerToggle
-                  label="Open menu"
-                  onClick={() => setDrawer("nav")}
-                  className="ml-auto"
-                />
-              ))}
+            {/* One control, whatever the width. On desktop it widens the
+                column; on a narrow screen there is nothing to widen into, so
+                the same control opens the nav as a drawer over the page.
+
+                No hamburger. It sat exactly where the expand toggle sits and
+                did a different thing, so the same corner of the same header
+                meant two things depending on how wide the window was. */}
+            {nav && (
+              <PanelToggle
+                open={isDesktop ? navOpen : false}
+                onToggle={isDesktop ? toggleNav : () => setDrawer("nav")}
+                side="left"
+                className={railed ? undefined : "ml-auto"}
+              />
+            )}
           </div>
 
           {/* Centre cell: everything belonging to the page. Title and actions
@@ -647,6 +651,8 @@ function Panel({
           </div>
         )}
 
+        {/* Not while it's a rail: its width is the width of an icon, so there
+            is nothing to prefer and nothing to drag. */}
         {open && (
           <ResizeHandle
             side={side}

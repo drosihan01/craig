@@ -54,3 +54,6 @@ next-env.d.ts
 # and a throwaway script in the tree is one `git add -A` from being permanent.
 .probe-tmp/
 .scratch/
+
+# Showcase data, written at runtime. Accounts live here between restarts.
+/.data/
