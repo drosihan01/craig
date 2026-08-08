@@ -25,6 +25,27 @@ import { render, SENDER, type EmailTemplate } from "./templates";
 /** The one width every client agrees on. */
 const WIDTH = 600;
 
+/**
+ * The only place Craig is named in anything that lands in a stranger's inbox.
+ *
+ * These messages go out under the customer's name because that is who the
+ * recipient has a relationship with — a new starter agreed to work at Katalis,
+ * not to hear from a tool Katalis bought. So the body is the company's voice
+ * throughout, and the supplier gets a watermark, the way Tally puts "Made with
+ * Tally" under somebody else's form.
+ *
+ * "with" rather than "by", and the preposition is the whole argument. "Made by
+ * Craig" claims the message; "Made with Craig" credits the tool and leaves the
+ * message the company's. The first is a sender, the second is attribution.
+ *
+ * It is there at all because unattributed transactional mail is worse for
+ * everyone: a recipient who wants to know what actually sent this has one word
+ * to search for, and the person who bought it gets the credit they are paying
+ * for. It is not a link, because a link is an invitation to click and this is a
+ * signature.
+ */
+const MADE_WITH = "Made with Craig";
+
 const INK = "#33302b";
 const MUTED = "#8a8279";
 const PAPER = "#ffffff";
@@ -101,6 +122,52 @@ function button(label: string, href: string) {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px 0;"><tr><td bgcolor="${BUTTON}" style="border-radius:6px;"><a href="${escape(href)}" style="display:inline-block;padding:12px 20px;font-family:${FONT};font-size:15px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:6px;">${escape(label)}</a></td></tr></table>`;
 }
 
+/**
+ * The watermark: a mark and a wordmark, drawn out of nothing but a table cell.
+ *
+ * The real Craig mark is a seven-path stroked line drawing, and there is no way
+ * to put it in an email. Every route is closed, and each is closed for a
+ * different reason worth writing down so nobody reopens one:
+ *
+ * - **A hosted `<img>`** needs a public URL, and this project has no asset host.
+ *   Inventing one is a decision about somebody's infrastructure, not a thing to
+ *   quietly bake into a template.
+ * - **A `data:` URI** is stripped by Gmail and several others. It looks perfect
+ *   in every client anybody tests in and arrives as a broken-image icon for a
+ *   large share of real recipients — worse than no mark, because a broken image
+ *   in the footer of a welcome email reads as a message that was tampered with.
+ * - **Inline `<svg>`** is removed outright by Outlook and Gmail.
+ * - **A glyph** — some emoji face standing in for the drawing — would be a
+ *   different logo, rendered differently on every platform, and on most of them
+ *   a joke.
+ *
+ * What is left is type and a coloured box, which is what this is: a rounded
+ * chip carrying the wordmark's initial, then the wordmark. Word doesn't do
+ * `border-radius`, so in Outlook the chip is a square — a deliberate-looking
+ * square rather than a failure, which is the only kind of degradation worth
+ * accepting.
+ *
+ * The nested table is not decoration either. A chip and a word need to sit on
+ * one line with a gap between them, and the two CSS ways to do that —
+ * `display:inline-block` with padding, or a margin — are both dropped by Word.
+ * Two cells and a `padding-left` are not.
+ *
+ * `align="right"` appears on both the cell and the table because they do
+ * different jobs: the attribute on the cell aligns inline content in web
+ * clients, and the attribute on the table is what floats it right in Word,
+ * which ignores the first. It is the last row in the layout, so the float has
+ * nothing after it to disturb.
+ */
+function watermark() {
+  const chip = `font-family:${FONT};font-size:11px;font-weight:700;line-height:18px;`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" style="margin-left:auto;">
+<tr>
+<td width="18" height="18" bgcolor="${MUTED}" align="center" style="width:18px;height:18px;border-radius:5px;text-align:center;vertical-align:middle;${chip}color:${PAPER};">C</td>
+<td style="padding-left:6px;font-family:${FONT};font-size:11px;line-height:18px;color:${MUTED};white-space:nowrap;">Made with <span style="font-weight:600;letter-spacing:-0.01em;">Craig</span></td>
+</tr>
+</table>`;
+}
+
 export interface RenderedEmail {
   subject: string;
   html: string;
@@ -129,11 +196,20 @@ export function renderEmail(
   const cta = template.cta ? render(template.cta, values) : "";
   const href = absolute(render("{{link}}", values));
 
-  const footer = `Sent by Craig on behalf of ${company}. You got this because someone there added you to an onboarding, not because you signed up for anything. Reply to this and it reaches a person — ${SENDER.replyTo}.`;
+  /* Attributed to the company, not to us. The recipient's question is "why has
+     this arrived and can I trust it", and the answer that settles it is the name
+     they recognise — naming the tool first answers a question nobody asked and
+     raises the one about who has their address. */
+  const footer = `Sent by ${company}. You're getting this because someone there put you into an onboarding, not because you signed up for anything. Reply to this and it reaches a person — ${SENDER.replyTo}.`;
 
   /* `role="presentation"` on every layout table, because a screen reader
      announcing "table, four rows" over a two-paragraph email is worse than the
-     Outlook bug the tables are here to avoid. */
+     Outlook bug the tables are here to avoid.
+
+     The watermark sits in its own row rather than in a second cell beside the
+     footer text, because a two-column footer at 600px becomes two
+     four-character columns at 320px — and a mark that wraps is a mark that
+     reads as a mistake rather than as a signature. */
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -156,8 +232,13 @@ ${cta ? button(cta, href) : ""}
 </td>
 </tr>
 <tr>
-<td style="padding:16px 32px 28px 32px;border-top:1px solid ${RULE};">
+<td style="padding:16px 32px 10px 32px;border-top:1px solid ${RULE};">
 <p style="margin:0;font-family:${FONT};font-size:12px;line-height:1.6;color:${MUTED};">${escape(footer)}</p>
+</td>
+</tr>
+<tr>
+<td align="right" style="padding:0 32px 24px 32px;">
+${watermark()}
 </td>
 </tr>
 </table>
@@ -170,7 +251,17 @@ ${cta ? button(cta, href) : ""}
   /* Hard-wrapped at nothing in particular: mail clients wrap plain text
      themselves, and pre-wrapping it is how a text part ends up ragged in the
      one place it was supposed to be readable. */
-  const text = [body.trim(), cta && href ? `${cta}: ${href}` : "", "—", footer]
+  const text = [
+    body.trim(),
+    cta && href ? `${cta}: ${href}` : "",
+    "—",
+    footer,
+    /* Last line, because plain text has no corners and no chip. The HTML part
+       is what almost everybody sees; this is what the watch notification and
+       the screen reader get, and the credit surviving into both is the whole
+       point of building the mark out of type rather than out of an image. */
+    MADE_WITH,
+  ]
     .filter(Boolean)
     .join("\n\n");
 

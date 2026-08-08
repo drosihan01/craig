@@ -52,8 +52,22 @@ import { COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
 export const FALLBACK_FROM = "onboarding@resend.dev";
 
 export const SENDER = {
-  /** Display name. The company is the customer's, the sender is Craig. */
-  name: (company: string) => `Craig, for ${company}`,
+  /**
+   * Display name — the company's, and only the company's.
+   *
+   * It used to read "Craig, for {company}", which was honest about the plumbing
+   * and wrong about the relationship. This email is a company welcoming
+   * somebody they have hired; the first thing that person sees in their inbox
+   * should be the name of the place they are joining, not the name of the tool
+   * that sent it. A new starter has no idea what Craig is, and "Craig, for
+   * Northgate" reads either as a person they're supposed to know or as a
+   * mailing service — neither of which is who is writing to them.
+   *
+   * Craig is still attributed, once, quietly, at the bottom of the email. That
+   * is the whole of the white-labelling: the message belongs to the company,
+   * the footer says what made it.
+   */
+  name: (company: string) => company,
 
   /**
    * The envelope address, from the environment, because which address is
@@ -127,21 +141,45 @@ export interface EmailTemplate {
 }
 
 export const TEMPLATES: EmailTemplate[] = [
+  /**
+   * The invitation, written in the company's voice rather than in Craig's.
+   *
+   * This is the one template that reaches somebody who has never heard of this
+   * product and never agreed to hear from it. They agreed to work at
+   * {{company}}, so that is who the message is from — an email introducing a
+   * third-party tool by name, on the day before their first day, reads as a
+   * vendor that has got hold of their address rather than as their new employer
+   * being organised. Craig appears once, quietly, in the footer, which is where
+   * a supplier belongs.
+   *
+   * Only the tokens the invite route can genuinely fill are used here:
+   * `first_name`, `company`, `start_date` and `sender`. `role` and `step` are in
+   * the vocabulary and are supplied empty by that route, so a sentence built
+   * around either would arrive with a hole in it — see the note beside `values`
+   * in the route for why the empty ones are supplied at all.
+   *
+   * The link is the credential. It is deliberately only ever the button: putting
+   * the same URL in the prose as well would double the number of places it can
+   * be forwarded, quoted into a ticket, or pasted into a chat.
+   */
   {
     id: "seat-invite",
     name: "Seat invite",
     trigger: "A new seat is added — the trigger, so this is always the first thing Craig sends",
     audience: "starter",
-    subject: "You're starting at {{company}} on {{start_date}}",
-    preheader: "A few things to sort before day one — none of them long.",
+    subject: "Welcome to {{company}} — a few things before {{start_date}}",
+    preheader:
+      "Everything we need from you before your first day, in one place.",
     body: `Hi {{first_name}},
 
-Welcome to {{company}}. I'm Craig — I look after the boring half of starting somewhere new, so {{sender}} doesn't have to remember all of it.
+We're really pleased you're joining us at {{company}}, and we're looking forward to seeing you on {{start_date}}.
 
-There are a few things to get through before {{start_date}}. Nothing takes long, and they'll come one at a time rather than all at once.
+There are a few things we need from you before then — the details we can't get you set up without. None of them take long.
 
-Your first one is ready now.`,
-    cta: "Get started",
+Your own checklist is below. You don't have to finish it in one sitting: it keeps whatever you've already given us, so you can come back to it whenever suits.
+
+If something on there doesn't look right, {{sender}} is the person to ask.`,
+    cta: "Open your checklist",
   },
   {
     id: "step-assigned",

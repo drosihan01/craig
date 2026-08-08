@@ -244,3 +244,100 @@ export type ChatEvent =
   | { type: "error"; message: string };
 
 export const CHAT_ENDPOINT = "/api/chat";
+
+/* --- The new starter ------------------------------------------------------ */
+
+/**
+ * What a step actually asks the person who's arriving.
+ *
+ * Two, because two are wired end to end. A workflow block can say "collect
+ * their details" in a dozen ways, but a form can only be rendered for a field
+ * somebody has written a form for — so this names the ones that exist rather
+ * than pretending the set is open. A block that maps to neither is real work
+ * that simply isn't the new starter's to do here, and it says so.
+ */
+export type JoinerField = "middle-name" | "date-of-birth";
+
+/** Preset ids that produce a step the new starter can actually answer. */
+export const JOINER_FIELD_BY_PRESET: Record<string, JoinerField> = {
+  "middle-name": "middle-name",
+  "date-of-birth": "date-of-birth",
+};
+
+/**
+ * Preset ids the admin ticks off themselves.
+ *
+ * The other half of a workflow, and the half that makes it a plan rather than
+ * a form. Somebody at the company writes the name tag, orders the laptop,
+ * books the desk — nothing to collect and nobody to collect it from, just work
+ * that has to be marked done by the person who did it.
+ *
+ * Kept as a list beside the fields rather than inferred from "has no field",
+ * because those are different things and the difference is visible on both
+ * screens: an admin step is waiting for the admin, and a step that is neither
+ * is waiting for something this showcase doesn't run yet. Collapsing them
+ * would put a tick box next to work nobody here can do.
+ */
+export const ADMIN_TICK_PRESETS = new Set<string>(["name-tag"]);
+
+/** Who a step is waiting on. Absent means neither — nothing to do here yet. */
+export type StepActor = "joiner" | "admin";
+
+export interface JoinerStep {
+  /** The block's id in the workflow this was taken from. */
+  id: string;
+  title: string;
+  /**
+   * Who this one is waiting on.
+   *
+   * Absent means nobody here: real work that neither side can complete from
+   * these screens. Those steps are kept and shown rather than dropped, because
+   * a plan with its middle removed misrepresents both what is happening and how
+   * far through it is.
+   */
+  actor?: StepActor;
+  /** Only on `actor: "joiner"` steps. Which form they're shown. */
+  field?: JoinerField;
+  /** What they gave, once they've given it. */
+  value?: string;
+  /** ISO. Set together with `value`, and the only record that it happened. */
+  completedAt?: string;
+}
+
+/**
+ * Somebody who was given a seat, and everything their onboarding knows.
+ *
+ * Server-side, unlike the rest of the showcase. It has to be: the admin and the
+ * new starter are two different people in two different browsers, and progress
+ * kept in either one's `localStorage` could never be seen by the other. This is
+ * the one piece of showcase state that two parties both read.
+ *
+ * The steps are a *snapshot* taken when the invitation went out, not a
+ * reference to the workflow. The admin can edit or delete that workflow
+ * afterwards, and a person half-way through onboarding must not have the
+ * remaining half rewritten under them — nor lose the record of what they
+ * already did because the step it belonged to no longer exists.
+ */
+export interface Joiner {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  /** `YYYY-MM-DD`, the same date the invitation gave them. */
+  startDate: string;
+  /** Which account invited them, so one account can't read another's people. */
+  accountEmail: string;
+  company: string;
+  workflowId: string;
+  workflowName: string;
+  steps: JoinerStep[];
+  /** ISO. */
+  invitedAt: string;
+}
+
+/** Where a magic link lands before it becomes a session. */
+export const JOIN_PATH = "/showcase/join";
+/** The new starter's own screen, once the link has been accepted. */
+export const JOINER_HOME = "/showcase/me";
+/** Separate from the admin's cookie: they are different people, possibly at once. */
+export const JOINER_COOKIE = "craig_joiner";

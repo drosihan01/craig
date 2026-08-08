@@ -36,7 +36,7 @@ interface Payload extends Session {
 
 let keyPromise: Promise<CryptoKey> | null = null;
 
-function signingKey(): Promise<CryptoKey> {
+export function signingKey(): Promise<CryptoKey> {
   if (keyPromise) return keyPromise;
 
   const secret = process.env.SESSION_SECRET;
@@ -62,7 +62,7 @@ function signingKey(): Promise<CryptoKey> {
 /* Plain base64 can't go in a cookie value without escaping, and escaping is a
    thing that gets done twice or not at all. base64url avoids the question. */
 
-function encode(bytes: Uint8Array): string {
+export function encode(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary)
@@ -74,7 +74,7 @@ function encode(bytes: Uint8Array): string {
 /* The explicit `<ArrayBuffer>` is not decoration: bare `Uint8Array` widens to
    `ArrayBufferLike`, which includes `SharedArrayBuffer`, which `crypto.subtle`
    refuses. */
-function decode(value: string): Uint8Array<ArrayBuffer> {
+export function decode(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);

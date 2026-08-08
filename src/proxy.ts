@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, SIGN_IN_PATH } from "@/lib/showcase/contract";
+import {
+  JOIN_PATH,
+  JOINER_HOME,
+  SESSION_COOKIE,
+  SIGN_IN_PATH,
+} from "@/lib/showcase/contract";
 import { readSession } from "@/lib/showcase/session";
 import { SIGN_UP_PATH } from "@/lib/showcase/sign-up";
 
@@ -22,6 +27,22 @@ export async function proxy(request: NextRequest) {
   // The way in is inside the tree it guards, so both doors are let through
   // explicitly — otherwise sign-in redirects to itself, forever.
   if (pathname === SIGN_IN_PATH || pathname === SIGN_UP_PATH) {
+    return NextResponse.next();
+  }
+
+  /* The new starter's two paths, which this fence is the wrong shape for.
+     It asks for `craig_session`, and they will never have one: they were given
+     a signed link rather than an account, on purpose — see joiner-session.ts.
+     Left in, every magic link in every invitation would land on the admin's
+     sign-in form, asking a stranger for a password nobody ever gave them.
+
+     Let through rather than checked here, because this runs on every matched
+     request including prefetches and a second cookie format to verify is a
+     second thing to get wrong in the hot path. Both pages read the joiner
+     cookie themselves, which is what the note above means by the outer fence
+     not being the only one: `/showcase/join` verifies the token before it will
+     mint anything, and `/showcase/me` has nothing to render without one. */
+  if (pathname === JOIN_PATH || pathname === JOINER_HOME) {
     return NextResponse.next();
   }
 

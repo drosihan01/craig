@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/showcase/contract";
 import { clearAccounts } from "@/lib/showcase/accounts";
+import { clearJoiners } from "@/lib/showcase/joiners";
 import { SESSION_COOKIE_OPTIONS } from "@/lib/showcase/session";
 
 /**
@@ -27,6 +28,12 @@ import { SESSION_COOKIE_OPTIONS } from "@/lib/showcase/session";
  */
 export async function POST() {
   clearAccounts();
+
+  /* The people those accounts invited go with them. They are the other half of
+     the same state — the only half that lives on the server — and an account
+     store emptied while the joiners survive leaves onboardings belonging to
+     nobody, still reachable by anyone holding a link from before the reset. */
+  clearJoiners();
 
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SESSION_COOKIE, "", {

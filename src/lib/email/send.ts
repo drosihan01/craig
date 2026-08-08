@@ -188,6 +188,71 @@ function classify(
  * caller that has to remember a try/catch around a network call is a caller
  * that will one day forget.
  */
+/**
+ * Every message, written to disk as it goes out. Development only.
+ *
+ * Because there is no inbox anyone here can read. The provider's test
+ * addresses accept mail and simulate an outcome, but nothing can open them,
+ * and its retrieve-a-message API is refused by a send-only key — so the only
+ * way to check what an email actually said was to send it to somebody's real
+ * address and ask them.
+ *
+ * That is a slow loop and a rude one, and it gets worse the moment an email
+ * carries something you need *out* of it: the new starter's invitation
+ * contains a sign-in link, and testing that flow meant a person copying a URL
+ * out of their own inbox by hand.
+ *
+ * So this is the outbox. It is not a mock and it does not replace sending —
+ * the real send still happens and its result is still what the caller sees.
+ * It only keeps a copy, which makes the message readable by whoever is working
+ * on it, and doubles as a preview of what the template renders to.
+ *
+ * Never in production: the files would accumulate unbounded on a real
+ * deployment, and the copies would be full of other people's personal details
+ * sitting in a directory nobody remembered was there.
+ */
+async function keepCopy(message: Outgoing, id: string | null) {
+  if (process.env.NODE_ENV === "production") return;
+
+  try {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+
+    const dir = join(process.cwd(), ".data", "outbox");
+    await mkdir(dir, { recursive: true });
+
+    /* Sortable, and unique without a counter. The recipient is in the name so
+       a directory listing answers "did it go to the right person" without
+       opening anything. */
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const who = message.to.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    const base = join(dir, `${stamp}-${who}`);
+
+    await writeFile(`${base}.html`, message.html, "utf8");
+    await writeFile(
+      `${base}.json`,
+      JSON.stringify(
+        {
+          id,
+          to: message.to,
+          bcc: message.bcc,
+          from: message.fromName,
+          subject: message.subject,
+          text: message.text,
+          sentAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+  } catch {
+    /* Swallowed on purpose. Keeping a copy is a convenience for whoever is
+       building this; failing the send because the copy couldn't be written
+       would let a development aid break the thing it exists to observe. */
+  }
+}
+
 export async function sendEmail(message: Outgoing): Promise<SendResult> {
   const key = process.env.RESEND_API_KEY?.trim();
   if (!key) {
@@ -275,6 +340,10 @@ export async function sendEmail(message: Outgoing): Promise<SendResult> {
       "Resend accepted the message but didn't return an id. It may have sent — check the Resend dashboard rather than sending again.",
     );
   }
+
+  /* After the send, not instead of it, and awaited so a caller that checks the
+     outbox straight afterwards finds it there. */
+  await keepCopy(message, id);
 
   return { ok: true, id };
 }
