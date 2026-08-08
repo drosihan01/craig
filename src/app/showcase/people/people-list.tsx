@@ -192,50 +192,56 @@ export function PeopleList({
             themselves — the seat they hold isn't onboarding and has no progress
             to show, so the row could only ever be a name with an empty half.
             The account is in the corner of every screen already. */}
-        <List>
-          {guests.map((person) => (
-            <ListItem
-              key={person.id}
-              /* The row is the way in to what's actually happening to them.
+        {/* Only when somebody is in it. `List` draws its own frame, so an
+            empty one collapsed to a bare rule sitting between the heading and
+            the empty state — a divider with nothing on either side of it,
+            which reads as a section that failed to load. */}
+        {guests.length > 0 && (
+          <List>
+            {guests.map((person) => (
+              <ListItem
+                key={person.id}
+                /* The row is the way in to what's actually happening to them.
                  A list of names that does nothing when you press one is a
                  list that answers "who" and refuses "how are they getting
                  on" — which is the question anybody opens this page with. */
-              href={`/showcase/people/${person.id}`}
-              leading={<Avatar name={person.name} size="md" />}
-              title={person.name}
-              description={`${person.role} · ${person.email}`}
-              /* What's actually happening to them, not just when they arrive.
+                href={`/showcase/people/${person.id}`}
+                leading={<Avatar name={person.name} size="md" />}
+                title={person.name}
+                description={`${person.role} · ${person.email}`}
+                /* What's actually happening to them, not just when they arrive.
                  A start date is the same line every day until it passes; the
                  step they're waiting on is the thing that changed since you
                  last looked, which is what anybody opens this page to find
                  out. The date keeps its place beside it, because "how far
                  along" only means something against "starting when". */
-              footnote={
-                person.finished
-                  ? `Finished · starts ${readable(person.startDate)}`
-                  : person.nextStep
-                    ? `${person.nextStep} · starts ${readable(person.startDate)}`
-                    : `Starts ${readable(person.startDate)}`
-              }
-              meta={
-                person.finished ? (
-                  <Badge tone="success" size="sm">
-                    <CheckCircle />
-                    Done
-                  </Badge>
-                ) : (
-                  /* The count rather than the word "Onboarding". Everyone on
+                footnote={
+                  person.finished
+                    ? `Finished · starts ${readable(person.startDate)}`
+                    : person.nextStep
+                      ? `${person.nextStep} · starts ${readable(person.startDate)}`
+                      : `Starts ${readable(person.startDate)}`
+                }
+                meta={
+                  person.finished ? (
+                    <Badge tone="success" size="sm">
+                      <CheckCircle />
+                      Done
+                    </Badge>
+                  ) : (
+                    /* The count rather than the word "Onboarding". Everyone on
                      this list is onboarding — a badge that says so on every
                      row is a column of the same word, and it was sitting
                      exactly where the one number worth reading could go. */
-                  <Badge tone="accent" size="sm">
-                    {person.done} of {person.total}
-                  </Badge>
-                )
-              }
-            />
-          ))}
-        </List>
+                    <Badge tone="accent" size="sm">
+                      {person.done} of {person.total}
+                    </Badge>
+                  )
+                }
+              />
+            ))}
+          </List>
+        )}
 
         {/* One empty state and one button, whatever the account is missing.
             It used to be two — one offering the invitation, one sending you

@@ -85,6 +85,18 @@ const PERSON_ENDPOINT = "/api/showcase/person";
 const SEAT_ENDPOINT = "/api/showcase/seat";
 
 /**
+ * How often to ask Google whether a new starter has accepted, while somebody
+ * is on the page waiting for exactly that.
+ *
+ * Fifteen seconds is chosen against the thing being waited for rather than
+ * against a quota: accepting an account takes a person a minute or two, and a
+ * page that catches up within fifteen seconds of them finishing reads as live.
+ * One `users.get` per outstanding step per tick is nothing against the
+ * Directory API's limits.
+ */
+const WATCH_EVERY_MS = 15_000;
+
+/**
  * The person, as much of them as this screen draws.
  *
  * Not the whole `Joiner`. `accountEmail` decided whether this page renders at
@@ -403,6 +415,48 @@ export function PersonProgress({
 
     return () => {
       live = false;
+    };
+  }, [worthAsking, person.id, router]);
+
+  /**
+   * Keep asking, while somebody is watching.
+   *
+   * The check above runs once per mount, which is right for opening a page and
+   * wrong for the moment this actually matters: somebody sends the invitation,
+   * sits on this page, and the new starter accepts their account a minute
+   * later in another tab. Once-per-mount means that page never moves, and the
+   * person watching concludes it doesn't work.
+   *
+   * Google could push this instead of us asking. It cannot yet — notifications
+   * go to a public HTTPS address, and a channel has to be renewed per tenant
+   * for ever — so until there is somewhere for Google to push to, asking every
+   * few seconds while the tab is open is the honest version of live.
+   *
+   * Only while the tab is visible, and only while something is outstanding.
+   * A background tab polling a third-party API on a timer is how a demo left
+   * open overnight becomes a quota problem, and `worthAsking` empties itself
+   * the moment the answer arrives — so this stops on its own.
+   */
+  React.useEffect(() => {
+    if (worthAsking.length === 0) return;
+
+    let live = true;
+
+    const tick = async () => {
+      if (document.hidden) return;
+
+      let learned = false;
+      for (const stepId of worthAsking) {
+        const result = await askAboutSeat(person.id, stepId, false);
+        learned = learned || result.ok;
+      }
+      if (live && learned) React.startTransition(() => router.refresh());
+    };
+
+    const timer = window.setInterval(tick, WATCH_EVERY_MS);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
     };
   }, [worthAsking, person.id, router]);
 
