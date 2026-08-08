@@ -40,7 +40,8 @@ export const DROPDOWN_PROPS: PropDoc[] = [
     name: "side",
     type: '"top" | "bottom"',
     default: '"bottom"',
-    description: "Which way the menu opens. Use top when it sits near the page bottom.",
+    description:
+      "Which way the menu opens. Use top when it sits near the page bottom.",
   },
   {
     name: "align",
@@ -129,7 +130,8 @@ export const DIALOG_PROPS: PropDoc[] = [
   {
     name: "title",
     type: "ReactNode",
-    description: "Also becomes the dialog's accessible name via aria-labelledby.",
+    description:
+      "Also becomes the dialog's accessible name via aria-labelledby.",
   },
   {
     name: "description",
@@ -191,7 +193,8 @@ export const CHAT_PROPS: PropDoc[] = [
   {
     name: "suggestions",
     type: "string[]",
-    description: "Starter prompts shown on the empty state; clicking one sends it.",
+    description:
+      "Starter prompts shown on the empty state; clicking one sends it.",
   },
 ];
 
@@ -327,7 +330,7 @@ export const AUTH_PROPS: PropDoc[] = [
     name: "ContinueAs",
     type: "account, onContinue, onUseAnother",
     description:
-      "\"Continue as …\" for a device that has signed in before. A hint about who was here last, never proof of who they are — clicking it starts a real sign-in. Always pair it with a way to use another account.",
+      '"Continue as …" for a device that has signed in before. A hint about who was here last, never proof of who they are — clicking it starts a real sign-in. Always pair it with a way to use another account.',
   },
 ];
 
@@ -429,7 +432,8 @@ export const SELECTMENU_PROPS: PropDoc[] = [
     name: "options",
     type: "DropdownItem[]",
     required: true,
-    description: "Same shape as DropdownMenu — descriptions and icons included.",
+    description:
+      "Same shape as DropdownMenu — descriptions and icons included.",
   },
   {
     name: "label",
@@ -507,8 +511,7 @@ export const TOAST_PROPS: PropDoc[] = [
   {
     name: "action",
     type: "{ label, onClick }",
-    description:
-      "One action, e.g. Undo. Dismisses the toast after firing.",
+    description: "One action, e.g. Undo. Dismisses the toast after firing.",
   },
 ];
 
@@ -530,6 +533,62 @@ export const NOTIFICATION_PROPS: PropDoc[] = [
     name: "onMarkAllRead",
     type: "() => void",
     description: "Omit it and the button doesn't render.",
+  },
+];
+
+export const NAV_TREE_PROPS: PropDoc[] = [
+  {
+    name: "label",
+    type: "string",
+    required: true,
+    description: "The group's own row.",
+  },
+  {
+    name: "icon",
+    type: "ReactNode",
+    description:
+      "Sits in the column the dotted rule descends from, which is what makes the rule read as belonging to this group.",
+  },
+  {
+    name: "open / onOpenChange",
+    type: "boolean / (open) => void",
+    description:
+      "Controlled mode. Omit both and it keeps its own state — a nav that forgets which section you opened is worse than one that never collapsed.",
+  },
+  {
+    name: "defaultOpen",
+    type: "boolean",
+    description: "Uncontrolled starting state. Defaults to open.",
+  },
+];
+
+export const NAV_TREE_ITEM_PROPS: PropDoc[] = [
+  {
+    name: "label",
+    type: "string",
+    required: true,
+    description: "The row.",
+  },
+  {
+    name: "href",
+    type: "string",
+    description:
+      "Renders a Link. Without it you get a button — use that for rows that change what's on screen rather than where you are.",
+  },
+  {
+    name: "icon",
+    type: "ReactNode",
+    description: "Boxed, so a column of them lines up under the rule.",
+  },
+  {
+    name: "current",
+    type: "boolean",
+    description: "Marks the page you're on. Sets aria-current.",
+  },
+  {
+    name: "trailing",
+    type: "ReactNode",
+    description: "A count or a badge, hard right.",
   },
 ];
 
@@ -614,7 +673,8 @@ export const SORT_PROPS: PropDoc[] = [
     name: "value",
     type: "SortState",
     required: true,
-    description: "{ field, direction }. Both live in one object so a page holds one piece of sort state, not two.",
+    description:
+      "{ field, direction }. Both live in one object so a page holds one piece of sort state, not two.",
   },
   {
     name: "options",

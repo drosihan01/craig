@@ -20,6 +20,8 @@ import {
   SelectMenu,
   MARK_MIN_SIZE,
   MARK_STROKE,
+  NavTreeGroup,
+  NavTreeItem,
   Button,
   Progress,
   Separator,
@@ -425,14 +427,23 @@ const NOTIFICATIONS: AppNotification[] = [
 
 /* -------------------------------------------------------------------------- */
 
-/** The five sections, switched from the left panel rather than a tab strip. */
+/** Switched from the left panel rather than a tab strip. */
 const SANDBOX_SECTIONS = [
   { value: "home", label: "Home" },
   { value: "design", label: "Design system" },
   { value: "docs", label: "Docs" },
   { value: "backend", label: "Backend" },
-  { value: "demo", label: "Demo" },
   { value: "mail", label: "Mail" },
+];
+
+/* Demo is a group rather than a section, because there are three of them now
+   and they aren't versions of one page — they're three different companies
+   with three different arguments. A flat "Demo" that silently meant the newest
+   one was going to keep being wrong. */
+const DEMO_RUNS = [
+  { value: "demo-v3", label: "Demo v3", note: "Calder — plays itself" },
+  { value: "demo-v2", label: "Demo v2", note: "Katalis — from signup" },
+  { value: "demo-v1", label: "Demo v1", note: "Katalis — mid-story" },
 ];
 
 export default function SandboxPage() {
@@ -492,7 +503,7 @@ export default function SandboxPage() {
           {tab === "design" && <DesignTab />}
           {tab === "docs" && <DocsTab />}
           {tab === "backend" && <BackendTab />}
-          {tab === "demo" && <DemoTab />}
+          {tab.startsWith("demo") && <DemoTab run={tab} />}
           {tab === "mail" && <MailTab />}
         </div>
       </div>
@@ -817,61 +828,71 @@ function BackendTab() {
 
 /* --- Demo ------------------------------------------------------------------ */
 
-function DemoTab() {
+function DemoTab({ run }: { run: string }) {
   return (
     <div className="flex flex-col gap-5">
-      <Card>
-        <CardHeader className="flex-row items-start gap-3">
-          <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-text-muted">
-            <PlayArrow className="size-4" />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <CardTitle>{COMPANY.name}</CardTitle>
-            <CardDescription>{COMPANY.pitch}</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            {Object.values(PEOPLE).map((p) => (
-              <div key={p.email} className="flex items-center gap-2">
-                <Avatar name={p.name} size="sm" />
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{p.name}</span>
-                  <span className="text-2xs text-text-subtle">{p.role}</span>
+      {/* v3 is a different company, so the Katalis card would be describing
+          the wrong one. */}
+      {run !== "demo-v3" && (
+        <Card>
+          <CardHeader className="flex-row items-start gap-3">
+            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-text-muted">
+              <PlayArrow className="size-4" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <CardTitle>{COMPANY.name}</CardTitle>
+              <CardDescription>{COMPANY.pitch}</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
+              {Object.values(PEOPLE).map((p) => (
+                <div key={p.email} className="flex items-center gap-2">
+                  <Avatar name={p.name} size="sm" />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{p.name}</span>
+                    <span className="text-2xs text-text-subtle">{p.role}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          <Separator />
-          <p className="text-base leading-relaxed text-text-muted">
-            Three people, no written process, first non-founder hire starting in
-            two weeks. That&apos;s the whole argument: a 500-person company
-            already has an HR system, and Craig would be a worse version of it.
-            Ada has a Notion doc written at 11pm before a fundraise call, and
-            everything else lives in her head and Jason&apos;s. Making the
-            undocumented parts visible is the product — not inventing process a
-            three-person company doesn&apos;t want.
-          </p>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+            <Separator />
+            <p className="text-base leading-relaxed text-text-muted">
+              Three people, no written process, first non-founder hire starting
+              in two weeks. That&apos;s the whole argument: a 500-person company
+              already has an HR system, and Craig would be a worse version of
+              it. Ada has a Notion doc written at 11pm before a fundraise call,
+              and everything else lives in her head and Jason&apos;s. Making the
+              undocumented parts visible is the product — not inventing process
+              a three-person company doesn&apos;t want.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-      <RunThrough
-        title="Demo v3 — Calder Diagnostics, plays itself"
-        note="The newest one, and a different company. Has a play button."
-        steps={FLOW_V3}
-      />
+      {run === "demo-v3" && (
+        <RunThrough
+          title="Demo v3 — Calder Diagnostics, plays itself"
+          note="A different company on purpose. Theo's problem isn't that nothing is written down — it's that everything is, twice, in documents that disagree. Press play, bottom right."
+          steps={FLOW_V3}
+        />
+      )}
 
-      <RunThrough
-        title="Demo v2 — the whole thing"
-        note="Katalis, from nobody having heard of Craig. Click-through."
-        steps={FLOW_V2}
-      />
+      {run === "demo-v2" && (
+        <RunThrough
+          title="Demo v2 — the whole thing"
+          note="Katalis, from nobody having heard of Craig. Click-through."
+          steps={FLOW_V2}
+        />
+      )}
 
-      <RunThrough
-        title="Demo v1 — the workflow draft"
-        note="Starts mid-story, with Ada already inside."
-        steps={FLOW_V1}
-      />
+      {run === "demo-v1" && (
+        <RunThrough
+          title="Demo v1 — the workflow draft"
+          note="Starts mid-story, with Ada already inside."
+          steps={FLOW_V1}
+        />
+      )}
 
       <Callout tone="neutral">
         The gaps in the drafted workflow — a right-to-work check nobody has
@@ -1107,6 +1128,22 @@ function SandboxNav({
             </button>
           );
         })}
+
+        <NavTreeGroup
+          label="Demo"
+          defaultOpen
+          className="pt-0.5"
+          icon={<PlayArrow />}
+        >
+          {DEMO_RUNS.map((d) => (
+            <NavTreeItem
+              key={d.value}
+              label={d.label}
+              current={section === d.value}
+              onClick={() => onSection(d.value)}
+            />
+          ))}
+        </NavTreeGroup>
       </div>
 
       <Separator />

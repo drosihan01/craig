@@ -5,6 +5,7 @@ import Link from "next/link";
 import * as Icon from "@/components/ui/icons";
 import {
   Add,
+  AltRoute,
   ArrowForward,
   CalendarMonth,
   Check,
@@ -14,7 +15,9 @@ import {
   Info,
   LaptopMac,
   PersonAdd,
+  Checklist,
   Search,
+  UploadFile,
   Warning,
 } from "@/components/ui/icons";
 import {
@@ -26,6 +29,8 @@ import {
   List,
   ListIcon,
   ListItem,
+  NavTreeGroup,
+  NavTreeItem,
   Badge,
   Button,
   Callout,
@@ -85,6 +90,8 @@ import {
   PROMPTBAR_PROPS,
   BACKLINK_PROPS,
   LIST_PROPS,
+  NAV_TREE_ITEM_PROPS,
+  NAV_TREE_PROPS,
   FILTER_PROPS,
   FILTER_BAR_PROPS,
   SORT_PROPS,
@@ -355,16 +362,20 @@ export default function DesignSystemPage() {
         <Api component="CraigMark" props={MARK_PROPS} />
         <Usage>{`import { CraigMark, CraigLockup, MARK_STROKE } from "@/components/ui";`}</Usage>
 
-        <Callout tone="info" icon={<Info />} title="One stroke weight, and a floor">
+        <Callout
+          tone="info"
+          icon={<Info />}
+          title="One stroke weight, and a floor"
+        >
           <p>
-            The mark uses{" "}
-            <code className="font-mono text-xs">MARK_STROKE</code> (9) at every
-            size — never vary it. An earlier version scaled the weight per size
-            to keep small renders legible; it worked, but it redrew the mark
-            heavier as it shrank, so it read as a slightly different logo
-            depending on where it appeared. 9 was chosen by rendering the mark
-            from 16px to 80px at several weights: heavy enough to hold at 20px,
-            light enough to keep the drawing&apos;s character at 80px.
+            The mark uses <code className="font-mono text-xs">MARK_STROKE</code>{" "}
+            (9) at every size — never vary it. An earlier version scaled the
+            weight per size to keep small renders legible; it worked, but it
+            redrew the mark heavier as it shrank, so it read as a slightly
+            different logo depending on where it appeared. 9 was chosen by
+            rendering the mark from 16px to 80px at several weights: heavy
+            enough to hold at 20px, light enough to keep the drawing&apos;s
+            character at 80px.
           </p>
           <p className="mt-2">
             The trade is a floor rather than a weight change. Below{" "}
@@ -453,10 +464,7 @@ export default function DesignSystemPage() {
       >
         <Demo className="flex-col items-stretch gap-0 divide-y divide-border p-0">
           {TYPE_SCALE.map((t) => (
-            <div
-              key={t.name}
-              className="flex items-baseline gap-5 px-5 py-3.5"
-            >
+            <div key={t.name} className="flex items-baseline gap-5 px-5 py-3.5">
               <span className="w-12 shrink-0 font-mono text-2xs text-text-subtle">
                 {t.name}
               </span>
@@ -575,7 +583,9 @@ export default function DesignSystemPage() {
               <span className="font-mono text-2xs text-text-subtle">hover</span>
             </div>
             <span className="text-2xs font-medium">ease-spring</span>
-            <span className="text-2xs text-text-subtle">200ms · travelling</span>
+            <span className="text-2xs text-text-subtle">
+              200ms · travelling
+            </span>
           </div>
         </Demo>
       </Section>
@@ -667,7 +677,11 @@ export default function DesignSystemPage() {
       >
         <Demo className="items-start">
           <div className="grid w-full gap-5 sm:grid-cols-2">
-            <Field label="Workflow name" required hint="Shown to the new starter">
+            <Field
+              label="Workflow name"
+              required
+              hint="Shown to the new starter"
+            >
               <Input placeholder="e.g. Engineer — Katalis" />
             </Field>
             <Field label="Search">
@@ -782,10 +796,7 @@ export default function DesignSystemPage() {
                 label="Workflow is live"
                 description="New hires are assigned this workflow automatically."
               />
-              <ControlRow
-                control={<Switch />}
-                label="Notify Jason"
-              />
+              <ControlRow control={<Switch />} label="Notify Jason" />
             </div>
           </div>
         </Demo>
@@ -835,7 +846,9 @@ export default function DesignSystemPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Engineer — Katalis</CardTitle>
-                <CardDescription>9 steps across 3 stages · 2 owners</CardDescription>
+                <CardDescription>
+                  9 steps across 3 stages · 2 owners
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Progress value={62} label="Workflow completion" />
@@ -884,14 +897,21 @@ export default function DesignSystemPage() {
         title="List"
         description="Rows of things — people, documents, workflows. Borrowed from Material's list anatomy, mainly for one detail: dividers are inset, starting where the text starts rather than at the row edge, so a column of avatars reads as a column instead of every row looking like a separate boxed card."
       >
-        <Demo title="Two-line rows with a leading avatar" className="items-stretch">
+        <Demo
+          title="Two-line rows with a leading avatar"
+          className="items-stretch"
+        >
           <List className="w-full">
             <ListItem
               leading={<Avatar name="Ada Yıldız" size="md" />}
               title="Ada Yıldız"
               description="Founder · ada@katalis.ai"
               meta="owns 4 steps"
-              trailing={<Badge tone="neutral" size="sm">Owner</Badge>}
+              trailing={
+                <Badge tone="neutral" size="sm">
+                  Owner
+                </Badge>
+              }
             />
             <ListItem
               leading={<Avatar name="Jason Cho" size="md" />}
@@ -899,18 +919,29 @@ export default function DesignSystemPage() {
               description="Cofounder · jason@katalis.ai"
               footnote="Every credential goes through him"
               meta="owns 4 steps"
-              trailing={<Badge tone="neutral" size="sm">Admin</Badge>}
+              trailing={
+                <Badge tone="neutral" size="sm">
+                  Admin
+                </Badge>
+              }
             />
             <ListItem
               leading={<Avatar name="Matty" size="md" />}
               title="Matty"
               description="Frontend, contract · matty@katalis.ai"
-              trailing={<Badge tone="neutral" size="sm">Contributor</Badge>}
+              trailing={
+                <Badge tone="neutral" size="sm">
+                  Contributor
+                </Badge>
+              }
             />
           </List>
         </Demo>
 
-        <Demo title="Icon tiles, overline, and an interactive row" className="items-stretch">
+        <Demo
+          title="Icon tiles, overline, and an interactive row"
+          className="items-stretch"
+        >
           <List className="w-full">
             <ListItem
               href="/resources"
@@ -941,23 +972,40 @@ export default function DesignSystemPage() {
           </List>
         </Demo>
 
-        <Demo title="Dense, undivided — for side panels" className="items-stretch">
+        <Demo
+          title="Dense, undivided — for side panels"
+          className="items-stretch"
+        >
           <div className="w-64 rounded-lg border border-border bg-surface p-3">
             <List dense divided={false} bordered={false}>
               <ListItem
                 leading={<Avatar name="Ada Yıldız" size="xs" />}
-                title={<span className="font-normal text-text-muted">Ada Yıldız</span>}
+                title={
+                  <span className="font-normal text-text-muted">
+                    Ada Yıldız
+                  </span>
+                }
                 meta="Founder"
               />
               <ListItem
                 leading={<Avatar name="Jason Cho" size="xs" />}
-                title={<span className="font-normal text-text-muted">Jason Cho</span>}
+                title={
+                  <span className="font-normal text-text-muted">Jason Cho</span>
+                }
                 meta="Cofounder"
               />
               <ListItem
                 leading={<Avatar name="Nils Hoffman" size="xs" />}
-                title={<span className="font-normal text-text-muted">Nils Hoffman</span>}
-                trailing={<Badge tone="warning" size="sm">Starts in 2 weeks</Badge>}
+                title={
+                  <span className="font-normal text-text-muted">
+                    Nils Hoffman
+                  </span>
+                }
+                trailing={
+                  <Badge tone="warning" size="sm">
+                    Starts in 2 weeks
+                  </Badge>
+                }
               />
             </List>
           </div>
@@ -965,6 +1013,73 @@ export default function DesignSystemPage() {
 
         <Api component="ListItem" props={LIST_PROPS} />
         <Usage>{`import { List, ListItem, ListSection, ListIcon } from "@/components/ui";`}</Usage>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section
+        id="nav-tree"
+        title="Nested nav"
+        description="A nav item with children under it. The dotted rule is the component — indentation alone gets ambiguous the moment two groups are open at once, because you can see that a row is nested but not what it's nested under, and the eye has to travel back up counting pixels. Dotted rather than solid for the same reason the canvas uses dotted inside a step: solid means flow, one thing leading to another, and Evidence doesn't come after Discovery — it's part of it."
+      >
+        <Demo title="A group with children" className="items-stretch">
+          <div className="w-64 rounded-lg border border-border bg-surface p-2">
+            <NavTreeGroup label="Discovery" icon={<Search />}>
+              <NavTreeItem label="Evidence" icon={<UploadFile />} />
+              <NavTreeItem label="Review" icon={<Checklist />} current />
+            </NavTreeGroup>
+          </div>
+        </Demo>
+
+        <Demo
+          title="Several groups, and a flat item"
+          note="collapsed groups keep their chevron; a row with no children has none, so the two never look alike"
+          className="items-stretch"
+        >
+          <div className="flex w-64 flex-col gap-0.5 rounded-lg border border-border bg-surface p-2">
+            <NavTreeItem label="Overview" icon={<Description />} />
+            <NavTreeGroup label="Discovery" icon={<Search />}>
+              <NavTreeItem label="Evidence" icon={<UploadFile />} />
+              <NavTreeItem label="Review" icon={<Checklist />} />
+            </NavTreeGroup>
+            <NavTreeGroup
+              label="Onboarding"
+              icon={<AltRoute />}
+              defaultOpen={false}
+            >
+              <NavTreeItem label="Workflows" />
+              <NavTreeItem label="People" />
+            </NavTreeGroup>
+          </div>
+        </Demo>
+
+        <Demo title="With counts" className="items-stretch">
+          <div className="w-64 rounded-lg border border-border bg-surface p-2">
+            <NavTreeGroup label="Discovery" icon={<Search />}>
+              <NavTreeItem
+                label="Evidence"
+                icon={<UploadFile />}
+                trailing={
+                  <Badge tone="neutral" size="sm">
+                    12
+                  </Badge>
+                }
+              />
+              <NavTreeItem
+                label="Review"
+                icon={<Checklist />}
+                trailing={
+                  <Badge tone="warning" size="sm">
+                    2
+                  </Badge>
+                }
+              />
+            </NavTreeGroup>
+          </div>
+        </Demo>
+
+        <Api component="NavTreeGroup" props={NAV_TREE_PROPS} />
+        <Api component="NavTreeItem" props={NAV_TREE_ITEM_PROPS} />
+        <Usage>{`import { NavTreeGroup, NavTreeItem } from "@/components/ui";`}</Usage>
       </Section>
 
       {/* ---------------------------------------------------------------- */}
@@ -1102,7 +1217,9 @@ export default function DesignSystemPage() {
             </p>
           </Callout>
           <Callout tone="warning" icon={<Warning />} title="Unassigned steps">
-            <p>3 steps have no owner. They&apos;ll fall to People &amp; Culture.</p>
+            <p>
+              3 steps have no owner. They&apos;ll fall to People &amp; Culture.
+            </p>
           </Callout>
           <Callout tone="success" icon={<Check />} title="All checks passed" />
         </Demo>
@@ -1164,7 +1281,11 @@ export default function DesignSystemPage() {
         />
         <Usage>{`import { ToastProvider, useToast, NotificationBell } from "@/components/ui";`}</Usage>
 
-        <Callout tone="info" icon={<Info />} title="Opening the list isn't reading it">
+        <Callout
+          tone="info"
+          icon={<Info />}
+          title="Opening the list isn't reading it"
+        >
           <p>
             The panel never marks anything read by itself. &ldquo;I opened the
             list&rdquo; is not &ldquo;I dealt with it&rdquo;, and clearing the
@@ -1244,11 +1365,15 @@ export default function DesignSystemPage() {
         <Api component="PromptBar" props={PROMPTBAR_PROPS} />
         <Usage>{`import { ChatModal, PromptBar, CHAT_MODELS } from "@/components/ui";`}</Usage>
 
-        <Callout tone="warning" icon={<Warning />} title="The model choice is a data boundary">
+        <Callout
+          tone="warning"
+          icon={<Warning />}
+          title="The model choice is a data boundary"
+        >
           <p>
-            Craigopilot is in-house and the default — it&apos;s the only
-            one that sees company data. Claude and GPT are hosted, so anything
-            sent to them leaves the tenancy. The composer says which regime
+            Craigopilot is in-house and the default — it&apos;s the only one
+            that sees company data. Claude and GPT are hosted, so anything sent
+            to them leaves the tenancy. The composer says which regime
             you&apos;re in rather than burying it in settings, and that rule
             belongs in the API layer too, not just this label.
           </p>
@@ -1265,9 +1390,8 @@ export default function DesignSystemPage() {
           <div className="flex flex-col gap-2">
             <p className="text-base text-text-muted">
               You&apos;re looking at it. Use the panel toggles in the header:
-              one beside{" "}
-              <span className="font-medium text-text">Craig.</span> for the nav,
-              one at the far right for the details panel.
+              one beside <span className="font-medium text-text">Craig.</span>{" "}
+              for the nav, one at the far right for the details panel.
             </p>
           </div>
         </Demo>
@@ -1377,12 +1501,26 @@ export default function DesignSystemPage() {
       >
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-medium">Admin — step row in the builder</h3>
+            <h3 className="text-sm font-medium">
+              Admin — step row in the builder
+            </h3>
             <Card className="divide-y divide-border">
               {[
-                { title: "Sign employment contract", owner: "Ada", status: "complete" },
-                { title: "GitHub + AWS keys", owner: "Jason", status: "in_progress" },
-                { title: "Add to Slack channels", owner: "—", status: "not_started" },
+                {
+                  title: "Sign employment contract",
+                  owner: "Ada",
+                  status: "complete",
+                },
+                {
+                  title: "GitHub + AWS keys",
+                  owner: "Jason",
+                  status: "in_progress",
+                },
+                {
+                  title: "Add to Slack channels",
+                  owner: "—",
+                  status: "not_started",
+                },
               ].map((row) => (
                 <div
                   key={row.title}
@@ -1405,7 +1543,11 @@ export default function DesignSystemPage() {
                 </div>
               ))}
               <div className="p-2">
-                <Button variant="ghost" size="sm" className="w-full justify-start">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start"
+                >
                   <Add />
                   Add step
                 </Button>
