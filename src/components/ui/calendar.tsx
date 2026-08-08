@@ -311,6 +311,88 @@ function NavButton({
   );
 }
 
+/**
+ * A typed date, or null.
+ *
+ * Deliberately narrow about years: four digits, always. A two-digit year is
+ * the one place this could guess wrong in a way nobody notices — `24` is 1924
+ * or 2024 depending on a pivot somebody chose, and on a date of birth that is
+ * a hundred-year error printed as a plausible date. Refusing is honest and
+ * costs two keystrokes.
+ *
+ * Formats, in the order people actually type them:
+ *
+ *   24/8/1994   24-8-1994   24.8.1994    day first, per the note in `commit`
+ *   1994-08-24                            ISO, which is unambiguous
+ *   24 Aug 1994   24 August 1994          month by name, in any case
+ *   Aug 24 1994                           and the other way round
+ *
+ * Month names are matched against the locale's own, so this follows the
+ * formatting rather than hardcoding English — the same list the field prints
+ * with is the list it reads back.
+ */
+function parseTyped(raw: string, locale: string): Date | null {
+  const text = raw.trim().replace(/,/g, " ").replace(/\s+/g, " ");
+
+  /* ISO first: it is the only form where a leading four-digit number is the
+     year, so testing it before the day-first patterns keeps them simple. */
+  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return build(+iso[1], +iso[2], +iso[3]);
+
+  const numeric = text.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/);
+  if (numeric) return build(+numeric[3], +numeric[2], +numeric[1]);
+
+  /* Month by name, either order. Built from the locale so "août" works
+     wherever the field would have printed "août". */
+  const months = monthNames(locale);
+  const named = text.match(/^(\d{1,2}) ([^\d\s]+) (\d{4})$/);
+  if (named) {
+    const m = matchMonth(named[2], months);
+    if (m) return build(+named[3], m, +named[1]);
+  }
+  const namedFirst = text.match(/^([^\d\s]+) (\d{1,2}) (\d{4})$/);
+  if (namedFirst) {
+    const m = matchMonth(namedFirst[1], months);
+    if (m) return build(+namedFirst[3], m, +namedFirst[2]);
+  }
+
+  return null;
+}
+
+/**
+ * A real date, or null if those numbers don't make one.
+ *
+ * The round-trip check is what rejects 31 February: `new Date(1994, 1, 31)`
+ * rolls forward to 3 March rather than failing, so a date that comes back
+ * describing a different day than it was given never existed.
+ */
+function build(year: number, month: number, day: number): Date | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function monthNames(locale: string): string[] {
+  const long = new Intl.DateTimeFormat(locale, { month: "long" });
+  return Array.from({ length: 12 }, (_, i) =>
+    long.format(new Date(2024, i, 1)),
+  );
+}
+
+/** Prefix match, so both "Aug" and "August" find the same month. */
+function matchMonth(input: string, months: string[]): number | null {
+  const needle = input.toLocaleLowerCase();
+  const i = months.findIndex((m) => m.toLocaleLowerCase().startsWith(needle));
+  return i === -1 ? null : i + 1;
+}
+
 /* --- DatePicker ------------------------------------------------------------ */
 
 export function DatePicker({
@@ -339,6 +421,7 @@ export function DatePicker({
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const fieldRef = React.useRef<HTMLInputElement>(null);
   const popoverRef = React.useRef<HTMLDivElement>(null);
   const mounted = useMounted();
 
@@ -430,38 +513,125 @@ export function DatePicker({
     };
   }, [open]);
 
-  const label = value
-    ? new Intl.DateTimeFormat(locale, {
+  const label = React.useCallback(
+    (d: Date) =>
+      new Intl.DateTimeFormat(locale, {
         day: "numeric",
         month: "short",
         year: "numeric",
-      }).format(value)
-    : placeholder;
+      }).format(d),
+    [locale],
+  );
+
+  /**
+   * What's in the box, which is not always what's been chosen.
+   *
+   * Typing is the fast way to give a date and the only tolerable way to give a
+   * date of birth — nobody pages a grid back thirty years to their own
+   * birthday, and the pattern people expect from every form they have ever
+   * filled in is that you type it. So the field is a real text input and the
+   * calendar is the second way in, not the only one.
+   *
+   * Held separately from `value` because a half-typed date is not a date. The
+   * field has to show "24/0" while somebody is still typing, and `value` must
+   * not change until there is something real to change it to.
+   */
+  const [text, setText] = React.useState(() => (value ? label(value) : ""));
+  const [bad, setBad] = React.useState(false);
+
+  /* Follows the value when it changes from outside — the calendar, or a form
+     being reset. Keyed on the timestamp rather than the object, or every
+     re-render with a fresh `new Date` would overwrite what somebody is typing. */
+  const stamp = value ? value.getTime() : null;
+  const lastStampRef = React.useRef(stamp);
+  if (lastStampRef.current !== stamp) {
+    lastStampRef.current = stamp;
+    setText(value ? label(value) : "");
+    setBad(false);
+  }
+
+  /**
+   * Take what they typed, if it is a date.
+   *
+   * Ambiguous numeric dates are read **day first** — `03/04/1994` is 3 April —
+   * because the whole product formats in `en-AU` and a field that reads dates
+   * in a different order from the one it prints them in is a field that
+   * silently records the wrong day twice a year. The parsed date is echoed
+   * back in the canonical format, so what was understood is visible
+   * immediately rather than at the point somebody's payroll is wrong.
+   */
+  function commit() {
+    const raw = text.trim();
+    if (!raw) {
+      setBad(false);
+      return;
+    }
+
+    const parsed = parseTyped(raw, locale);
+    const outOfRange =
+      parsed &&
+      ((min && parsed.getTime() < startOfDay(min).getTime()) ||
+        (max && parsed.getTime() > startOfDay(max).getTime()));
+
+    if (!parsed || outOfRange) {
+      /* Left exactly as typed. Clearing somebody's input because it wasn't
+         understood is how you lose a date they now have to look up again. */
+      setBad(true);
+      return;
+    }
+
+    setBad(false);
+    setText(label(parsed));
+    onChange?.(parsed);
+  }
 
   return (
     <div ref={rootRef} className={cn("relative", className)}>
-      <button
-        ref={triggerRef}
-        id={id}
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-describedby={describedBy}
-        /* role=button doesn't support aria-invalid, so the invalid state is
-           carried on a data attribute and styled from that instead. */
-        data-invalid={invalid || undefined}
+      <div
+        data-invalid={invalid || bad || undefined}
         className={cn(
-          "flex h-8 w-full items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-base shadow-e1",
+          "flex h-8 w-full items-center gap-2 rounded-md border border-border bg-surface pl-2.5 pr-1 text-base shadow-e1",
           "transition-[border-color,box-shadow] hover:border-border-strong",
-          "focus:border-accent-ring focus:outline-none focus:ring-[3px] focus:ring-accent-ring/20",
+          "focus-within:border-accent-ring focus-within:ring-[3px] focus-within:ring-accent-ring/20",
           "data-[invalid]:border-danger data-[invalid]:ring-danger/20",
-          value ? "text-text" : "text-text-subtle",
         )}
       >
-        <CalendarToday className="size-4 shrink-0 text-text-subtle" />
-        <span className="truncate">{label}</span>
-      </button>
+        <input
+          ref={fieldRef}
+          id={id}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={text}
+          placeholder={placeholder}
+          aria-describedby={describedBy}
+          aria-invalid={invalid || bad || undefined}
+          onChange={(e) => {
+            setText(e.target.value);
+            if (bad) setBad(false);
+          }}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          className="min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-text-subtle"
+        />
+
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label="Choose from a calendar"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+        >
+          <CalendarToday className="size-4" />
+        </button>
+      </div>
 
       {open &&
         mounted &&
@@ -480,8 +650,10 @@ export function DatePicker({
               locale={locale}
               onChange={(d) => {
                 onChange?.(d);
+                setText(label(d));
+                setBad(false);
                 setOpen(false);
-                triggerRef.current?.focus();
+                fieldRef.current?.focus();
               }}
             />
           </div>,
