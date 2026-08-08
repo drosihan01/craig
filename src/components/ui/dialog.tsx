@@ -74,6 +74,22 @@ export function Dialog({
 
   const mounted = useMounted();
 
+  /**
+   * `onClose` through a ref, so the effect below depends only on `open`.
+   *
+   * It used to be a dependency, and every call site passes an inline arrow —
+   * which is idiomatic and which makes it a new function on every render. So
+   * the effect tore down and re-ran constantly, and its cleanup calls
+   * `restoreTo.focus()`. Focus was being yanked out of whatever you were
+   * typing in, several times a second, on any screen whose parent re-renders
+   * — which is how a dialog with working inputs becomes one you cannot type
+   * in at all.
+   */
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   React.useEffect(() => {
     if (!open) return;
 
@@ -97,7 +113,7 @@ export function Dialog({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;
@@ -132,7 +148,7 @@ export function Dialog({
       document.body.style.paddingRight = paddingRight;
       restoreTo?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || !mounted) return null;
 
