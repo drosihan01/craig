@@ -98,13 +98,6 @@ const makeId = (role: Role) => `${role}-${++nextId}`;
  * `message` first: the limiter and the chat route both use it. `error` is what
  * the validation replies and the auth route use.
  */
-/** "Nothing" is how the model says a step can go first, and isn't worth saying. */
-function preconditionOf(needs: string): string | undefined {
-  const trimmed = needs.trim();
-  if (!trimmed || /^(nothing|none|n\/a)\.?$/i.test(trimmed)) return undefined;
-  return `Needs ${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
-}
-
 async function failureFrom(response: Response): Promise<string> {
   try {
     const body: unknown = await response.json();
@@ -276,23 +269,16 @@ export function useCraigChat(): CraigChat {
                 { id: `note-${++nextId}`, kind: note.kind, text: note.text },
               ]);
             } else if (event.type === "workflow") {
+              /* Blocks, not a description of blocks. Nothing is derived here
+                 and nothing needs to be: they were built from the library on
+                 the server, so what lands in the store is what the canvas and
+                 the publish gate already know how to read. */
               addWorkflow({
                 id: crypto.randomUUID(),
-                name: "Onboarding",
+                name: event.name,
                 draftedBy: "Craig",
                 createdAt: new Date().toISOString(),
-                blocks: event.steps.map((step, i) => ({
-                  id: `step-${i + 1}`,
-                  kind: step.kind,
-                  title: step.title,
-                  owner: step.owner || undefined,
-                  /* `WorkflowBlock` has no field for a precondition — the
-                     builder expresses order by position — so what a step waits
-                     on is carried as prose rather than dropped. Not
-                     `incomplete`: that means a gap somebody has to close, and
-                     a satisfied dependency isn't one. */
-                  summary: preconditionOf(step.needs),
-                })),
+                blocks: event.blocks,
               });
             } else if (event.type === "tool") {
               const call = event;

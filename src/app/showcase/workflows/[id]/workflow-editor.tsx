@@ -1,0 +1,658 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import {
+  AppShell,
+  BackLink,
+  Badge,
+  BlockInspector,
+  BlockSetup,
+  Button,
+  CraigMark,
+  EmptyState,
+  Field,
+  Input,
+  Separator,
+  Textarea,
+  WorkflowBuilder,
+  WorkflowCanvas,
+  buttonVariants,
+  isUnconfigured,
+  setupWarning,
+  type WorkflowBlock,
+} from "@/components/ui";
+import {
+  AltRoute,
+  AutoAwesome,
+  Check,
+  ChevronLeft,
+} from "@/components/ui/icons";
+import { NavStat } from "@/components/app-nav";
+import { cn } from "@/lib/cn";
+import type { Session } from "@/lib/showcase/contract";
+import {
+  publishWorkflow,
+  setWorkflowBlocks,
+  stepCount,
+  unconfiguredCount,
+  useShowcase,
+  type ShowcasePerson,
+  type ShowcaseWorkflow,
+} from "@/lib/showcase/store";
+import { blockFromPreset, findPreset } from "@/lib/workflow/library";
+import type { BlockPreset } from "@/lib/workflow/library";
+
+/**
+ * Where Craig's draft lands.
+ *
+ * The conversation ends with a workflow and, until this screen existed, that
+ * was where it stopped — he could tell you what he'd built but there was
+ * nowhere to look at it. So this is the second half of the argument the welcome
+ * screen makes: he does the writing, you do the deciding, and the decisions he
+ * couldn't make are marked on the steps they belong to rather than listed in a
+ * paragraph you have to translate back into work.
+ *
+ * One rule runs the whole page. A step is unconfigured when a required field of
+ * its preset has no value, and that single derivation badges the block on the
+ * canvas, fills the worklist in the left column and disables Publish. Nothing
+ * is stored, nothing is counted twice, and the three surfaces cannot disagree
+ * about how finished this is.
+ */
+
+/** Every step is somebody's, and the most common somebody is the person arriving. */
+const NEW_STARTER = "The new hire";
+
+/**
+ * Why Craig can't run this step himself, if he can't.
+ *
+ * A preset marked unavailable is still a real part of onboarding — cloud access
+ * deliberately keeps a person in the loop, Notion's API can't manage members —
+ * so it belongs in the workflow as work somebody does. It is not a gap to be
+ * closed, and it must never be drawn as one.
+ */
+const byHand = (block: WorkflowBlock) =>
+  block.preset ? findPreset(block.preset)?.unavailable : undefined;
+
+let seq = 0;
+const nextId = () => `b${Date.now()}-${seq++}`;
+
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+export function WorkflowEditor({ id, user }: { id: string; user: Session }) {
+  const { workflows, people, gaps } = useShowcase();
+  const workflow = workflows.find((w) => w.id === id);
+
+  if (!workflow) return <NoWorkflow user={user} />;
+
+  return (
+    <Editor
+      /* Keyed so opening a different workflow starts with nothing selected,
+         rather than carrying a block id that belongs to the last one. */
+      key={workflow.id}
+      workflow={workflow}
+      user={user}
+      people={people}
+      gaps={gaps}
+    />
+  );
+}
+
+function Editor({
+  workflow,
+  user,
+  people,
+  gaps,
+}: {
+  workflow: ShowcaseWorkflow;
+  user: Session;
+  people: ShowcasePerson[];
+  gaps: { id: string; text: string }[];
+}) {
+  const blocks = workflow.blocks;
+
+  /* Straight through to the store rather than into local state. A copy here
+     would mean an answer given on this screen never reaching the list that
+     counts what's still open. */
+  const setBlocks = React.useCallback(
+    (next: WorkflowBlock[] | ((prev: WorkflowBlock[]) => WorkflowBlock[])) =>
+      setWorkflowBlocks(
+        workflow.id,
+        typeof next === "function" ? next(workflow.blocks) : next,
+      ),
+    [workflow.id, workflow.blocks],
+  );
+
+  /* Opens on the workflow, not on a step. Landing inside one block's settings
+     before you've seen the shape of the thing is backwards. */
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const selected = blocks.find((b) => b.id === selectedId) ?? null;
+
+  /**
+   * Everyone a step can be assigned to.
+   *
+   * The account holder, anybody they've invited, the person arriving — and
+   * every name already written onto the draft. That last part is what makes
+   * the list honest: Craig learned about Jason in the conversation and this
+   * account has never met him, so a list built only from People would render
+   * an owner that is very much set as "Not set".
+   */
+  const assignees = React.useMemo(() => {
+    const names = [
+      user.name,
+      ...people.filter((p) => !p.owner).map((p) => p.name),
+      NEW_STARTER,
+    ];
+
+    for (const block of blocks) {
+      if (block.owner) names.push(block.owner);
+      const preset = block.preset ? findPreset(block.preset) : undefined;
+      for (const field of preset?.setup ?? []) {
+        if (field.kind !== "person") continue;
+        const value = block.config?.[field.id];
+        if (typeof value === "string" && value.trim()) names.push(value);
+      }
+    }
+
+    return [...new Set(names)];
+  }, [user.name, people, blocks]);
+
+  function insert(preset: BlockPreset, index: number) {
+    const block = blockFromPreset(preset, nextId());
+    setBlocks((prev) => [...prev.slice(0, index), block, ...prev.slice(index)]);
+    setSelectedId(block.id);
+  }
+
+  function remove(id: string) {
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    setSelectedId((cur) => (cur === id ? null : cur));
+  }
+
+  function duplicate(id: string) {
+    setBlocks((prev) => {
+      const i = prev.findIndex((b) => b.id === id);
+      if (i === -1) return prev;
+      const copy = {
+        ...prev[i],
+        id: nextId(),
+        title: `${prev[i].title} (copy)`,
+      };
+      return [...prev.slice(0, i + 1), copy, ...prev.slice(i + 1)];
+    });
+  }
+
+  function move(id: string, direction: -1 | 1) {
+    setBlocks((prev) => {
+      const i = prev.findIndex((b) => b.id === id);
+      const j = i + direction;
+      // Index 0 is the trigger and is not a valid destination.
+      if (i < 1 || j < 1 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+
+  function patch(id: string, changes: Partial<WorkflowBlock>) {
+    setBlocks((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, ...changes } : b)),
+    );
+  }
+
+  const steps = stepCount(blocks);
+  const unconfigured = unconfiguredCount(blocks);
+
+  function publish() {
+    publishWorkflow(workflow.id);
+    /* Back to Craig, because what happens next is written in his panel and a
+       block's settings would be sitting on top of it. */
+    setSelectedId(null);
+  }
+
+  return (
+    <AppShell
+      title={workflow.name}
+      account={{ name: user.name, email: user.email }}
+      fill
+      nav={
+        <EditorNav
+          workflow={workflow}
+          blocks={blocks}
+          steps={steps}
+          unconfigured={unconfigured}
+          onSelect={setSelectedId}
+        />
+      }
+      actions={
+        workflow.published ? (
+          <Badge tone="success">
+            <Check />
+            Published
+          </Badge>
+        ) : (
+          /* A trigger on its own is valid but pointless, so an empty workflow
+             is unpublishable for a different reason to an unconfigured one. */
+          <Button
+            size="sm"
+            disabled={unconfigured > 0 || steps === 0}
+            onClick={publish}
+          >
+            Publish
+          </Button>
+        )
+      }
+      aside={
+        /* One thing at a time, and no heading over it. With nothing selected
+           the panel is Craig — he wrote this and he's the reason to look right.
+           Select a block and it becomes that block's settings. */
+        selected ? (
+          <div className="flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="-ml-1 flex w-fit items-center gap-1 rounded-md px-1 py-0.5 text-xs text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <ChevronLeft className="size-3.5" />
+              Back to Craig
+            </button>
+
+            <BlockInspector block={selected}>
+              {/* The trigger has nothing to edit. It's the same block in every
+                  workflow and it fires on one event — offering a title field
+                  for it would imply otherwise. */}
+              {selected.kind === "trigger" ? (
+                <p className="text-sm leading-relaxed text-text-subtle">
+                  No configuration. This step is identical in every workflow.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <ByHandNote reason={byHand(selected)} />
+
+                  <Separator />
+                  <Field label="Title">
+                    <Input
+                      value={selected.title}
+                      onChange={(e) =>
+                        patch(selected.id, { title: e.target.value })
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Summary" hint="Shown on the block">
+                    <Textarea
+                      rows={2}
+                      value={selected.summary ?? ""}
+                      onChange={(e) =>
+                        patch(selected.id, { summary: e.target.value })
+                      }
+                    />
+                  </Field>
+
+                  {/* What this particular step needs before it can run. The
+                      fields come from the preset, so a GitHub block asks for an
+                      org and a permission level and a contract block asks for a
+                      document and a countersigner. */}
+                  {selected.preset && (
+                    <>
+                      <Separator />
+                      <BlockSetup
+                        block={selected}
+                        people={assignees}
+                        onChange={(fieldId, value) =>
+                          patch(selected.id, {
+                            config: { ...selected.config, [fieldId]: value },
+                          })
+                        }
+                      />
+                    </>
+                  )}
+
+                  {selected.incomplete && (
+                    <>
+                      <Separator />
+                      <Field
+                        label="Flagged"
+                        hint="Left open rather than guessed at"
+                      >
+                        <div className="flex flex-col gap-2">
+                          <p className="text-sm text-text-muted">
+                            {selected.incomplete}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="w-fit"
+                            onClick={() =>
+                              patch(selected.id, { incomplete: undefined })
+                            }
+                          >
+                            Resolved
+                          </Button>
+                        </div>
+                      </Field>
+                    </>
+                  )}
+                </div>
+              )}
+            </BlockInspector>
+          </div>
+        ) : (
+          <CraigPanel
+            workflow={workflow}
+            blocks={blocks}
+            gaps={gaps}
+            seats={people.filter((p) => !p.owner).length}
+          />
+        )
+      }
+    >
+      {/* Full bleed. The canvas is the page — a title and a paragraph above it
+          would repeat the header and steal the space the work needs. The
+          negative margins cancel the content column's padding. */}
+      <div className="-mx-4 h-[calc(100vh-3rem)] lg:-mx-8">
+        <WorkflowCanvas
+          className="h-full rounded-none border-0"
+          onBackgroundClick={() => setSelectedId(null)}
+        >
+          <div className="px-10 py-12">
+            <WorkflowBuilder
+              blocks={blocks}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onInsert={insert}
+              onRemove={remove}
+              onDuplicate={duplicate}
+              onMove={move}
+            />
+          </div>
+        </WorkflowCanvas>
+      </div>
+    </AppShell>
+  );
+}
+
+/**
+ * A step Craig can't run, said plainly and without alarm.
+ *
+ * The distinction this draws is the one that decides whether somebody trusts
+ * the rest of the screen: a warning badge means "you have to fix this", and
+ * "cloud access keeps a human in the loop" is not something anybody can fix. So
+ * it reads as a fact about the step, in the same quiet frame the preset's own
+ * fixed behaviour uses, and the reason is printed as written rather than folded
+ * into a sentence it doesn't grammatically fit.
+ */
+function ByHandNote({ reason }: { reason?: string }) {
+  if (!reason) return null;
+
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-dashed border-border-strong px-3 py-2">
+      <p className="text-xs leading-relaxed text-text-muted">
+        A step somebody does themselves, not one Craig runs.
+      </p>
+      <p className="text-xs leading-relaxed text-text-subtle">{reason}</p>
+    </div>
+  );
+}
+
+/**
+ * The menu column, which here is everything true about the workflow you're in.
+ *
+ * The list of open steps is the useful part: four unanswered steps out of
+ * twelve is the actual state of the draft, and each row jumps to its block, so
+ * it's a worklist rather than a summary you read and then go hunting from.
+ */
+function EditorNav({
+  workflow,
+  blocks,
+  steps,
+  unconfigured,
+  onSelect,
+}: {
+  workflow: ShowcaseWorkflow;
+  blocks: WorkflowBlock[];
+  steps: number;
+  unconfigured: number;
+  onSelect: (id: string) => void;
+}) {
+  const open = blocks.filter(isUnconfigured);
+  const manual = blocks.filter((b) => byHand(b)).length;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <BackLink href="/showcase/workflows" className="px-2">
+        Workflows
+      </BackLink>
+
+      <Separator />
+
+      <div className="flex flex-col gap-3 px-2">
+        {/* No name here — the header carries it, and the trigger is the first
+            block on the canvas. A column that repeats what's already on screen
+            twice over is a column you stop reading. */}
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Overview
+        </p>
+
+        <div className="flex flex-col gap-2">
+          <NavStat label="Steps" value={steps} />
+          <NavStat
+            label="Unconfigured"
+            value={unconfigured}
+            tone={unconfigured > 0 ? "warning" : "neutral"}
+          />
+          {/* Only when there are some. A permanent "0 done by hand" would make
+              a normal workflow look like it was missing something. */}
+          {manual > 0 && <NavStat label="Done by hand" value={manual} />}
+        </div>
+
+        <div className="flex flex-col gap-1 pt-1">
+          <NavFact label="Drafted by" value={workflow.draftedBy ?? "You"} />
+          <NavFact
+            label="Status"
+            value={workflow.published ? "Published" : "Draft"}
+          />
+        </div>
+      </div>
+
+      {open.length > 0 && (
+        <>
+          <Separator />
+          <div className="flex flex-col gap-1.5 px-2">
+            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+              Still open
+            </p>
+            {open.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => onSelect(b.id)}
+                className="-mx-1.5 flex flex-col gap-0.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover"
+              >
+                <span className="text-sm leading-snug text-text-muted">
+                  {b.title}
+                </span>
+                <span className="text-2xs leading-relaxed text-text-subtle">
+                  {setupWarning(b)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <Separator />
+
+      <p className="px-2 text-xs leading-relaxed text-text-subtle">
+        {workflow.published
+          ? "Published. Everyone given a seat from now on starts at step one and works down."
+          : "A workflow cannot be published while any step is unconfigured."}
+      </p>
+    </div>
+  );
+}
+
+/** A label and a value on one line. Not a NavStat — these aren't counts, and a
+    badge around "Craig" is a badge around a word. */
+function NavFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 text-xs">
+      <span className="shrink-0 text-text-subtle">{label}</span>
+      {/* min-w-0 or truncate does nothing on its own: a flex item's default
+          min-width is auto, which floors it at its content and pushes past the
+          panel when you drag it narrow. */}
+      <span
+        className="min-w-0 truncate text-right text-text-muted"
+        title={value}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Craig, with nothing selected.
+ *
+ * He drafted this, so the panel is him saying where it stands — how much of it
+ * still needs an answer, and what he found that nobody had written down. Those
+ * gaps came out of the conversation and they're the reason several of these
+ * steps are unconfigured, so they belong next to the draft rather than back on
+ * a screen you've left.
+ *
+ * After publishing it says what happens next, plainly. That's the one moment
+ * on this page where somebody is entitled to ask "and then what?", and the
+ * honest answer — it runs when somebody is given a seat, and nobody has one
+ * yet — is better than a link to a screen that would have to be invented to
+ * receive them.
+ */
+function CraigPanel({
+  workflow,
+  blocks,
+  gaps,
+  seats,
+}: {
+  workflow: ShowcaseWorkflow;
+  blocks: WorkflowBlock[];
+  gaps: { id: string; text: string }[];
+  seats: number;
+}) {
+  const steps = stepCount(blocks);
+  const open = unconfiguredCount(blocks);
+  const manual = blocks.filter((b) => byHand(b)).length;
+
+  const status =
+    steps === 0
+      ? "Nothing in here but the trigger. Add a step from the line between the blocks and I'll tell you what it needs."
+      : open > 0
+        ? `${plural(open, "step")} still ${open === 1 ? "needs" : "need"} something from you before this can run. They're in the left column — open one and this panel becomes its settings.`
+        : `All ${steps} steps have what they need, so this one is ready to publish.`;
+
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <CraigMark className="size-5 shrink-0 text-accent" />
+        <span className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Craig
+        </span>
+      </div>
+
+      {workflow.published ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm leading-relaxed text-text-muted">
+            Published. This is the one I run from now on — the next person given
+            a seat starts at step one and works down it.
+          </p>
+          <p className="text-sm leading-relaxed text-text-subtle">
+            {seats === 0
+              ? "Nobody has a seat yet, so it hasn't run for anybody."
+              : "Anyone given a seat from here starts on it."}
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm leading-relaxed text-text-muted">{status}</p>
+      )}
+
+      {manual > 0 && (
+        <p className="text-sm leading-relaxed text-text-muted">
+          {manual === 1 ? "One step here is" : `${manual} steps here are`} work
+          I don&apos;t run — somebody does {manual === 1 ? "it" : "them"} and
+          ticks {manual === 1 ? "it" : "them"} off. Still in the workflow, so
+          nobody forgets.
+        </p>
+      )}
+
+      {gaps.length > 0 && (
+        <>
+          <Separator />
+          <div className="flex flex-col gap-2">
+            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+              What nobody had written down
+            </p>
+            <ul className="flex list-disc flex-col gap-1.5 pl-4 marker:text-text-subtle">
+              {gaps.map((gap) => (
+                <li
+                  key={gap.id}
+                  className="text-sm leading-relaxed text-text-muted"
+                >
+                  {gap.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
+
+      <Link
+        href="/showcase/welcome"
+        className={cn(
+          buttonVariants({ variant: "secondary", size: "sm" }),
+          "mt-auto w-fit",
+        )}
+      >
+        <AutoAwesome />
+        Tell Craig more
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * An address with no workflow behind it.
+ *
+ * Reachable by typing a URL, by following a stale link, or by opening the
+ * account fresh — so it offers both ways forward rather than only the one that
+ * assumes you already have workflows.
+ */
+function NoWorkflow({ user }: { user: Session }) {
+  return (
+    <AppShell
+      title="Workflows"
+      account={{ name: user.name, email: user.email }}
+    >
+      <div className="mx-auto w-full max-w-3xl py-10">
+        <EmptyState
+          icon={<AltRoute />}
+          title="There's no workflow here"
+          description="Open one from your workflows, or tell Craig about your company and he'll draft one."
+          action={
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Link
+                href="/showcase/workflows"
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
+              >
+                All workflows
+              </Link>
+              <Link
+                href="/showcase/welcome"
+                className={buttonVariants({ size: "sm" })}
+              >
+                <AutoAwesome />
+                Talk to Craig
+              </Link>
+            </div>
+          }
+        />
+      </div>
+    </AppShell>
+  );
+}

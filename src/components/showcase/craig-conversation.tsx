@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   AgentPhase,
   AgentQuestion,
@@ -9,8 +10,9 @@ import {
   MessageBody,
   PersonTurn,
   PromptBar,
+  buttonVariants,
 } from "@/components/ui";
-import { AutoAwesome, Description } from "@/components/ui/icons";
+import { ArrowForward, AutoAwesome, Description } from "@/components/ui/icons";
 import type { ShowcaseWorkflow } from "@/lib/showcase/store";
 import type { CraigMessage } from "@/lib/showcase/use-craig-chat";
 import { CraigFault } from "./craig-fault";
@@ -399,11 +401,10 @@ function ReplyOptions({
  * to, which is a real message he can push back on if he still needs more. He
  * has a `draft_workflow` tool and he decides when it fires.
  *
- * Once it has fired there's a workflow in the account, and the card says so and
- * stops offering. It doesn't link anywhere yet — the builder reads a different
- * store and would open one of the scripted demos' fixtures, and sending
- * somebody from their own conversation into a company they have never heard of
- * would undo the one thing the showcase is for.
+ * Once it has fired there's a workflow in the account, and the card stops
+ * offering and starts pointing: the draft has an editor to land in, so the
+ * useful thing to do with it is open it. The conversation stays live
+ * underneath, because anything said after this goes into the next draft.
  */
 function Handoff({
   draft,
@@ -414,12 +415,22 @@ function Handoff({
 }) {
   if (draft) {
     return (
-      <div className="flex flex-col gap-1 rounded-xl border border-accent bg-accent-subtle/30 p-4">
-        <p className="text-base font-medium">Drafted — {draft.name}</p>
-        <p className="text-sm leading-relaxed text-text-muted">
-          It&apos;s in your account. There&apos;s nowhere to open it yet.
-          Anything else you tell him below goes into the next draft.
-        </p>
+      <div className="flex flex-col gap-3 rounded-xl border border-accent bg-accent-subtle/30 p-4">
+        <div className="flex flex-col gap-1">
+          <p className="text-base font-medium">Drafted — {draft.name}</p>
+          <p className="text-sm leading-relaxed text-text-muted">
+            It&apos;s in your account, with anything he had to leave open marked
+            on the step it belongs to. Anything else you tell him below goes
+            into the next draft.
+          </p>
+        </div>
+        <Link
+          href={`/showcase/workflows/${draft.id}`}
+          className={buttonVariants({ size: "sm", className: "w-fit" })}
+        >
+          Open it
+          <ArrowForward />
+        </Link>
       </div>
     );
   }

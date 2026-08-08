@@ -1,3 +1,5 @@
+import type { WorkflowBlock } from "@/components/ui";
+
 /**
  * The seams between the showcase's three halves.
  *
@@ -11,8 +13,6 @@
  * Deliberately small. A contract that describes everything anybody might want
  * is a contract nobody can implement.
  */
-
-import type { BlockKind } from "@/components/ui";
 
 /* ---------------------------------------------------------------------- */
 /*  Auth                                                                  */
@@ -63,22 +63,6 @@ export interface ChatRequest {
 }
 
 /**
- * A step in the workflow Craig drafts.
- *
- * `kind` is the closed set the builder's engine actually runs, asked of the
- * model directly rather than guessed from the title on the way in. A draft that
- * arrives as six blocks all typed "task" is a draft somebody has to redo.
- */
-export interface WorkflowDraftStep {
-  title: string;
-  kind: BlockKind;
-  /** A named person, or the new starter. */
-  owner: string;
-  /** What has to be true before it can run. */
-  needs: string;
-}
-
-/**
  * The stream is newline-delimited JSON, one object per line.
  *
  * Not the provider's wire format: the client shouldn't have to know what's
@@ -118,7 +102,21 @@ export type ChatEvent =
    * the artefact the whole conversation was for, and the screen turns it into
    * a real workflow rather than a line in a list.
    */
-  | { type: "workflow"; steps: WorkflowDraftStep[] }
+  /**
+   * A workflow Craig drafted.
+   *
+   * Real blocks, not a description of blocks. He picks from the same preset
+   * library the builder's own picker offers, so what arrives can be dropped
+   * straight onto the canvas — and, more importantly, the derived machinery
+   * works on it unchanged: a preset knows which of its setup fields are
+   * required, so `isUnconfigured` can see the holes he left and Publish gates
+   * on them without anybody writing a second rule.
+   *
+   * The alternative — free text describing steps — would have meant every
+   * drafted step arriving as a generic task with nothing to check, and a
+   * publish gate that had to be invented separately and could disagree.
+   */
+  | { type: "workflow"; name: string; blocks: WorkflowBlock[] }
   /** A chunk of the answer. Append. */
   | { type: "delta"; text: string }
   /** The turn is finished. */

@@ -31,6 +31,7 @@ import {
   type TaskStatus,
 } from "@/components/ui";
 import {
+  CheckCircle,
   Database,
   Mail,
   MenuBook,
@@ -39,8 +40,10 @@ import {
   PersonAdd,
   PlayArrow,
   TaskAlt,
+  Warning,
 } from "@/components/ui/icons";
-import { AUDIENCE, TEMPLATES as EMAIL_TEMPLATES } from "@/lib/email";
+import { AUDIENCE, SENDER, TEMPLATES as EMAIL_TEMPLATES } from "@/lib/email";
+import { renderEmail } from "@/lib/email/html";
 import { SECTIONS } from "@/app/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
 import { ShowcaseReset } from "@/components/sandbox/showcase-reset";
@@ -115,7 +118,7 @@ const TODOS: TodoGroup[] = [
       {
         id: "a4",
         title: "Adding a seat actually sends the first email",
-        note: "The dialog says what would happen and then nothing does. Needs the API route and Resend.",
+        note: "The dialog says what would happen and then nothing does. The transport exists now — src/lib/email/send.ts, proven by the Mail tab — so what's left is the seat calling it with that seat's merge values.",
         where: "src/lib/onboarding.ts",
       },
       {
@@ -963,20 +966,69 @@ function RunThrough({
  *
  * The address comes from an env var, never the source. This repo is public.
  */
+
+/** What POST /api/email/test answers with. Narrowed here rather than shared
+    with the route: a client component that imports from a route handler is one
+    careless edit away from importing the provider key with it. */
+type SendResponse =
+  | { ok: true; id: string; to: string; from: string; subject: string }
+  | { ok: false; error?: string };
+
 function MailTab() {
   const [templateId, setTemplateId] = React.useState(EMAIL_TEMPLATES[0].id);
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState<Extract<
+    SendResponse,
+    { ok: true }
+  > | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [showSource, setShowSource] = React.useState(false);
+
   const template =
     EMAIL_TEMPLATES.find((t) => t.id === templateId) ?? EMAIL_TEMPLATES[0];
 
   const inbox = process.env.NEXT_PUBLIC_CRAIG_TEST_INBOX;
 
+  /* The same function the route calls, so what's shown here is the markup that
+     went out rather than a second rendering of the same intent. */
+  const wire = renderEmail(template);
+
+  async function send() {
+    setSending(true);
+    setSent(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/email/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId }),
+      });
+      const payload = (await response.json()) as SendResponse;
+
+      if (!response.ok || !payload.ok) {
+        setError(
+          (!payload.ok && payload.error) || `Send failed (${response.status}).`,
+        );
+        return;
+      }
+      setSent(payload);
+    } catch {
+      /* The route reports every provider failure as JSON, so reaching here
+         means the request itself didn't complete — the dev server restarting
+         mid-click is the usual one. */
+      setError("The request never completed. Is the dev server still up?");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      <Callout tone="warning" title="Nothing can send yet">
-        Craig has no server. Every screen in this repo is front-end state, and
-        real mail needs an API route plus a provider key — the first backend
-        this project would have. The button below is real and disabled, rather
-        than fake and satisfying.
+      <Callout tone="neutral" title="This sends real email">
+        <Code>POST /api/email/test</Code> hands the template to Resend over
+        plain <Code>fetch</Code> — no SDK, no new dependency. It needs a
+        showcase session, so sign in first if the button comes back with{" "}
+        <em>Not signed in</em>. Every send is a real one against a real key.
       </Callout>
 
       <Card>
@@ -1022,15 +1074,45 @@ function MailTab() {
             />
           </Field>
 
-          <div className="flex items-center gap-3">
-            <Button size="sm" disabled>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              size="sm"
+              onClick={send}
+              loading={sending}
+              disabled={sending || !inbox}
+            >
               <Mail />
-              Send test
+              {sending ? "Sending" : "Send test"}
             </Button>
             <span className="text-xs text-text-subtle">
-              Needs an API route and a provider.
+              {inbox
+                ? `From ${SENDER.address}.`
+                : "Nowhere to send until the inbox is set."}
             </span>
           </div>
+
+          {/* The id, because it's the only part of this that's checkable. A
+              button that says "Sent" and nothing else is a button asking to be
+              believed; this one hands over the thing you can look up. */}
+          {sent && (
+            <Callout tone="success" title="Sent" icon={<CheckCircle />}>
+              <div className="mt-1 flex flex-col gap-1 text-xs">
+                <span>
+                  Resend id <Code>{sent.id}</Code>
+                </span>
+                <span className="text-text-muted">
+                  {sent.from} → {sent.to}
+                </span>
+                <span className="text-text-muted">Subject: {sent.subject}</span>
+              </div>
+            </Callout>
+          )}
+
+          {error && (
+            <Callout tone="danger" title="Didn't send" icon={<Warning />}>
+              {error}
+            </Callout>
+          )}
         </CardContent>
       </Card>
 
@@ -1049,21 +1131,42 @@ function MailTab() {
         <EmailPreview template={template} />
       </div>
 
-      <Callout tone="neutral" title="What wiring it up needs">
+      {/* The preview is Tailwind and flexbox; what leaves is tables and inline
+          styles, because Outlook renders through Word. Two renderings of one
+          design, which is a real cost — so the second one is visible here
+          rather than something you'd only find by reading the source. */}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => setShowSource((v) => !v)}
+          className="flex items-center gap-1 self-start text-xs text-accent underline-offset-4 hover:underline"
+        >
+          {showSource ? "Hide" : "Show"} what actually goes on the wire
+        </button>
+        {showSource && (
+          <pre className="max-h-80 overflow-auto rounded-md border border-border bg-surface-sunken p-3 font-mono text-2xs leading-relaxed text-text-muted">
+            {wire.html}
+          </pre>
+        )}
+      </div>
+
+      <Callout tone="warning" title="Still on the sandbox sender">
         <ul className="mt-1 flex list-disc flex-col gap-1 pl-4">
           <li>
-            A route handler at <Code>src/app/api/email/test/route.ts</Code>.
+            <Code>{SENDER.address}</Code> is Resend&rsquo;s shared address. It
+            works without any DNS, and it only delivers to the address that owns
+            the Resend account — fine for this, useless for a customer.
           </li>
           <li>
-            A provider. Resend is the least friction — one dependency, one key.
+            <Code>mail.craig-ob.me</Code> is the real one and is refused with a
+            403 until its records exist. Add them, set{" "}
+            <Code>NEXT_PUBLIC_CRAIG_MAIL_FROM</Code>, and every send and preview
+            moves across with no code change.
           </li>
           <li>
-            <Code>RESEND_API_KEY</Code> in <Code>.env.local</Code>, and never in
-            a commit. Server-side only, so no <Code>NEXT_PUBLIC_</Code> prefix.
-          </li>
-          <li>
-            A verified sending domain, or everything lands in spam and the test
-            tells you nothing.
+            Until then deliverability tells you nothing: the sandbox domain
+            isn&rsquo;t ours, so its reputation isn&rsquo;t a signal about
+            Craig&rsquo;s.
           </li>
         </ul>
       </Callout>

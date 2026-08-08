@@ -40,10 +40,37 @@ import { COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
  * one — it needs each customer to add DNS records, which is a setup step Ada
  * hasn't earned yet on day one.
  */
+
+/**
+ * Where mail comes from until `mail.craig-ob.me` has its DNS records.
+ *
+ * Resend's shared sandbox address. It sends today and it only sends to the
+ * address that owns the Resend account, which is the right shape for a test
+ * harness and useless for a product — the whole reason the real subdomain is
+ * still worth doing.
+ */
+export const FALLBACK_FROM = "onboarding@resend.dev";
+
 export const SENDER = {
   /** Display name. The company is the customer's, the sender is Craig. */
   name: (company: string) => `Craig, for ${company}`,
-  address: "craig@mail.craig-ob.me",
+
+  /**
+   * The envelope address, from the environment, because which address is
+   * sendable is a fact about DNS rather than about this code. Everything above
+   * describes the address this *should* be; Resend refuses it with a 403 until
+   * the records exist, so the default is the one that works. Setting
+   * `NEXT_PUBLIC_CRAIG_MAIL_FROM=craig@mail.craig-ob.me` the hour they land
+   * moves every send and every preview across with no deploy.
+   *
+   * `NEXT_PUBLIC_` because the preview renders it and a preview that shows an
+   * address other than the one that will arrive is a preview that lies. There
+   * is nothing to withhold: this value is in the header of every email that
+   * goes out. The key is the secret; the address it sends from is the opposite
+   * of one, and lives in `send.ts` where no browser can reach it.
+   */
+  address: process.env.NEXT_PUBLIC_CRAIG_MAIL_FROM || FALLBACK_FROM,
+
   replyTo: "hello@craig-ob.me",
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { WorkflowBlock } from "@/components/ui";
+import { isUnconfigured, type WorkflowBlock } from "@/components/ui";
 import type { ActivityEntry } from "@/components/ui";
 
 /**
@@ -128,6 +128,43 @@ export function addWorkflow(workflow: ShowcaseWorkflow) {
   });
 }
 
+/**
+ * The editor writing the canvas back.
+ *
+ * The whole list rather than one block, because the editor owns order,
+ * insertion and deletion as well as field values — three narrower writers that
+ * each knew part of the shape is how a count in the nav ends up disagreeing
+ * with the canvas it was counting.
+ */
+export function setWorkflowBlocks(id: string, blocks: WorkflowBlock[]) {
+  set({
+    workflows: state.workflows.map((w) => (w.id === id ? { ...w, blocks } : w)),
+  });
+}
+
+/**
+ * The moment it stops being a draft and becomes what runs.
+ *
+ * Nothing here checks whether the workflow is complete. That rule is derived
+ * from the blocks and enforced where it can be seen — the Publish button is
+ * disabled while any step is unconfigured — and repeating it as a silent
+ * refusal in the store would mean a button that looks live and does nothing.
+ */
+export function publishWorkflow(id: string) {
+  const workflow = state.workflows.find((w) => w.id === id);
+  if (!workflow || workflow.published) return;
+
+  set({
+    workflows: state.workflows.map((w) =>
+      w.id === id ? { ...w, published: true } : w,
+    ),
+  });
+  logActivity({
+    verb: "Published",
+    what: `${workflow.name} — it runs the next time somebody is given a seat`,
+  });
+}
+
 export function invitePerson(person: Omit<ShowcasePerson, "id">) {
   set({
     people: [...state.people, { ...person, id: crypto.randomUUID() }],
@@ -179,6 +216,21 @@ export const resetShowcase = () => {
 /* ---------------------------------------------------------------------- */
 /*  Derived                                                               */
 /* ---------------------------------------------------------------------- */
+
+/** Steps excluding the trigger, which is the event rather than work anybody does. */
+export const stepCount = (blocks: WorkflowBlock[]) =>
+  blocks.filter((b) => b.kind !== "trigger").length;
+
+/**
+ * How many steps still need an answer.
+ *
+ * Derived from the presets' required fields rather than stored on the
+ * workflow, so the list's badge, the editor's nav counter, the warnings on the
+ * canvas and the disabled Publish button are four readings of one answer and
+ * cannot drift apart.
+ */
+export const unconfiguredCount = (blocks: WorkflowBlock[]) =>
+  blocks.filter(isUnconfigured).length;
 
 /** True until the account holder has done anything. Drives first-run screens. */
 export const isUntouched = (s: ShowcaseState) =>

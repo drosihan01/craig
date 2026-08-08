@@ -1,13 +1,24 @@
 import "server-only";
 
-import { Agent, RunContext, setTracingDisabled, tool } from "@openai/agents";
+import {
+  Agent,
+  RunContext,
+  setTracingDisabled,
+  tool,
+  webSearchTool,
+} from "@openai/agents";
 import { z } from "zod";
-import type { BlockKind } from "@/components/ui";
-import type { WorkflowDraftStep } from "@/lib/showcase/contract";
+import {
+  PRESET_IDS,
+  byHand,
+  openSetup,
+  parseDraft,
+  type Draft,
+} from "@/lib/showcase/draft";
 import {
   CHAT_MODEL,
   CHAT_TEMPERATURE,
-  CRAIG_SYSTEM_PROMPT,
+  craigSystemPrompt,
 } from "@/lib/showcase/craig-prompt";
 
 /**
@@ -18,10 +29,15 @@ import {
  * well because the labels were honest about what the work *would* be. Nothing
  * was happening.
  *
- * These four tools are that same list, made real. "Writing that down" appears
+ * These tools are that same list, made real. "Writing that down" appears
  * because `note_gap` is executing, and it stops appearing when the call
  * returns. The screen can't tell the difference — that's the point — but the
  * product can now only claim things it did.
+ *
+ * Four of them are ours and run in this process. The fifth is `webSearchTool`,
+ * which runs inside OpenAI's response and is the only one that can come back
+ * with something untrue — see the note above it, and the section of the prompt
+ * it exists to be governed by.
  *
  * `note_gap` is the one that matters. Finding what nobody wrote down is the
  * argument this whole codebase makes for Craig existing, and it has always
@@ -59,7 +75,11 @@ export interface Gap {
 export interface Notebook {
   gaps: Gap[];
   facts: { key: string; value: string }[];
-  workflow: WorkflowDraftStep[] | null;
+  workflow: Draft | null;
+  /** Whoever is signed in. Carried on the context because the prompt is built
+      per run, and the alternative was a module-level constant that named one
+      person for everybody. */
+  firstName: string;
 }
 
 /**
@@ -76,14 +96,15 @@ export interface Notebook {
  * — the key/value split is only used for display back to the model, so the
  * label is dropped rather than faked.
  */
-export function seedNotebook(known?: {
-  gaps: string[];
-  facts: string[];
-}): Notebook {
+export function seedNotebook(
+  firstName: string,
+  known?: { gaps: string[]; facts: string[] },
+): Notebook {
   return {
     gaps: (known?.gaps ?? []).map((what) => ({ what, whyItMatters: "" })),
     facts: (known?.facts ?? []).map((value) => ({ key: "", value })),
     workflow: null,
+    firstName,
   };
 }
 
@@ -131,47 +152,56 @@ const recordFactParams = z.object({
 const recallParams = z.object({});
 
 /**
- * The block types the builder's engine runs.
+ * A step is a preset from the library, and nothing else can be said.
  *
- * `satisfies` is the point of the literal array: zod needs the values at
- * runtime, and this stops compiling the day `BlockKind` gains or loses a
- * member, which is the only way two copies of a union stay honest.
+ * `PRESET_IDS` is built from `BLOCK_LIBRARY` at module load, so the enum in the
+ * schema is the same list the picker offers — an id that isn't in the library
+ * isn't rejected after the fact, it's unsayable. The block's `kind` comes with
+ * the preset, which is why the model is no longer asked for one: it was the
+ * best available guess when a step was free text, and a preset knows.
+ *
+ * `config` is a list of pairs rather than an object keyed by field id, because
+ * strict function schemas can't carry an open-ended map — `additionalProperties`
+ * has to be `false`, and a `z.record` is exactly the thing that isn't. Which
+ * fields exist is in the prompt, and `parseDraft` drops any that don't.
  */
-const BLOCK_KINDS = [
-  "trigger",
-  "task",
-  "approval",
-  "notify",
-  "branch",
-  "document",
-] as const satisfies readonly BlockKind[];
-
 const draftWorkflowParams = z.object({
+  name: z
+    .string()
+    .describe(
+      "What this workflow is for, in a few words — usually the role, like 'Engineer onboarding'.",
+    ),
   steps: z
     .array(
       z.object({
-        title: z
-          .string()
-          .describe("What happens. Short, like 'Sign contract'."),
-        /* Asked for rather than guessed from the title on the way out. A draft
-           that arrives as six blocks all typed "task" is one somebody has to
-           redo, and the model knows which is which better than a regex would. */
-        kind: z
-          .enum(BLOCK_KINDS)
-          .describe(
-            "What sort of step it is. 'document' for something signed or read, 'approval' where somebody has to say yes, 'notify' for a message, 'branch' where it depends, 'task' for anything else a person does. 'trigger' only for what starts the whole thing.",
-          ),
+        preset: z
+          .enum(PRESET_IDS)
+          .describe("The id of a block from the library. Exactly as listed."),
         owner: z
           .string()
           .describe("Who does it — a named person, or the new starter."),
-        needs: z
-          .string()
+        config: z
+          .array(
+            z.object({
+              field: z
+                .string()
+                .describe("A setup field's id, from that preset's needs line."),
+              value: z
+                .string()
+                .describe(
+                  "What she actually said. Several values in one entry, separated by commas.",
+                ),
+            }),
+          )
+          .optional()
           .describe(
-            "What has to be true before it can run. 'Nothing' if it can go first.",
+            "Only fields she gave you an answer to, in a sentence you could point at. Leave out anything else — especially a filename, a URL, an account name, a permission level or a list of channels. An empty field is a gap she can see and close; an invented one is a step nobody ever checks.",
           ),
       }),
     )
-    .describe("In the order they should run."),
+    .describe(
+      "In the order they should run. The trigger is added for you, so don't include it.",
+    ),
 });
 
 const factLine = (f: { key: string; value: string }) =>
@@ -229,14 +259,67 @@ const recall = tool<typeof recallParams, Notebook>({
 const draftWorkflow = tool<typeof draftWorkflowParams, Notebook>({
   name: "draft_workflow",
   description:
-    "Produce the onboarding draft once you know the tools, who can create them, and roughly what week one involves. Call this whenever the user signals they have finished telling you things — 'that's everything', 'that's all I can think of', 'what else do you need'. Do not call it in the first two exchanges: a workflow built on two facts is a generic one and they will be able to tell.",
+    "Produce the onboarding draft once you know the tools, who can create them, and roughly what week one involves. Every step is a preset id from the block library in your instructions. Call this whenever the user signals they have finished telling you things — 'that's everything', 'that's all I can think of', 'what else do you need'. Do not call it in the first two exchanges: a workflow built on two facts is a generic one and they will be able to tell.",
   parameters: draftWorkflowParams,
-  execute: ({ steps }, context) => {
+  execute: (args, context) => {
     const notebook = notebookOf(context);
-    notebook.workflow = steps;
-    return `Drafted ${steps.length} steps. Now tell them what you've built, in your own voice — lead line, bullets, and name anything you left open rather than guessing at.`;
+    const draft = parseDraft(args);
+    if (!draft) return "None of those steps matched a block. Try again.";
+
+    notebook.workflow = draft;
+
+    /* Read back off the blocks he just made rather than off what he meant to
+       do, so the reply names the holes that are actually there. Without it he
+       reliably announces a step as done and leaves its required fields empty. */
+    const open = openSetup(draft.blocks);
+    const manual = byHand(draft.blocks);
+
+    return [
+      `Drafted ${draft.blocks.length - 1} steps as ${draft.name}.`,
+      open.length > 0
+        ? `Still open, and you must name these: ${open.join("; ")}.`
+        : "Nothing left open.",
+      manual.length > 0
+        ? `Done by a person, not by you — say so: ${manual.join(", ")}.`
+        : "",
+      "Now tell them what you've built. Lead line, then bullets. No headings and no bold.",
+    ]
+      .filter(Boolean)
+      .join(" ");
   },
 });
+
+/**
+ * The one tool that isn't ours, and the only one that can be wrong.
+ *
+ * Hosted: the search happens inside OpenAI's response rather than in this
+ * process, so there is no `execute` to write and nothing it finds ever reaches
+ * the notebook by itself. That asymmetry is the whole reason the prompt has a
+ * section about it. Every other tool here records something *she* said; this one
+ * returns something a stranger wrote, and the two must not end up looking the
+ * same in her notes. What comes back is a claim to put to her, and it becomes a
+ * fact only when she agrees and he calls `record_fact` on her answer.
+ *
+ * What it is actually for is the thing a founder of four genuinely cannot be
+ * expected to know: that hiring in Australia means a VEVO check rather than a UK
+ * right-to-work one. That is a fact about the world rather than about her
+ * company, it maps onto a real option id in `verify-identity`, and getting it
+ * right without asking her to research her own employment law is the product
+ * working.
+ *
+ * `searchContextSize: "low"` because these are lookups with short answers — the
+ * name of a check, what a company sells — and the setting governs how much
+ * retrieved page text is billed into the model's context. `medium`, the default,
+ * would buy depth this conversation never reads. No `userLocation`: we don't
+ * know where she is, and the jurisdiction that matters is the one she employs
+ * people in, which is a thing she tells him rather than a thing to infer from an
+ * IP address.
+ */
+const lookItUp = webSearchTool({ searchContextSize: "low" });
+
+/** What the tool is called when it's sent, and what a call comes back named. */
+const WEB_SEARCH_TOOL = "web_search";
+const WEB_SEARCH_ITEM = "web_search_call";
 
 /* --- Mapping a tool call onto something a person can read ------------------ */
 
@@ -248,7 +331,7 @@ export interface ToolActivity {
   /** Surfaced to the screen as its own event, when the tool produces one. */
   note?: { kind: "gap" | "fact"; text: string };
   /** The draft, when this was `draft_workflow` and it parsed. */
-  workflow?: WorkflowDraftStep[];
+  workflow?: Draft;
 }
 
 /**
@@ -261,40 +344,6 @@ export interface ToolActivity {
  * `execute`, but this runs off the call event, which fires first. So every
  * field is checked before it's read.
  */
-/**
- * The draft, or nothing.
- *
- * This reads the model's arguments off the call event, which fires *before* the
- * SDK validates them against the schema — so nothing here may be assumed. A
- * step missing a title is dropped rather than passed on as a blank block, and a
- * `kind` that isn't one of ours becomes "task", which is the honest default for
- * "a person does this" and the only one that can't misrepresent the step.
- */
-function parseSteps(value: unknown): WorkflowDraftStep[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-
-  const steps = value.flatMap((raw): WorkflowDraftStep[] => {
-    if (!raw || typeof raw !== "object") return [];
-    const step = raw as Record<string, unknown>;
-
-    const title = typeof step.title === "string" ? step.title.trim() : "";
-    if (!title) return [];
-
-    const kind = BLOCK_KINDS.find((k) => k === step.kind) ?? "task";
-
-    return [
-      {
-        title,
-        kind,
-        owner: typeof step.owner === "string" ? step.owner.trim() : "",
-        needs: typeof step.needs === "string" ? step.needs.trim() : "",
-      },
-    ];
-  });
-
-  return steps.length > 0 ? steps : undefined;
-}
-
 export function describeToolCall(
   name: string,
   rawArguments: string,
@@ -339,17 +388,75 @@ export function describeToolCall(
         phase: "Checking what you've told me so far",
         label: "Reading back my notes",
       };
+    /* Both spellings: the tool is sent as `web_search` and a call comes back
+       named `web_search_call`, and which one this is handed depends on whether
+       the route read it off the provider's stream or the SDK's run item. */
+    case WEB_SEARCH_TOOL:
+    case WEB_SEARCH_ITEM:
+      return {
+        /* An agent that quietly goes to the internet is worse than one that
+           says so, and this is the only line that says so — there's no note
+           event, because nothing he found is his to write down yet. */
+        phase: "Looking that up",
+        label: "Looking that up",
+      };
     case "draft_workflow":
       return {
         phase: "Drafting the workflow",
         label: "Drafting the workflow",
-        workflow: parseSteps(args.steps),
+        /* The same blocks `execute` builds, from the same arguments — the
+           screen gets them here because this event carries them and the result
+           event carries a sentence. Deterministic in, deterministic out, so
+           there is one draft rather than two that agree by luck. */
+        workflow: parseDraft(args),
       };
     default:
       /* A tool we don't have a line for still gets a phase, because something
          is genuinely running and a blank line would be the bigger lie. */
       return { phase: "Working on it", label: name };
   }
+}
+
+/**
+ * A hosted tool does not arrive the way ours do.
+ *
+ * The four function tools are announced as a `tool_called` run item *before*
+ * they execute, which is what makes their phase line honest. A web search has
+ * already happened by the time the SDK produces that item: it runs inside the
+ * model's own response, so the run item is emitted after the reply has finished
+ * streaming. A "Looking that up" that appears underneath a finished answer is
+ * worse than no phase line at all — it's the decoration this whole file exists
+ * to have stopped.
+ *
+ * The provider's own events come through the same stream and do carry the
+ * moment. `response.output_item.added` fires as the search starts and
+ * `response.output_item.done` when it returns, so the line goes up and comes
+ * down with the work.
+ *
+ * Nothing about the shape is assumed. This is an untyped passthrough of somebody
+ * else's wire format, so every field is checked before it's read and an event
+ * that isn't a web search is simply not one.
+ */
+export function describeWebSearch(
+  event: unknown,
+): { id: string; state: "running" | "done" } | null {
+  if (!event || typeof event !== "object") return null;
+
+  const { type, item } = event as { type?: unknown; item?: unknown };
+  const state =
+    type === "response.output_item.added"
+      ? "running"
+      : type === "response.output_item.done"
+        ? "done"
+        : null;
+  if (!state) return null;
+
+  if (!item || typeof item !== "object") return null;
+  const { type: itemType, id } = item as { type?: unknown; id?: unknown };
+  if (itemType !== WEB_SEARCH_ITEM || typeof id !== "string" || !id)
+    return null;
+
+  return { id, state };
 }
 
 /* --- The agent ------------------------------------------------------------ */
@@ -373,11 +480,12 @@ export function describeToolCall(
  * stay exactly as written and this is plainly a briefing note on top.
  */
 function instructionsFor(context: RunContext<Notebook>): string {
-  const { facts, gaps } = context.context;
-  if (facts.length === 0 && gaps.length === 0) return CRAIG_SYSTEM_PROMPT;
+  const { facts, gaps, firstName } = context.context;
+  const base = craigSystemPrompt(firstName);
+  if (facts.length === 0 && gaps.length === 0) return base;
 
   return [
-    CRAIG_SYSTEM_PROMPT,
+    base,
     "",
     "## What you already know",
     "",
@@ -396,7 +504,7 @@ export const craig = new Agent<Notebook>({
   instructions: instructionsFor,
   model: CHAT_MODEL,
   modelSettings: { temperature: CHAT_TEMPERATURE, maxTokens: 900 },
-  tools: [noteGap, recordFact, recall, draftWorkflow],
+  tools: [noteGap, recordFact, recall, draftWorkflow, lookItUp],
 });
 
 /* How far the agent may loop is `MAX_TURNS` in `rate-limit.ts`, next to the

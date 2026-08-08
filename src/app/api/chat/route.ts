@@ -11,6 +11,7 @@ import { currentUser } from "@/lib/showcase/current-user";
 import {
   craig,
   describeToolCall,
+  describeWebSearch,
   seedNotebook,
 } from "@/lib/showcase/craig-agent";
 import {
@@ -314,7 +315,10 @@ export async function POST(request: Request) {
   });
 
   /* Seeded from what the client kept, because this dies with the response. */
-  const notebook = seedNotebook(parsed.known);
+  const notebook = seedNotebook(
+    session.name?.split(" ")[0] || "there",
+    parsed.known,
+  );
 
   /* Cancelling stops the meter when somebody closes the tab or sends again.
      The timer is the third runaway mode: a connection that never closes holds
@@ -361,6 +365,36 @@ export async function POST(request: Request) {
               clearPhase();
               send({ type: "delta", text: event.data.delta });
             }
+
+            /* The hosted web search, which is the one tool that doesn't run
+               here. It happens inside the model's response, so the SDK's run
+               item for it only exists once that response is over — by which
+               time the answer has already been read. The provider's own events
+               come through untouched on this same stream and carry the moment
+               it starts and the moment it returns, which is the only place a
+               phase line for it can be true. */
+            if (event.data.type === "model") {
+              const search = describeWebSearch(event.data.event);
+              const activity = search
+                ? describeToolCall("web_search", "{}")
+                : null;
+
+              if (search && activity) {
+                if (search.state === "running") {
+                  send({ type: "phase", label: activity.phase });
+                  phaseShowing = true;
+                }
+                /* The line stays up when the search returns: he is composing
+                   the answer out of what he found, and it clears itself the
+                   instant there are words to read. */
+                send({
+                  type: "tool",
+                  id: search.id,
+                  label: search.state === "running" ? activity.label : "",
+                  state: search.state,
+                });
+              }
+            }
             continue;
           }
 
@@ -371,6 +405,9 @@ export async function POST(request: Request) {
              the work starts rather than after it finished. */
           if (event.name === "tool_called") {
             const raw = event.item.rawItem;
+            /* Function calls only. A hosted tool arrives here as a
+               `hosted_tool_call` long after its work — and its answer — are
+               done, so it's handled off the raw stream above instead. */
             if (raw?.type !== "function_call") continue;
 
             const activity = describeToolCall(raw.name, raw.arguments);
@@ -391,7 +428,11 @@ export async function POST(request: Request) {
                 text: activity.note.text,
               });
             if (activity.workflow)
-              send({ type: "workflow", steps: activity.workflow });
+              send({
+                type: "workflow",
+                name: activity.workflow.name,
+                blocks: activity.workflow.blocks,
+              });
             continue;
           }
 

@@ -21,6 +21,7 @@ import { BlockPicker } from "./block-picker";
 import { DropdownMenu } from "./dropdown";
 import {
   findPreset,
+  missingRequired,
   type BlockPreset,
   type SetupField,
 } from "@/lib/workflow/library";
@@ -149,22 +150,17 @@ export function blockLabel(block: WorkflowBlock) {
   };
 }
 
-const hasValue = (v: string | string[] | undefined) =>
-  Array.isArray(v) ? v.length > 0 : Boolean(v && v.trim());
-
 /**
  * The setup fields this block still needs.
  *
  * Derived rather than stored, so "unconfigured" can't drift from what's
  * actually missing — the badge, the nav count and the disabled Publish button
- * all read from the same answer.
+ * all read from the same answer. The rule itself is in the library, where the
+ * server can reach it too: Craig drafts these blocks and has to leave the same
+ * holes this reads back.
  */
 export function missingSetup(block: WorkflowBlock): SetupField[] {
-  const preset = block.preset ? findPreset(block.preset) : undefined;
-  if (!preset) return [];
-  return preset.setup.filter(
-    (f) => f.required && !hasValue(block.config?.[f.id]),
-  );
+  return missingRequired(block.preset, block.config);
 }
 
 export function isUnconfigured(block: WorkflowBlock) {

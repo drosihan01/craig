@@ -1291,6 +1291,27 @@ export function blockFromPreset(
   };
 }
 
+const hasValue = (v: string | string[] | undefined) =>
+  Array.isArray(v) ? v.length > 0 : Boolean(v && v.trim());
+
+/**
+ * The required fields this config hasn't answered.
+ *
+ * The rule behind "unconfigured", stated once. It lives here rather than in the
+ * builder because Craig drafts on the server, where a `"use client"` module's
+ * exports are references he can't call — and the alternative was a second copy
+ * of "required and empty", which is exactly the drift the derived badge exists
+ * to avoid. `missingSetup` in the builder is this, given a block.
+ */
+export function missingRequired(
+  presetId: string | undefined,
+  config: Record<string, string | string[]> | undefined,
+): SetupField[] {
+  const preset = presetId ? findPreset(presetId) : undefined;
+  if (!preset) return [];
+  return preset.setup.filter((f) => f.required && !hasValue(config?.[f.id]));
+}
+
 /**
  * A block's setup, resolved for reading rather than editing.
  *
