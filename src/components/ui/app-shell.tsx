@@ -165,7 +165,6 @@ export function AppShell({
   nav,
   aside,
   asideTitle,
-  asideFlush,
   account,
   actions,
   fill,
@@ -182,17 +181,6 @@ export function AppShell({
       shouting. The drawer still gets a name, since a sheet with no title is
       unlabelled to a screen reader. */
   asideTitle?: string;
-  /**
-   * Drop the aside's vertical padding, for a panel that owns its own edges.
-   *
-   * A conversation wants neither: the transcript should scroll up under the top
-   * edge rather than stopping short of it, and a composer pinned to the bottom
-   * wants to be pinned to the bottom. A panel of settings still wants the
-   * padding, which is why this is a flag and not a change to the default —
-   * and why it is per-state rather than per-page, since the editor's aside is
-   * a conversation until you select a block and a form after that.
-   */
-  asideFlush?: boolean;
   account?: AccountInfo;
   actions?: React.ReactNode;
   /** Omit entirely to hide the bell — an empty array still shows it, correctly
@@ -365,12 +353,7 @@ export function AppShell({
                 only has to be decided once. A chat sizes to the column exactly
                 and never scrolls this box; a panel of settings taller than the
                 column scrolls it. */}
-            <div
-              className={cn(
-                "craig-panel-aside scrollbar-thin flex h-full flex-col overflow-y-auto px-4",
-                asideFlush ? "py-0" : "py-6",
-              )}
-            >
+            <div className="craig-panel-aside scrollbar-thin flex h-full flex-col overflow-y-auto px-4 py-6">
               {asideTitle && (
                 <p className="shrink-0 pb-3 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
                   {asideTitle}

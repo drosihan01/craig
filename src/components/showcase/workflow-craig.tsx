@@ -68,7 +68,11 @@ export function WorkflowCraig({
   const open = unconfiguredCount(blocks);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    /* No gap on the column. The transcript runs straight into the composer —
+       the space between them was reading as a gap in the conversation rather
+       than as breathing room, and the composer's own border is separation
+       enough. Anything that does want clearance carries it itself. */
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* No standing header. A column that says CRAIG above a conversation
           with Craig in it spends its first line telling you what the next one
           already shows — every turn of his carries the mark anyway, so the
@@ -80,7 +84,7 @@ export function WorkflowCraig({
           exactly as long as it's honest and then the column starts with his
           first message, which is what you came to read. */}
       {revealing && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pb-4">
           <CraigMark className="size-5 shrink-0 text-accent" />
           <AgentPhase label="Laying it out" />
         </div>

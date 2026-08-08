@@ -407,10 +407,6 @@ function Editor({
           </Button>
         )
       }
-      /* Flush only while Craig has the panel. His transcript runs to both
-         edges — scrolling up under the top rule, composer against the bottom —
-         and a block's settings underneath still want their margin. */
-      asideFlush={!selected}
       aside={
         /* One thing at a time, and no heading over it. With nothing selected
            the panel is Craig — he wrote this and he's the reason to look right.
