@@ -165,6 +165,7 @@ export function AppShell({
   nav,
   aside,
   asideTitle,
+  asideFlush,
   account,
   actions,
   fill,
@@ -181,6 +182,17 @@ export function AppShell({
       shouting. The drawer still gets a name, since a sheet with no title is
       unlabelled to a screen reader. */
   asideTitle?: string;
+  /**
+   * Drop the aside's vertical padding, for a panel that owns its own edges.
+   *
+   * A conversation wants neither: the transcript should scroll up under the top
+   * edge rather than stopping short of it, and a composer pinned to the bottom
+   * wants to be pinned to the bottom. A panel of settings still wants the
+   * padding, which is why this is a flag and not a change to the default —
+   * and why it is per-state rather than per-page, since the editor's aside is
+   * a conversation until you select a block and a form after that.
+   */
+  asideFlush?: boolean;
   account?: AccountInfo;
   actions?: React.ReactNode;
   /** Omit entirely to hide the bell — an empty array still shows it, correctly
@@ -339,11 +351,26 @@ export function AppShell({
             {/* Same py as the nav panel: the two columns read as one frame,
                 and 8px of difference at the top reads as a mistake.
 
-                min-h-full + flex-col so an aside that wants the whole column
-                can have it. Content that doesn't ask still stacks at the top,
-                but a chat can now put its composer against the bottom edge
-                instead of trailing off after the last message. */}
-            <div className="craig-panel-aside flex min-h-full flex-col px-4 py-6">
+                `h-full`, not `min-h-full`. The intent was always that an aside
+                wanting the whole column could have it — but a minimum is a
+                floor, and it only held while the content was shorter than the
+                column. Past that the container grew, so a chat's `flex-1`
+                transcript resolved against unbounded space, never scrolled
+                itself, and scrolled the whole column instead: the header slid
+                out of view, the top of the transcript went under it, and the
+                composer trailed off after the last message — the exact failure
+                this was meant to prevent.
+
+                A ceiling fixes both shapes, and the scroll lives here so it
+                only has to be decided once. A chat sizes to the column exactly
+                and never scrolls this box; a panel of settings taller than the
+                column scrolls it. */}
+            <div
+              className={cn(
+                "craig-panel-aside scrollbar-thin flex h-full flex-col overflow-y-auto px-4",
+                asideFlush ? "py-0" : "py-6",
+              )}
+            >
               {asideTitle && (
                 <p className="shrink-0 pb-3 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
                   {asideTitle}

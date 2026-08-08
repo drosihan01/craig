@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   AppShell,
   CraigMark,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui";
 import {
   CraigConversation,
+  DRAFT_REQUEST,
   readyToDraft,
 } from "@/components/showcase/craig-conversation";
 import { DraftStrength } from "@/components/showcase/draft-strength";
@@ -67,6 +69,37 @@ export function WelcomeScreen({ user }: { user: Session }) {
   /* Not `draft`. This one asks whether there is anywhere else in the product
      worth going, and a workflow from last week counts for that. */
   const drafted = workflows.length > 0;
+
+  /**
+   * A workflow appearing is the end of this screen.
+   *
+   * The hand-off used to take two presses on two cards: ask him to draft, wait,
+   * then find the card again and open it. One intention split in half, with the
+   * interesting part — the canvas assembling itself — happening somewhere
+   * nobody was yet.
+   *
+   * Deliberately not gated on having pressed Generate, which is what this tried
+   * first. He owns his own tool and he fires it unprompted more often than not:
+   * three answers in, he'd draft, and a run nobody had pressed a button for
+   * fell back to exactly the two-step this replaced. The button is one way to
+   * reach the draft, not the only one, so the navigation follows the workflow
+   * rather than the press.
+   *
+   * Nothing is lost by moving. The conversation is held in the store and the
+   * editor's panel is the same thread continued, so his closing question is
+   * still on screen when the canvas opens.
+   */
+  const router = useRouter();
+  const [handing, setHanding] = React.useState(false);
+
+  React.useEffect(() => {
+    if (draft) router.push(`/showcase/workflows/${draft.id}`);
+  }, [draft, router]);
+
+  function generate() {
+    setHanding(true);
+    send(DRAFT_REQUEST);
+  }
 
   const steps: Step[] = [
     /* Not "Upload". v3's first phase was reading the documents somebody had
@@ -156,6 +189,12 @@ export function WelcomeScreen({ user }: { user: Session }) {
           error={error}
           draft={draft}
           onSend={send}
+          onGenerate={generate}
+          /* Still generating right up until the workflow lands — `busy` goes
+             false between his tool call and the last token of his reply, and a
+             button that comes back to life for a second in the middle reads as
+             a failure you should retry. */
+          generating={handing && !draft}
         />
       </div>
     </AppShell>

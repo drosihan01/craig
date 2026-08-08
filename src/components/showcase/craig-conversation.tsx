@@ -43,8 +43,14 @@ import { SourceChips, type Source } from "./source-chips";
    asks him, and he's free to say he needs more first. */
 const ENOUGH_ANSWERS = 3;
 
-/** The message the hand-off button sends. He owns whether it's premature. */
-const DRAFT_REQUEST = "Draft the workflow from what I've told you so far.";
+/**
+ * The message the hand-off button sends. He owns whether it's premature.
+ *
+ * Exported so the screen that owns the navigation can send it itself, rather
+ * than the transcript firing it and the screen guessing when it happened.
+ */
+export const DRAFT_REQUEST =
+  "Draft the workflow from what I've told you so far.";
 
 export function readyToDraft(messages: CraigMessage[]): boolean {
   return (
@@ -76,6 +82,8 @@ export function CraigConversation({
   error,
   draft,
   onSend,
+  onGenerate,
+  generating = false,
 }: {
   messages: CraigMessage[];
   phase: string | null;
@@ -84,6 +92,14 @@ export function CraigConversation({
   /** The workflow Craig has drafted, once he has. Null until then. */
   draft: ShowcaseWorkflow | null;
   onSend: (text: string, attachments?: string[]) => void;
+  /**
+   * Pressing Generate. Given by the screen rather than done here, because what
+   * follows the draft landing is a navigation, and a transcript should not be
+   * the thing that decides where you end up.
+   */
+  onGenerate?: () => void;
+  /** Generate has been pressed and the workflow hasn't arrived yet. */
+  generating?: boolean;
 }) {
   const [text, setText] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
@@ -225,7 +241,11 @@ export function CraigConversation({
         <CraigFault error={error} />
 
         {offerHandoff && (
-          <Handoff draft={draft} onAsk={() => send(DRAFT_REQUEST)} />
+          <Handoff
+            draft={draft}
+            generating={generating}
+            onAsk={onGenerate ?? (() => send(DRAFT_REQUEST))}
+          />
         )}
 
         {replies.length > 0 && <ReplyOptions replies={replies} onPick={pick} />}
@@ -265,8 +285,13 @@ function footnote(attaching: boolean, started: boolean) {
   if (attaching) {
     return "Craig is told the filename and nothing else. There's no upload behind this yet, so he'll ask what's in it.";
   }
+  /* Not "nothing is created until you ask him to draft it", which is what this
+     said and is not true — he owns the drafting tool and fires it himself once
+     he has enough, usually without being asked. A promise the product breaks on
+     turn three is worse than no promise, and what's actually reassuring is the
+     bit that stayed true: a draft is a draft until you publish it. */
   return started
-    ? "Craig can make mistakes. Nothing is created until you ask him to draft it."
+    ? "Craig can make mistakes. Nothing runs against anyone until you publish it."
     : "Craig only knows what you tell him. There's nothing here for him to look up.";
 }
 
@@ -408,27 +433,33 @@ function ReplyOptions({
  * to, which is a real message he can push back on if he still needs more. He
  * has a `draft_workflow` tool and he decides when it fires.
  *
- * Once it has fired there's a workflow in the account, and the card stops
- * offering and starts pointing: the draft has an editor to land in, so the
- * useful thing to do with it is open it. The conversation stays live
- * underneath, because anything said after this goes into the next draft.
+ * One button, and it says Generate. It used to take two — draft it here, then
+ * find a second card and press Open it — which split one intention across two
+ * screens and left the workflow being assembled somewhere you weren't looking.
+ * Pressing this now carries you into the editor and the canvas builds in front
+ * of you, which is the part worth watching and was the part nobody saw.
+ *
+ * The drafted state below is the few seconds between his tool firing and the
+ * route changing, plus the fallback for a navigation that never happened. It
+ * points at the editor rather than claiming to be finished.
  */
 function Handoff({
   draft,
+  generating,
   onAsk,
 }: {
   draft: ShowcaseWorkflow | null;
+  generating: boolean;
   onAsk: () => void;
 }) {
   if (draft) {
     return (
       <div className="flex flex-col gap-3 rounded-xl border border-accent bg-accent-subtle/30 p-4">
         <div className="flex flex-col gap-1">
-          <p className="text-base font-medium">Drafted — {draft.name}</p>
+          <p className="text-base font-medium">Built — {draft.name}</p>
           <p className="text-sm leading-relaxed text-text-muted">
-            It&apos;s in your account, with anything he had to leave open marked
-            on the step it belongs to. Anything else you tell him below goes
-            into the next draft.
+            Opening it now, with anything he had to leave open marked on the
+            step it belongs to.
           </p>
         </div>
         <Link
@@ -445,15 +476,26 @@ function Handoff({
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-accent bg-accent-subtle/30 p-4">
       <div className="flex flex-col gap-1">
-        <p className="text-base font-medium">Enough to draft from</p>
+        <p className="text-base font-medium">Enough to build from</p>
         <p className="text-sm leading-relaxed text-text-muted">
-          He&apos;ll build it from what you&apos;ve told him and say what he had
-          to leave open. Anything you add below goes into it.
+          He&apos;ll choose the steps from what you&apos;ve told him and say
+          what he had to leave open. You&apos;ll land in the editor and watch it
+          come together.
         </p>
       </div>
-      <Button size="sm" className="w-fit" onClick={onAsk}>
-        <AutoAwesome />
-        Draft the workflow
+      {/* `loading` rather than a disabled button with the same label. The wait
+          is a model call and it is long enough to doubt — several seconds of a
+          button that looks pressable and does nothing is how somebody presses
+          it twice and asks him to draft two. */}
+      <Button
+        size="sm"
+        className="w-fit"
+        onClick={onAsk}
+        loading={generating}
+        disabled={generating}
+      >
+        {!generating && <AutoAwesome />}
+        {generating ? "Generating" : "Generate workflow"}
       </Button>
     </div>
   );

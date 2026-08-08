@@ -29,6 +29,15 @@ export interface PromptBarProps {
   dictation?: boolean;
   /** Enables the attach button. Fires with the full list after every change. */
   onAttach?: (files: File[]) => void;
+  /**
+   * The attach button. Off in narrow columns with nothing a file would answer.
+   *
+   * Separate from `onAttach` rather than derived from it, which is the obvious
+   * shape and the wrong one: most callers here don't pass a handler, so
+   * deriving it would strip the button off every composer in the product as a
+   * side effect of a panel that didn't want it.
+   */
+  attachments?: boolean;
   /** Passed straight to the file input. */
   accept?: string;
   /** Shows a numbered chip in the composer, continuing a list of quick replies
@@ -57,6 +66,7 @@ export function PromptBar({
   busy,
   onStop,
   dictation = true,
+  attachments = true,
   numberHint,
   inputRef,
   onAttach,
@@ -135,6 +145,11 @@ export function PromptBar({
 
   const lg = size === "lg";
 
+  /* No persistent controls at all, so the send button has to hold the row open
+     on its own. Only the showcase's editor panel asks for this today — a
+     ~300px column where an attach button answers nothing. */
+  const bare = !attachments && !modelPicker && !dictation;
+
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <div
@@ -208,32 +223,47 @@ export function PromptBar({
           </ul>
         )}
 
+        {/* The row is decided by the controls that are always there, never by
+            what you've typed. A bar that materialises on the first keystroke
+            shifts the composer under the cursor mid-word, which is the same
+            flinch the height floor above exists to stop.
+
+            So with every control off the send button becomes the row's
+            permanent occupant, disabled until there's something to send —
+            rather than the row vanishing and taking 36px with it. Before this
+            the opposite happened: attachments off left one lone plus floating
+            in a bar of its own, reading as a control that had lost its
+            neighbours. */}
         <div
           className={cn("flex items-center gap-1", lg ? "p-2.5" : "px-2 pb-2")}
         >
           {/* A real file input, kept out of the layout and driven by the button
               — styling an <input type="file"> directly is not portable, and the
               button needs to look like the rest of the bar. */}
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            accept={accept}
-            onChange={(e) => {
-              addFiles(e.target.files);
-              // Reset so picking the same file twice still fires a change.
-              e.target.value = "";
-            }}
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden
-          />
-          <IconButton
-            label="Attach a file"
-            onClick={() => fileRef.current?.click()}
-          >
-            <Add className="size-4" />
-          </IconButton>
+          {attachments && (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept={accept}
+                onChange={(e) => {
+                  addFiles(e.target.files);
+                  // Reset so picking the same file twice still fires a change.
+                  e.target.value = "";
+                }}
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden
+              />
+              <IconButton
+                label="Attach a file"
+                onClick={() => fileRef.current?.click()}
+              >
+                <Add className="size-4" />
+              </IconButton>
+            </>
+          )}
 
           <div className="ml-auto flex items-center gap-0.5">
             {modelPicker && <ModelPicker value={model} onChange={setModel} />}
@@ -257,12 +287,18 @@ export function PromptBar({
                 <StopCircle className="size-4" />
               </button>
             ) : (
-              value.trim() && (
+              (value.trim() || bare) && (
                 <button
                   type="button"
                   onClick={submit}
+                  disabled={!value.trim()}
                   aria-label="Send"
-                  className="ml-0.5 inline-flex size-7 items-center justify-center rounded-md bg-accent text-accent-fg transition-colors hover:bg-accent-hover"
+                  className={cn(
+                    "ml-0.5 inline-flex size-7 items-center justify-center rounded-md transition-colors",
+                    value.trim()
+                      ? "bg-accent text-accent-fg hover:bg-accent-hover"
+                      : "bg-surface-sunken text-text-subtle",
+                  )}
                 >
                   <ArrowUpward className="size-4" />
                 </button>

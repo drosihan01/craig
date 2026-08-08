@@ -69,20 +69,22 @@ export function WorkflowCraig({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <CraigMark className="size-5 shrink-0 text-accent" />
-        {/* His name, or what he's doing instead. The line only appears while
-            the blocks are still landing, and it is true for exactly that long
-            — a workflow assembling itself with nothing said about it reads as
-            the page having loaded badly. */}
-        {revealing ? (
+      {/* No standing header. A column that says CRAIG above a conversation
+          with Craig in it spends its first line telling you what the next one
+          already shows — every turn of his carries the mark anyway, so the
+          label was the same claim made twice.
+
+          What's left is the part that isn't always true: while the canvas is
+          still laying itself out, a workflow assembling with nothing said
+          about it reads as the page having loaded badly. That line appears for
+          exactly as long as it's honest and then the column starts with his
+          first message, which is what you came to read. */}
+      {revealing && (
+        <div className="flex items-center gap-2">
+          <CraigMark className="size-5 shrink-0 text-accent" />
           <AgentPhase label="Laying it out" />
-        ) : (
-          <span className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-            Craig
-          </span>
-        )}
-      </div>
+        </div>
+      )}
 
       <div
         ref={scrollRef}
@@ -134,13 +136,21 @@ export function WorkflowCraig({
         <CraigFault error={error} />
 
         {/* sm, and no attachments: this is a ~300px column, and there is
-            nothing on this screen a file would answer. */}
+            nothing on this screen a file would answer. The flag is new — the
+            button used to draw regardless of what this said, which left the
+            control row holding one orphaned plus.
+
+            The placeholder is short for the same reason the column is narrow.
+            The longer version wrapped to two lines here, and PromptBar takes
+            its resting height from the placeholder, so a composer that should
+            be one line tall opened at two and pushed the transcript up. */}
         <PromptBar
           size="sm"
           busy={busy}
           dictation={false}
           modelPicker={false}
-          placeholder="Tell him who does what, or what's missing…"
+          attachments={false}
+          placeholder="Tell him what's missing…"
           onSubmit={send}
           footnote={footnote(steps, open, published)}
         />
