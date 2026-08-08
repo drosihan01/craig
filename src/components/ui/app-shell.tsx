@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ExpandLess,
   LeftPanelClose,
@@ -831,6 +831,17 @@ function PanelToggle({
 function accountItems(
   account: AccountInfo,
   router: ReturnType<typeof useRouter>,
+  /**
+   * Where the menu was opened from, so Settings knows what it is a detour
+   * out of.
+   *
+   * Settings has no parent in the nav — it is reached from this menu, from
+   * every screen — so the only honest answer to "what does its back arrow point
+   * at" is whichever area you were standing in when you opened it. That is
+   * knowable exactly here and nowhere else, so it travels in the URL rather
+   * than being guessed at the far end.
+   */
+  from: string,
 ) {
   return [
     {
@@ -856,7 +867,8 @@ function accountItems(
       id: "settings",
       label: "Settings",
       icon: <Settings />,
-      onSelect: () => router.push("/showcase/settings"),
+      onSelect: () =>
+        router.push(`/showcase/settings?from=${encodeURIComponent(from)}`),
     },
     /* The sandbox is a builder's tool, not an admin's — it doesn't belong in
        the product nav, but it has to be reachable from every screen. */
@@ -887,6 +899,8 @@ function AccountMenu({
   compact?: boolean;
 }) {
   const router = useRouter();
+  /* The area Settings will offer to send them back to. */
+  const pathname = usePathname();
 
   /* At 52px there is no room for a name beside a chevron, and dropping the
      name while keeping the chevron would leave the strip ending in a control
@@ -912,7 +926,7 @@ function AccountMenu({
               <Avatar name={account.name} size="md" />
             </span>
           }
-          items={accountItems(account, router)}
+          items={accountItems(account, router, pathname)}
         />
       </div>
     );
@@ -943,7 +957,7 @@ function AccountMenu({
             <ExpandLess className="size-4" />
           </span>
         }
-        items={accountItems(account, router)}
+        items={accountItems(account, router, pathname)}
       />
     </div>
   );

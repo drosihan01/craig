@@ -41,6 +41,7 @@ import type { SeatEntitlement } from "@/lib/showcase/seats";
 export function SettingsScreen({
   user,
   outcome,
+  back,
   subscription,
   taken,
   entitlement,
@@ -48,6 +49,15 @@ export function SettingsScreen({
   user: Session;
   /** The `?google=` code the connect flow redirected back with, if any. */
   outcome: string | null;
+  /**
+   * The room this is a detour out of, worked out on the server.
+   *
+   * Not a constant, because Settings has no parent in the nav — it opens from
+   * the account menu on every screen, so the only correct destination is
+   * wherever they were. A hardcoded "Workflows" was right half the time and
+   * quietly wrong for anybody who came from People.
+   */
+  back: { href: string; label: string };
   /** The plan as Stripe last described it, or nothing on a free account. */
   subscription: Subscription | null;
   /** How many people hold a seat right now. */
@@ -63,13 +73,13 @@ export function SettingsScreen({
       navRail={
         <NavRail>
           <NavRailItem
-            href="/showcase/workflows"
-            label="Workflows"
+            href={back.href}
+            label={back.label}
             icon={<ArrowBack />}
           />
         </NavRail>
       }
-      nav={<SettingsNav entitlement={entitlement} taken={taken} />}
+      nav={<SettingsNav entitlement={entitlement} taken={taken} back={back} />}
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 py-10">
         <header className="flex flex-col gap-1">
@@ -360,14 +370,16 @@ function IntegrationsSection({
 function SettingsNav({
   entitlement,
   taken,
+  back,
 }: {
   entitlement: SeatEntitlement;
   taken: number;
+  back: { href: string; label: string };
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <BackLink href="/showcase/workflows" className="px-2">
-        Workflows
+      <BackLink href={back.href} className="px-2">
+        {back.label}
       </BackLink>
 
       <Separator />

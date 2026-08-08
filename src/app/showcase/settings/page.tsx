@@ -33,6 +33,30 @@ export const metadata = {
  * screen that names which account a Workspace is about to be attached to, and
  * a name it guessed would be worse than no name at all.
  */
+/**
+ * Which room this is a detour out of.
+ *
+ * Settings has no parent in the nav — it opens from the account menu, on every
+ * screen — so its back arrow can only be answered by where somebody was
+ * standing when they pressed it. The menu puts that in `?from=`.
+ *
+ * The value is never echoed into the link. It only ever *chooses* between two
+ * hardcoded destinations, which is what makes this immune to the open-redirect
+ * this shape of feature usually invites: there is no string a visitor can put
+ * in that URL which sends the next person anywhere but People or Workflows.
+ *
+ * The area rather than the exact page, deliberately. Somebody who opened
+ * Settings from a workflow gets "Workflows" and lands on the list, which is a
+ * predictable place; a link labelled "Workflows" that dropped them back inside
+ * one particular builder would be a surprise every time it was right.
+ */
+function parentArea(from: unknown): { href: string; label: string } {
+  const raw = typeof from === "string" ? from : "";
+  return raw.startsWith("/showcase/people")
+    ? { href: "/showcase/people", label: "People" }
+    : { href: "/showcase/workflows", label: "Workflows" };
+}
+
 export default async function ShowcaseSettingsPage(
   props: PageProps<"/showcase/settings">,
 ) {
@@ -42,7 +66,9 @@ export default async function ShowcaseSettingsPage(
      matched against a closed set of known codes before a word of it is
      rendered — see `OUTCOMES` — so an arbitrary string in `?google=` renders
      as nothing rather than as prose of a stranger's choosing. */
-  const outcome = (await props.searchParams)[CONNECT_OUTCOME_PARAM];
+  const params = await props.searchParams;
+  const outcome = params[CONNECT_OUTCOME_PARAM];
+  const back = parentArea(params.from);
 
   /* The plan, and how much of it is spoken for.
    *
@@ -59,6 +85,7 @@ export default async function ShowcaseSettingsPage(
     <SettingsScreen
       user={user}
       outcome={typeof outcome === "string" ? outcome : null}
+      back={back}
       subscription={subscription}
       taken={taken}
       entitlement={seatEntitlement(subscription, taken)}

@@ -13,6 +13,8 @@ import {
   Callout,
   Dialog,
   EmptyState,
+  NavRail,
+  NavRailItem,
   Separator,
   WorkflowProgress,
   type StepMetric,
@@ -23,6 +25,7 @@ import {
   ShowcaseNavRail,
 } from "@/components/showcase/showcase-nav";
 import {
+  ArrowBack,
   Bolt,
   CheckCircle,
   Cloud,
@@ -553,37 +556,31 @@ function Detail({
     <AppShell
       title={person.name}
       account={{ name: user.name, email: user.email }}
-      navRail={<ShowcaseNavRail />}
-      nav={
-        <ShowcaseNav>
-          <PersonNav
-            person={person}
-            progress={progress}
-            first={first}
-            onRemove={onRemove}
+      /* Collapsed, the column keeps the one thing it has: the way out. The
+         list screens' rails carry Workflows and People; this one deliberately
+         doesn't, for the same reason the builder's doesn't — a page about one
+         person is somewhere you went into, and offering two other rooms
+         invites you out of it before you have read anything. */
+      navRail={
+        <NavRail>
+          <NavRailItem
+            href="/showcase/people"
+            label="People"
+            icon={<ArrowBack />}
           />
-        </ShowcaseNav>
+        </NavRail>
+      }
+      nav={
+        <PersonNav
+          person={person}
+          progress={progress}
+          first={first}
+          onRemove={onRemove}
+        />
       }
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 py-10">
-        {/* The way out, above the name it returns you from.
-
-            It used to sit at the top of the nav column, which put the only
-            route back to People inside the one part of the frame that can be
-            shut — collapse the panel and it goes with it, leaving the browser's
-            back button. The column beside this page is for moving between
-            places; returning to the list you arrived from is part of *this*
-            page, and it is the thing you look for at the top-left of what you
-            are reading rather than in a panel. Grouped with the header at
-            `gap-4` rather than left to the container's `gap-8`, so it reads as
-            belonging to the name under it instead of floating above the page.
-
-            The workflow editor's back link moved to the same place for the same
-            reason, so the two screens keep one answer to "how do I get out of
-            here". */}
         <div className="flex flex-col gap-4">
-          <BackLink href="/showcase/people">People</BackLink>
-
           <header className="flex items-start gap-4">
             <Avatar name={person.name} size="lg" />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -1273,12 +1270,22 @@ function PersonNav({
   const craigLeft = progress.craig.total - progress.craig.done;
 
   return (
-    /* No way back at the top any more — it is above the name now, in the column
-       somebody is actually reading. What is left opens on "Their seat", which
-       `ShowcaseNav` already separates from the two rooms above it, so nothing
-       is orphaned and the column starts on a heading rather than on a rule with
-       nothing over it. */
+    /* The way back opens the column, and it is the only navigation here — the
+       same shape as the builder, because this is the same kind of screen: one
+       record, at length, that you leave by going back rather than sideways.
+
+       It sat above the name in the content for a while, on the argument that a
+       collapsible panel is no place for the only way out. The rail settles
+       that — collapsed, the column still shows this as an arrow — so the link
+       can live where the eye already looks for navigation, and the page can
+       open on the person's name instead of on a link away from them. */
     <div className="flex flex-col gap-5">
+      <BackLink href="/showcase/people" className="px-2">
+        People
+      </BackLink>
+
+      <Separator />
+
       <div className="flex flex-col gap-3 px-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Their seat
