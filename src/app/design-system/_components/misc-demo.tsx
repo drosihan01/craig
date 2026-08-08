@@ -334,6 +334,20 @@ export function CanvasDemo() {
               return next;
             })
           }
+          /* Passing this is what arms the drag — without it the grip still
+             opens its menu and the cards simply aren't draggable. The demo
+             wants the real thing, so it takes the same index-1 floor the
+             editor does rather than trusting the builder to hold the line. */
+          onReorder={(id, to) =>
+            setBlocks((p) => {
+              const from = p.findIndex((b) => b.id === id);
+              if (from < 1 || to < 1 || to >= p.length) return p;
+              const next = [...p];
+              const [moved] = next.splice(from, 1);
+              next.splice(to, 0, moved);
+              return next;
+            })
+          }
         />
       </div>
     </WorkflowCanvas>

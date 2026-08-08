@@ -351,6 +351,30 @@ function Editor({
     });
   }
 
+  /**
+   * What dragging a block by its grip does, which `move` can't express: a
+   * drag crosses as many steps as it likes in one gesture, and swapping with
+   * your neighbour doesn't generalise to that.
+   *
+   * `to` is the index the block should occupy afterwards, so it is lifted out
+   * first and put back second — splicing it in while it is still in the array
+   * is where every off-by-one in a reorder comes from.
+   *
+   * The guards restate the builder's rule rather than trusting it. Index 0 is
+   * the trigger, and this is the last point at which a workflow can be stopped
+   * from being stored with something above it.
+   */
+  function reorder(id: string, to: number) {
+    setBlocks((prev) => {
+      const from = prev.findIndex((b) => b.id === id);
+      if (from < 1 || to < 1 || to >= prev.length || to === from) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
+
   function patch(id: string, changes: Partial<WorkflowBlock>) {
     setBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, ...changes } : b)),
@@ -542,6 +566,7 @@ function Editor({
               onRemove={remove}
               onDuplicate={duplicate}
               onMove={move}
+              onReorder={reorder}
             />
           </div>
         </WorkflowCanvas>

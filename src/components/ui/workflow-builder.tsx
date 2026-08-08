@@ -10,16 +10,16 @@ import {
   ContentCopy,
   Delete,
   Description,
+  DragIndicator,
   HowToReg,
   Mail,
-  MoreHoriz,
   TaskAlt,
   Warning,
 } from "./icons";
 import { Badge } from "./badge";
 import { Skeleton } from "./feedback";
 import { BlockPicker } from "./block-picker";
-import { DropdownMenu } from "./dropdown";
+import { DropdownMenu, type DropdownItem } from "./dropdown";
 import {
   findPreset,
   missingRequired,
@@ -245,6 +245,7 @@ export function WorkflowBuilder({
   onInsert,
   onRemove,
   onMove,
+  onReorder,
   onDuplicate,
   reveal,
   className,
@@ -256,17 +257,43 @@ export function WorkflowBuilder({
   onInsert?: (preset: BlockPreset, index: number) => void;
   onRemove?: (id: string) => void;
   onMove?: (id: string, direction: -1 | 1) => void;
+  /**
+   * Move a block anywhere, not just one place. `to` is the index it should
+   * occupy once it has landed, counted in the array it ends up in — so a
+   * block travelling downwards gets a number that already accounts for its
+   * own absence.
+   *
+   * Separate from `onMove` rather than replacing it because they answer
+   * different questions. `onMove` is "swap with your neighbour", which is what
+   * the menu items mean and what a keyboard user gets; a drag can cross six
+   * steps in one gesture and there is no honest way to express that as a
+   * direction. Passing this is also what turns dragging on at all: a call site
+   * that can't reorder shouldn't offer a grip that does nothing.
+   */
+  onReorder?: (id: string, to: number) => void;
   onDuplicate?: (id: string) => void;
   /** Land the blocks one after another instead of all at once. */
   reveal?: boolean;
   className?: string;
 }) {
-  /* How many blocks have finished arriving. Everything past this is still a
-     placeholder. Starts at the full count when there's no reveal to run, so a
-     workflow you already know never flickers through skeletons on its way to
-     being itself. */
+  /**
+   * How far down the column the reveal has got. Everything at or past it is
+   * still a placeholder.
+   *
+   * A count, not a headcount: it ends at infinity rather than at
+   * `blocks.length`, and that is the whole point of it. It used to stop at the
+   * number of blocks there were when the reveal ran, which quietly turned it
+   * into a cap on how many blocks the column would ever draw — add a step
+   * afterwards and it fell outside the count, so it rendered as a pulsing
+   * placeholder with no timer left running to ever resolve it. The step you
+   * had just asked for was the one thing on the canvas that never arrived.
+   *
+   * Once the sequence is done, nothing is ever withheld again. Infinity says
+   * that in a way a number can't, because there is no later insert that can
+   * outgrow it.
+   */
   const [landed, setLanded] = React.useState(() =>
-    reveal ? 0 : blocks.length,
+    reveal ? 0 : Number.POSITIVE_INFINITY,
   );
 
   React.useEffect(() => {
@@ -282,28 +309,245 @@ export function WorkflowBuilder({
        than the rest, and an interval can only have one period. */
     const step = () => {
       i += 1;
-      setLanded(i);
-      if (i < blocks.length) timer = setTimeout(step, beat);
+      if (i < blocks.length) {
+        setLanded(i);
+        timer = setTimeout(step, beat);
+      } else {
+        /* The last one lands and the gate comes off for good. Setting the
+           count here instead would leave it exactly one insert away from the
+           bug above. */
+        setLanded(Number.POSITIVE_INFINITY);
+      }
     };
     timer = setTimeout(step, REVEAL_START);
 
     return () => clearTimeout(timer);
   }, [reveal, blocks.length]);
 
+  /**
+   * The drag, held here rather than on the cards.
+   *
+   * Two facts: which block is in your hand, and where in the column it has
+   * provisionally moved to. A card that only knew about itself could express
+   * the first and never the second, and the second is the whole feature.
+   */
+  const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = React.useState<number | null>(null);
+
+  const columnRef = React.useRef<HTMLDivElement>(null);
+  const rowTopsRef = React.useRef(new Map<string, number>());
+
+  /**
+   * The blocks travel to their new positions rather than appearing in them.
+   *
+   * Reordering an array repaints the column in its new arrangement instantly,
+   * which reads as the list redrawing rather than as one step moving past
+   * another — and what the drag is for is watching an order change, so a cut
+   * between two orders throws away the thing you were trying to see.
+   *
+   * The old position of each row is remembered, and any row that has since
+   * moved is put back where it was and then released, so the browser animates
+   * the difference. Transform only: the layout has already happened and is
+   * correct, this is purely how the pixels get there, which keeps it off the
+   * layout path no matter how long the workflow is.
+   *
+   * `offsetTop`, not `getBoundingClientRect()`. The builder sits on a canvas
+   * that zooms, and rects come back in painted pixels — a translate computed
+   * from them would overshoot at any zoom but 100%. Offsets are layout pixels
+   * and don't know the canvas is scaled.
+   *
+   * Only while a drag is running. The column moves for other reasons — a step
+   * is inserted, the reveal swaps a placeholder for a card — and those bring
+   * their own entrance animation, which sets `transform` too; two animations
+   * writing the same property is one of them silently winning.
+   */
+  React.useLayoutEffect(() => {
+    const column = columnRef.current;
+    if (!column) return;
+
+    if (!draggingId) {
+      rowTopsRef.current.clear();
+      return;
+    }
+
+    const previous = rowTopsRef.current;
+    const current = new Map<string, number>();
+
+    for (const row of column.querySelectorAll<HTMLElement>("[data-row-id]")) {
+      const id = row.dataset.rowId;
+      if (!id) continue;
+      const top = row.offsetTop;
+      current.set(id, top);
+
+      const was = previous.get(id);
+      if (was === undefined || was === top) continue;
+
+      row.style.transition = "none";
+      row.style.transform = `translateY(${was - top}px)`;
+      /* Read something layout-dependent so the browser commits to that as the
+         starting position. Without it both style writes land in the same frame
+         and there is nothing to animate from. */
+      void row.offsetHeight;
+      row.style.transition = "";
+      row.style.transform = "";
+    }
+
+    rowTopsRef.current = current;
+  });
+
+  /* Where the carried block really lives, in the stored order. -1 when nothing
+     is in flight, which every guard below reads as "there is nothing to drop". */
+  const origin = draggingId ? blocks.findIndex((b) => b.id === draggingId) : -1;
+
+  /**
+   * The column as it would be if you let go now.
+   *
+   * This is the whole preview, and it is deliberately not a separate ghost
+   * element drawn alongside the real ones. A placeholder shape at the drop
+   * position plus the held card still sitting at its origin is two objects
+   * where the reader has one: it makes you work out which of them is the block
+   * and which is the space, and it can only ever approximate the result
+   * because the placeholder has to guess a height the real card already knows.
+   *
+   * Moving the block within the rendered order instead means the answer is
+   * exact by construction — the arrangement on screen during the drag is the
+   * arrangement you get, drawn by the same cards, at their own heights, with
+   * their own numbering. There is one block, it is dimmed, and it is where it
+   * would land.
+   */
+  const view = React.useMemo(() => {
+    if (origin < 1 || previewIndex === null || previewIndex === origin) {
+      return blocks;
+    }
+    const next = [...blocks];
+    const [moved] = next.splice(origin, 1);
+    next.splice(previewIndex, 0, moved);
+    return next;
+  }, [blocks, origin, previewIndex]);
+
+  /* Where the held block sits in what's on screen — which is the preview
+     position once there is one, and its real one until then. Everything below
+     reasons in these coordinates, because these are the ones the pointer is
+     actually over. */
+  const held = origin < 1 ? -1 : (previewIndex ?? origin);
+
+  /**
+   * Gaps are numbered the way the connectors already are: gap `g` is the space
+   * between the block at `g - 1` and the block at `g`, so gap 1 sits directly
+   * under the trigger and gap `view.length` is the bottom of the column.
+   *
+   * Gap 0 — above the trigger — is deliberately not a number this accepts. The
+   * trigger is structural and nothing may precede it, and the refusal has to
+   * happen while you are still holding the block: a drop that quietly corrects
+   * itself to position 1 teaches that the rule doesn't exist, and the same
+   * person tries it again next week.
+   */
+  const droppable = (gap: number) =>
+    held >= 1 && gap >= 1 && gap <= view.length;
+
+  /* Which index the held block takes if released into `gap`. Landing in either
+     of its own two gaps leaves it exactly where it is, and the arithmetic says
+     so on its own — no special case needed. */
+  const landing = (gap: number) => (gap > held ? gap - 1 : gap);
+
+  function startDrag(id: string, e: React.DragEvent<HTMLElement>) {
+    /* Firefox refuses to start a drag at all unless the transfer carries
+       something, so this is load-bearing even though nothing reads it back —
+       the drop handler knows the block from `draggingId`, because dataTransfer
+       is write-only until the drop and the preview has to move before that. */
+    e.dataTransfer.setData("text/plain", id);
+    e.dataTransfer.effectAllowed = "move";
+
+    /* Deferred one frame. The browser photographs the element as this handler
+       returns and tows that picture around under the pointer — so fading the
+       card in the same tick fades the photograph too, and you spend the drag
+       carrying a rectangle you can no longer read. */
+    requestAnimationFrame(() => setDraggingId(id));
+  }
+
+  function endDrag() {
+    setDraggingId(null);
+    setPreviewIndex(null);
+  }
+
+  function overGap(gap: number, e: React.DragEvent) {
+    if (!droppable(gap)) {
+      /* Withholding preventDefault is the refusal: the browser keeps the
+         no-entry cursor and never fires a drop here. */
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    /* Settling on the position it already holds is the same value, so React
+       drops the update and the column doesn't re-render on every dragover. */
+    setPreviewIndex(landing(gap));
+  }
+
+  function dropInGap(gap: number, e: React.DragEvent) {
+    e.preventDefault();
+    const id = draggingId;
+    const to = landing(gap);
+    const ok = droppable(gap) && to !== origin;
+    endDrag();
+    if (id && ok) onReorder?.(id, to);
+  }
+
+  /* A card is two drop zones, not one: its top half means "above me" and its
+     bottom half "below me". A whole-card target can only ever say one of
+     those, which would leave the other only reachable by aiming at the 56px
+     connector — and the gap between two steps is not a thing anyone aims at.
+
+     This is also what keeps the preview from oscillating. Once the held block
+     has moved into the position you pointed at, the thing under the pointer is
+     the held block itself, and both of its own gaps resolve to the position it
+     already occupies — so the arrangement settles instead of the two cards
+     trading places for as long as you hold still. */
+  const gapAt = (i: number, e: React.DragEvent<HTMLElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    return e.clientY < box.top + box.height / 2 ? i : i + 1;
+  };
+
   return (
-    <div className={cn("mx-auto flex w-full max-w-xl flex-col", className)}>
-      {blocks.map((block, i) => {
+    <div
+      ref={columnRef}
+      className={cn("mx-auto flex w-full max-w-xl flex-col", className)}
+      /* Leaving the column puts the block back where it came from. Moving
+         between two cards also fires a leave for the one behind you, so
+         anything still inside has to be ignored or the preview collapses and
+         re-forms the whole way down. A null relatedTarget — the pointer left
+         the window — counts as outside. */
+      onDragLeave={
+        onReorder
+          ? (e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setPreviewIndex(null);
+              }
+            }
+          : undefined
+      }
+    >
+      {view.map((block, i) => {
         const isTrigger = block.kind === "trigger";
-        const isLast = i === blocks.length - 1;
-        const at = reveal ? i * revealBeat(blocks.length) : undefined;
+        const isLast = i === view.length - 1;
+        const at = reveal ? i * revealBeat(view.length) : undefined;
+        /* The trigger has no grip. It cannot be moved by any route, and a
+           handle that refuses on pickup is worse than no handle. */
+        const canDrag = Boolean(onReorder) && !isTrigger;
 
         /* Not yet resolved, so it's drawn as its own outline. Keyed the same as
            the real card so React swaps the contents rather than remounting the
            row — the connector below it stays put and the column doesn't jump
-           as each one lands. */
-        if (i >= landed) {
+           as each one lands.
+
+           `reveal` is checked as well as the count because a reveal can be
+           called off half-way: the editor stops it dead the moment you select
+           or insert anything, which leaves the effect returning early and
+           `landed` frozen wherever the timer had got to. Read on its own that
+           number would hold the rest of the column as placeholders forever.
+           Nobody is revealing anything, so nothing is withheld. */
+        if (reveal && i >= landed) {
           return (
-            <React.Fragment key={block.id}>
+            <Row key={block.id} id={block.id}>
               <BlockSkeleton />
               <Connector
                 onInsert={undefined}
@@ -311,12 +555,12 @@ export function WorkflowBuilder({
                 last={isLast}
                 arrival={undefined}
               />
-            </React.Fragment>
+            </Row>
           );
         }
 
         return (
-          <React.Fragment key={block.id}>
+          <Row key={block.id} id={block.id}>
             <BlockCard
               block={block}
               index={i}
@@ -327,6 +571,16 @@ export function WorkflowBuilder({
               onMove={isTrigger ? undefined : onMove}
               canMoveUp={i > 1}
               canMoveDown={!isLast && i > 0}
+              dragging={draggingId === block.id}
+              onDragStart={canDrag ? (e) => startDrag(block.id, e) : undefined}
+              onDragEnd={canDrag ? endDrag : undefined}
+              /* Every card is a landing site, including the trigger — its
+                 bottom half is gap 1, the only legal place directly beside
+                 it. Its top half resolves to gap 0 and is refused. */
+              onDragOver={
+                onReorder ? (e) => overGap(gapAt(i, e), e) : undefined
+              }
+              onDrop={onReorder ? (e) => dropInGap(gapAt(i, e), e) : undefined}
               arrival={arriving(at)}
             />
 
@@ -336,11 +590,34 @@ export function WorkflowBuilder({
               onInsert={onInsert}
               index={i + 1}
               last={isLast}
+              dragActive={draggingId !== null}
+              onDragOver={onReorder ? (e) => overGap(i + 1, e) : undefined}
+              onDrop={onReorder ? (e) => dropInGap(i + 1, e) : undefined}
               arrival={arriving(at === undefined ? undefined : at + 55)}
             />
-          </React.Fragment>
+          </Row>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * One step's worth of column: the card and the gap beneath it, as a single
+ * thing that can be moved.
+ *
+ * They were two siblings until the drag preview needed them to travel
+ * together — a card that slid to a new position leaving its own connector
+ * behind would tear the thread in half. The wrapper is also what the reorder
+ * animation measures and moves, which is why it carries the block's id.
+ */
+function Row({ id, children }: { id: string; children: React.ReactNode }) {
+  return (
+    <div
+      data-row-id={id}
+      className="motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out-quart"
+    >
+      {children}
     </div>
   );
 }
@@ -387,7 +664,12 @@ interface Arrival {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The line between two blocks, and the only place a step can be inserted.
+ * The space between two blocks: the only place a step can be inserted, and one
+ * of the places a dragged block can be dropped. Both meanings are the same
+ * fact — this is the space between step `index - 1` and step `index` — so one
+ * element carries the add button and the drop target rather than two things
+ * that have to be kept in agreement about where a step goes.
+ *
  * The button is always in the DOM so it's reachable by keyboard — hover just
  * fades it in for the mouse.
  */
@@ -395,11 +677,18 @@ function Connector({
   index,
   onInsert,
   last,
+  dragActive,
+  onDragOver,
+  onDrop,
   arrival,
 }: {
   index: number;
   onInsert?: (preset: BlockPreset, index: number) => void;
   last?: boolean;
+  /** Somebody is carrying a block somewhere in the column. */
+  dragActive?: boolean;
+  onDragOver?: React.DragEventHandler<HTMLDivElement>;
+  onDrop?: React.DragEventHandler<HTMLDivElement>;
   arrival?: Arrival;
 }) {
   const [picking, setPicking] = React.useState(false);
@@ -408,6 +697,8 @@ function Connector({
     <div
       className={cn("group/conn relative h-14", arrival?.className)}
       style={arrival?.style}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       {/* Solid across the gap; dashed inside the cards above and below. Same
           thread, two treatments — see THREAD_X for why the offset is 33 here
@@ -427,7 +718,14 @@ function Connector({
 
       {onInsert && (
         <span
-          className="absolute top-1/2 z-10 -translate-y-1/2"
+          className={cn(
+            "absolute top-1/2 z-10 -translate-y-1/2 transition-opacity",
+            /* Out of the way for the length of a drag. It sits right where the
+               ghost opens, and an "insert step" button under the pointer while
+               your hands are full offers an action you can't take and clutters
+               the preview of the one you're taking. */
+            dragActive && "pointer-events-none opacity-0",
+          )}
           style={{ left: THREAD_X - 14 }}
         >
           {/* Always visible — a hover-only affordance hides the single most
@@ -475,6 +773,11 @@ function BlockCard({
   onMove,
   canMoveUp,
   canMoveDown,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
   arrival,
 }: {
   block: WorkflowBlock;
@@ -486,12 +789,72 @@ function BlockCard({
   onMove?: (id: string, direction: -1 | 1) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  /** This is the block being carried, not merely one a drag is passing over. */
+  dragging?: boolean;
+  /** Given only when this block may be dragged — it also arms the grip. */
+  onDragStart?: React.DragEventHandler<HTMLButtonElement>;
+  onDragEnd?: React.DragEventHandler<HTMLButtonElement>;
+  onDragOver?: React.DragEventHandler<HTMLDivElement>;
+  onDrop?: React.DragEventHandler<HTMLDivElement>;
   arrival?: Arrival;
 }) {
   const type = blockLabel(block);
   const Icon = type.icon;
   const isTrigger = block.kind === "trigger";
   const warning = setupWarning(block);
+
+  /**
+   * What the grip's menu offers, gathered before the render so an empty one
+   * can be dropped rather than drawn.
+   *
+   * This matters more than it used to. The grip is now permanent rather than
+   * a thing that fades in under the mouse, and the trigger has no actions at
+   * all — it can't be moved, copied or deleted — so leaving the control in
+   * place for it would put a permanent handle on the one block that cannot be
+   * handled, opening onto a menu with nothing in it.
+   */
+  const actions: DropdownItem[] = [
+    ...(onMove
+      ? [
+          {
+            id: "up",
+            label: "Move up",
+            icon: <ArrowUpward />,
+            disabled: !canMoveUp,
+            onSelect: () => onMove(block.id, -1),
+          },
+          {
+            id: "down",
+            label: "Move down",
+            icon: <ArrowDownward />,
+            disabled: !canMoveDown,
+            onSelect: () => onMove(block.id, 1),
+          },
+        ]
+      : []),
+    ...(onDuplicate
+      ? [
+          {
+            id: "duplicate",
+            label: "Duplicate",
+            icon: <ContentCopy />,
+            onSelect: () => onDuplicate(block.id),
+          },
+        ]
+      : []),
+    ...(onRemove
+      ? [
+          {
+            id: "remove",
+            label: "Delete step",
+            icon: <Delete />,
+            destructive: true,
+            separatorBefore: true,
+            onSelect: () => onRemove(block.id),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div
@@ -508,12 +871,24 @@ function BlockCard({
           onSelect?.(block.id);
         }
       }}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       className={cn(
         "group/card relative flex cursor-pointer items-start gap-3.5 rounded-xl border bg-surface px-4 py-3.5 text-left shadow-e1",
-        "transition-[border-color,box-shadow] duration-150 ease-out-quart",
+        "transition-[border-color,box-shadow,opacity] duration-150 ease-out-quart",
         selected
           ? "border-accent ring-[3px] ring-accent-ring/25"
           : "border-border hover:border-border-strong hover:shadow-e2",
+        /* The block in your hand, drawn where it would land rather than where
+           it came from — this dimmed card *is* the preview, not a copy of it.
+           There is deliberately no second one left behind at the origin: two
+           renderings of one step, one solid and one faint, make the reader
+           work out which is the block and which is the hole, and the column
+           would be a step longer than any arrangement it could actually
+           produce. Dimming rather than outlining keeps it legible as the thing
+           it is — its own title, icon and new number — and keeps it distinct
+           from the reveal's skeleton, which is a solid card of empty bars. */
+        dragging && "opacity-40 shadow-none",
         arrival?.className,
       )}
       style={arrival?.style}
@@ -573,70 +948,63 @@ function BlockCard({
 
       {/* Stop clicks bubbling to the card so opening the menu doesn't also
           change the selection. */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-        className="shrink-0"
-      >
-        <DropdownMenu
-          label={`${block.title} actions`}
-          align="end"
-          width="w-48"
-          trigger={
-            <span
-              className={cn(
-                "inline-flex size-7 items-center justify-center rounded-md text-text-subtle transition-[color,opacity] hover:bg-surface-hover hover:text-text",
-                "opacity-0 group-hover/card:opacity-100 group-focus-within/card:opacity-100",
-                selected && "opacity-100",
-              )}
-            >
-              <MoreHoriz className="size-4" />
-            </span>
-          }
-          items={[
-            ...(onMove
-              ? [
-                  {
-                    id: "up",
-                    label: "Move up",
-                    icon: <ArrowUpward />,
-                    disabled: !canMoveUp,
-                    onSelect: () => onMove(block.id, -1),
-                  },
-                  {
-                    id: "down",
-                    label: "Move down",
-                    icon: <ArrowDownward />,
-                    disabled: !canMoveDown,
-                    onSelect: () => onMove(block.id, 1),
-                  },
-                ]
-              : []),
-            ...(onDuplicate
-              ? [
-                  {
-                    id: "duplicate",
-                    label: "Duplicate",
-                    icon: <ContentCopy />,
-                    onSelect: () => onDuplicate(block.id),
-                  },
-                ]
-              : []),
-            ...(onRemove
-              ? [
-                  {
-                    id: "remove",
-                    label: "Delete step",
-                    icon: <Delete />,
-                    destructive: true,
-                    separatorBefore: true,
-                    onSelect: () => onRemove(block.id),
-                  },
-                ]
-              : []),
-          ]}
-        />
-      </div>
+      {actions.length > 0 && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="shrink-0"
+        >
+          {/**
+           * One control, two gestures: drag it and the step moves, click it
+           * and the menu opens.
+           *
+           * It reads as a grip rather than a three-dot menu because dragging
+           * is the thing you'd never guess was there — a "more" glyph
+           * announces a menu and nothing else, so the reordering underneath it
+           * stayed undiscovered. The six dots are the one shape that means
+           * "pick this up" without a label, and the menu is still one click
+           * away underneath.
+           *
+           * Permanently visible, unlike the menu it replaces. A handle that
+           * only exists once the mouse is already on the card can't advertise
+           * that the column can be rearranged, which is exactly what a
+           * first-time reader needs told; and a hover-only drag affordance is
+           * unusable to anyone whose pointer isn't a mouse.
+           *
+           * It stays a real button, so Tab reaches it and Enter or Space opens
+           * the menu — where Move up and Move down do by keyboard what the
+           * drag does by hand. Dragging must never be the only route to an
+           * order, and this is why those two items stay.
+           */}
+          <DropdownMenu
+            label={`Reorder or edit ${block.title}`}
+            align="end"
+            width="w-48"
+            triggerClassName={cn(
+              "select-none rounded-md",
+              onDragStart &&
+                /* Safari won't drag an arbitrary element from a `draggable`
+                   attribute alone; this is the property that actually makes a
+                   button pick up there. Harmless everywhere else. */
+                "cursor-grab active:cursor-grabbing [-webkit-user-drag:element]",
+            )}
+            triggerProps={{
+              draggable: Boolean(onDragStart),
+              onDragStart,
+              onDragEnd,
+              /* Says the part the icon can't. The menu is discoverable by
+                 clicking; that this thing lifts is not. */
+              title: onDragStart ? "Drag to reorder" : undefined,
+            }}
+            trigger={
+              <span className="inline-flex size-7 items-center justify-center rounded-md text-text-subtle transition-colors group-hover/card:text-text-muted hover:bg-surface-hover hover:text-text">
+                <DragIndicator className="size-4" />
+              </span>
+            }
+            items={actions}
+          />
+        </div>
+      )}
     </div>
   );
 }

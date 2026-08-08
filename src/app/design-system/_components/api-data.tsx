@@ -409,7 +409,13 @@ export const BUILDER_PROPS: PropDoc[] = [
     name: "onMove",
     type: "(id, -1 | 1) => void",
     description:
-      "Swap with the neighbour. The trigger is excluded and index 0 is never a valid destination.",
+      "Swap with the neighbour. The trigger is excluded and index 0 is never a valid destination. This is the keyboard path, and it stays whether or not the drag is armed.",
+  },
+  {
+    name: "onReorder",
+    type: "(id, to: number) => void",
+    description:
+      "Move a block to an index outright, for the drag. Separate from onMove because a drag crosses several places at once and there is no honest way to say that as a direction. Passing it is also what makes the cards draggable — leave it off and the grip is a menu button and nothing else.",
   },
   {
     name: "onRemove / onDuplicate",
