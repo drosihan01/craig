@@ -1,7 +1,14 @@
 import "server-only";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+/* Type-only, and it has to stay that way. `@/lib/google/auth` reads the OAuth
+   client secret at module scope-adjacent call sites and is `server-only`; a
+   value import here would drag it into every module graph that touches the
+   account store, for a shape that costs nothing at runtime. `import type` is
+   erased entirely, so this is a promise about the shape and nothing more. */
+import type { GoogleConnection } from "@/lib/google/auth";
 import { constantTimeEqual } from "./session";
 import { safeCompany } from "./sign-up";
 
@@ -26,6 +33,39 @@ import { safeCompany } from "./sign-up";
  * is a store that will one day let somebody do exactly that.
  */
 
+/**
+ * What a screen may know about somebody's Google Workspace connection.
+ *
+ * Written out field by field rather than derived from the stored shape, and
+ * that is the whole point of it existing. What a UI legitimately needs is
+ * *whether* they are connected, *which* domain, and *when* — the three things
+ * that let a page say "Connected to northgate.io on 4 August" instead of
+ * asking somebody to trust a green tick. It does not need the refresh token,
+ * and there is no version of this product where it does.
+ *
+ * So the token has no field here to travel in. A future edit that wanted to
+ * leak it would have to add one on purpose, which is a line somebody reviews,
+ * rather than change a `...spread` somewhere and leak it by accident.
+ */
+export interface GoogleConnectionView {
+  /** From the id token's `hd` claim — Google's answer, not a typed guess. */
+  domain: string | null;
+  /** The Workspace admin who consented. Null if Google omitted it. */
+  adminEmail: string | null;
+  /** What Google actually granted, which is not always what we asked for. */
+  scopes: string[];
+  /** Unix seconds, when the consent completed. */
+  connectedAt: number;
+  /**
+   * Set when a later call found the standing permission gone. A separate flag
+   * rather than deleting the connection, because "you connected this and it
+   * has stopped working" and "you never connected this" are different
+   * sentences to the person reading the screen, and only one of them is
+   * alarming.
+   */
+  needsReconnect: boolean;
+}
+
 /** What everything outside this file is allowed to see. No secrets in here. */
 export interface Account {
   name: string;
@@ -33,13 +73,56 @@ export interface Account {
   company: string;
   /** Unix seconds. */
   createdAt: number;
+  /** Null until a Workspace admin has consented. Never carries the token. */
+  google: GoogleConnectionView | null;
 }
 
-interface StoredAccount extends Account {
+/**
+ * The refresh token as it sits on disk: AES-256-GCM, never plaintext.
+ *
+ * All three parts are needed to get it back and none of them is a secret on
+ * its own. The IV is fresh per seal and is meant to be stored beside the
+ * ciphertext — reusing one under the same key is what breaks GCM, so it is
+ * generated rather than derived. The tag is what makes this authenticated
+ * encryption rather than merely encryption: without checking it, somebody who
+ * could write to `.data/showcase-accounts.json` could flip bits in the
+ * ciphertext and we would decrypt whatever fell out and send it to Google.
+ */
+interface SealedToken {
+  /** Hex. */
+  ciphertext: string;
+  /** Hex, 12 bytes. */
+  iv: string;
+  /** Hex, 16 bytes. GCM's authentication tag. */
+  tag: string;
+}
+
+/** The stored half of a connection. Only this file ever holds one. */
+interface StoredGoogleConnection {
+  token: SealedToken;
+  domain: string | null;
+  adminEmail: string | null;
+  scopes: string[];
+  connectedAt: number;
+  /** Absent on records written before the flag existed, hence optional. */
+  needsReconnect?: boolean;
+}
+
+/**
+ * `Omit<Account, "google">` rather than `extends Account`, and the one field
+ * they differ on is the one that matters: the record on disk holds a sealed
+ * token, the record that leaves this file holds a description of a connection.
+ * Writing it this way makes the compiler refuse a stored connection anywhere
+ * an `Account` is expected, so the sealed token cannot be handed out by
+ * somebody widening a return type.
+ */
+interface StoredAccount extends Omit<Account, "google"> {
   /** Hex. Per-account, so two people choosing the same password don't collide. */
   salt: string;
   /** Hex. PBKDF2-SHA256 over the password with the salt above. */
   hash: string;
+  /** Absent until somebody connects. Never leaves this file as it stands. */
+  google?: StoredGoogleConnection;
 }
 
 /**
@@ -81,6 +164,14 @@ const STORE_KEY = "__craig_showcase_accounts__";
  * memory — the password is a PBKDF2 hash and its salt, never the password —
  * so the file is no more sensitive than the process was, and it is ignored by
  * git so it can't be committed by accident.
+ *
+ * That claim used to be free and now has to be earned. Since this record can
+ * carry a Google refresh token, a plaintext file would be a standing
+ * authorisation to create accounts inside somebody else's company, sitting in
+ * a working directory, surviving every restart, and readable by anything that
+ * can read a file. So the token is sealed before it is written and the key
+ * lives in the environment — see `GOOGLE_TOKEN_ENCRYPTION_KEY` below. The
+ * sentence above stays true because of that, not in spite of it.
  */
 const FILE = join(process.cwd(), ".data", "showcase-accounts.json");
 
@@ -101,7 +192,15 @@ function load(): Map<string, StoredAccount> {
           (a): a is StoredAccount =>
             typeof a?.email === "string" && typeof a?.hash === "string",
         )
-        .map((a) => [a.email, a]),
+        /* The connection is re-checked field by field rather than trusted,
+           and a record that fails drops the connection while keeping the
+           account. The alternative — trusting whatever is in the file — means
+           a half-written or hand-edited entry reaches `createDecipheriv` as
+           `undefined`, which throws somewhere with no context, on a page that
+           was only trying to say whether somebody is connected. Losing the
+           connection costs one click to redo; losing the account costs
+           everything they signed up with. */
+        .map((a) => [a.email, { ...a, google: readStoredGoogle(a.google) }]),
     );
   } catch {
     /* Missing is the normal first run, and unreadable is a file somebody
@@ -178,6 +277,186 @@ async function derive(password: string, saltHex: string): Promise<string> {
   return toHex(new Uint8Array(bits));
 }
 
+/* --- Sealing a refresh token ----------------------------------------------- */
+
+/**
+ * The key that the Google refresh token is encrypted with, from the
+ * environment and nowhere else.
+ *
+ * `GOOGLE_TOKEN_ENCRYPTION_KEY`, 32 bytes, as 64 hex characters or as base64
+ * that decodes to 32. Generate one with:
+ *
+ *   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+ *
+ * Not `NEXT_PUBLIC_`, not derived from anything, and deliberately not shared
+ * with `SESSION_SECRET`. Those two protect different things over different
+ * lifetimes: rotating the session secret is a routine act that signs everyone
+ * out for a minute, and if it also happened to be the encryption key it would
+ * silently destroy every Google connection in the store at the same time — a
+ * failure that would not surface until the next unattended workflow run, at
+ * three in the morning, as a customer's new starter not getting an account.
+ * One key, one job.
+ *
+ * Read on every call rather than cached, for the same reason `oauthClient()`
+ * is: adding the variable and restarting should be the whole of the setup
+ * loop. It is one string read and a 32-byte decode.
+ */
+const KEY_VAR = "GOOGLE_TOKEN_ENCRYPTION_KEY";
+const KEY_BYTES = 32;
+/** 96 bits, which is the size GCM is specified around. */
+const IV_BYTES = 12;
+
+type KeyResult = { ok: true; key: Buffer } | { ok: false; message: string };
+
+function encryptionKey(): KeyResult {
+  const raw = process.env[KEY_VAR]?.trim() ?? "";
+
+  if (!raw) {
+    return {
+      ok: false,
+      message: `Google Workspace can't be connected on this deployment yet: ${KEY_VAR} isn't set, and it is what the connection is encrypted with. Rather than write one down in the clear, nothing is stored at all. Generate 32 bytes — node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" — put it in the environment, and restart the server so the value is re-read.`,
+    };
+  }
+
+  /* Hex first because that is what the command above prints, then base64,
+     because somebody will paste the output of `openssl rand -base64 32` and
+     be entirely reasonable to expect it to work. Anything else fails the
+     length check below rather than being silently truncated to a shorter,
+     weaker key — `Buffer.from` drops characters it doesn't recognise instead
+     of complaining, which is exactly the kind of quiet degradation that would
+     leave somebody encrypting under 11 bytes of entropy. */
+  const key = /^[0-9a-fA-F]{64}$/.test(raw)
+    ? Buffer.from(raw, "hex")
+    : Buffer.from(raw, "base64");
+
+  if (key.length !== KEY_BYTES) {
+    return {
+      ok: false,
+      message: `${KEY_VAR} has to be exactly 32 bytes — 64 hex characters, or base64 that decodes to 32 bytes. What's set decodes to ${key.length}, so it was rejected rather than padded into something weaker.`,
+    };
+  }
+
+  return { ok: true, key };
+}
+
+/**
+ * What the ciphertext is bound to, beyond being ciphertext.
+ *
+ * GCM's additional authenticated data isn't encrypted; it is mixed into the
+ * tag, so decryption fails unless the same value is supplied again. Passing
+ * the account's email makes the sealed token *that account's* sealed token
+ * rather than a portable blob. Without it, anybody who could edit
+ * `.data/showcase-accounts.json` — or any future bug that copied a record
+ * while migrating one — could move the sealed token from one row to another
+ * and it would decrypt perfectly, and the next unattended workflow run would
+ * create a new starter inside the wrong company's Google Workspace. With it,
+ * a moved blob simply fails to open.
+ *
+ * Versioned because the string is part of the ciphertext's meaning: changing
+ * it invalidates every token sealed under the old one, so it must change
+ * deliberately and visibly rather than as a tidy-up.
+ */
+const aad = (accountEmail: string) =>
+  Buffer.from(`craig.google.refresh-token.v1:${accountEmail}`, "utf8");
+
+function seal(
+  plaintext: string,
+  key: Buffer,
+  accountEmail: string,
+): SealedToken {
+  /* Fresh per seal, never derived from the account or a counter. An IV reused
+     under one key is the failure that takes GCM from "authenticated
+     encryption" to "the plaintexts XOR to each other". */
+  const iv = randomBytes(IV_BYTES);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(aad(accountEmail));
+
+  const ciphertext = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
+
+  return {
+    ciphertext: ciphertext.toString("hex"),
+    iv: iv.toString("hex"),
+    tag: cipher.getAuthTag().toString("hex"),
+  };
+}
+
+/**
+ * The token back, or `null` for every way it can fail to come back.
+ *
+ * A rotated key, a hand-edited file, a record moved between accounts and a
+ * truncated write all land here, and none of them is distinguishable from the
+ * others without saying something about the key — so all of them are `null`,
+ * and the caller turns that into one honest sentence. Nothing is logged here:
+ * the only interesting values in scope are the key and the plaintext.
+ */
+function unseal(
+  sealed: SealedToken,
+  key: Buffer,
+  accountEmail: string,
+): string | null {
+  try {
+    const decipher = createDecipheriv(
+      "aes-256-gcm",
+      key,
+      Buffer.from(sealed.iv, "hex"),
+    );
+    decipher.setAAD(aad(accountEmail));
+    decipher.setAuthTag(Buffer.from(sealed.tag, "hex"));
+
+    return Buffer.concat([
+      decipher.update(Buffer.from(sealed.ciphertext, "hex")),
+      decipher.final(),
+    ]).toString("utf8");
+  } catch {
+    /* `final()` throws when the tag doesn't check out, which is the case this
+       whole design exists to catch. It is a refusal, not a crash. */
+    return null;
+  }
+}
+
+/**
+ * A connection off the disk, checked rather than trusted.
+ *
+ * The three hex fields are all that decide whether `unseal` can be called
+ * without throwing, so they are the three that are actually verified; the
+ * descriptive fields are normalised to something renderable instead, because
+ * a missing domain should show as "Google didn't say" rather than take the
+ * connection down with it.
+ */
+function readStoredGoogle(value: unknown): StoredGoogleConnection | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const stored = value as Partial<StoredGoogleConnection>;
+  const token = stored.token;
+
+  if (
+    !token ||
+    typeof token.ciphertext !== "string" ||
+    typeof token.iv !== "string" ||
+    typeof token.tag !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    token: { ciphertext: token.ciphertext, iv: token.iv, tag: token.tag },
+    domain: typeof stored.domain === "string" ? stored.domain : null,
+    adminEmail:
+      typeof stored.adminEmail === "string" ? stored.adminEmail : null,
+    scopes: Array.isArray(stored.scopes)
+      ? stored.scopes.filter((s): s is string => typeof s === "string")
+      : [],
+    connectedAt:
+      typeof stored.connectedAt === "number" &&
+      Number.isFinite(stored.connectedAt)
+        ? stored.connectedAt
+        : 0,
+    needsReconnect: stored.needsReconnect === true,
+  };
+}
+
 /** Emails are matched the way mail servers match them, and stored that way. */
 const normalise = (email: string) => email.trim().toLowerCase();
 
@@ -196,14 +475,53 @@ const normalise = (email: string) => email.trim().toLowerCase();
  * the session, and whatever reads it next — and it costs two regex passes on a
  * record that is already in memory. `safeCompany` is idempotent, so doing it
  * here as well as in `createAccount` changes nothing for a clean value.
+ *
+ * It is also the one place that decides what a Google connection looks like
+ * from outside. The parameter list is a destructure of named fields and the
+ * return is an object literal of named fields, in both directions — never
+ * `{ ...account }` with the secrets deleted afterwards. Those two spellings
+ * behave identically today and fail in opposite directions tomorrow: add a
+ * field to `StoredAccount` and a spread publishes it by default, while this
+ * one leaves it behind by default. Since the field most likely to be added
+ * next to that record is another credential, the default has to be "stays in
+ * this file".
  */
-const publicView = ({ name, email, company, createdAt }: StoredAccount) =>
+const publicView = ({
+  name,
+  email,
+  company,
+  createdAt,
+  google,
+}: StoredAccount) =>
   ({
     name,
     email,
     company: safeCompany(company),
     createdAt,
+    google: googleView(google),
   }) satisfies Account;
+
+/**
+ * The connection, as a screen may see it.
+ *
+ * Field by field, and the sealed token has no line here — which is what makes
+ * "the refresh token cannot leave this file" a property of the code rather
+ * than a promise in a comment. Note there is nothing to opt out of and no
+ * flag: a caller cannot ask for the token, because no caller can express the
+ * request.
+ */
+function googleView(
+  stored: StoredGoogleConnection | undefined,
+): GoogleConnectionView | null {
+  if (!stored) return null;
+  return {
+    domain: stored.domain,
+    adminEmail: stored.adminEmail,
+    scopes: [...stored.scopes],
+    connectedAt: stored.connectedAt,
+    needsReconnect: stored.needsReconnect === true,
+  };
+}
 
 /* --- Store ----------------------------------------------------------------- */
 
@@ -294,6 +612,267 @@ export async function verifyCredentials(
   return publicView(candidate);
 }
 
+/* --- The Google Workspace connection --------------------------------------- */
+
+/**
+ * Whether this deployment can store a connection at all.
+ *
+ * The counterpart to `googleSetupStatus()` in `lib/google/config.ts`, and the
+ * two answer different halves of the same question: that one says whether we
+ * can *ask* a customer for permission, this one says whether we could keep
+ * what they gave us. Both have to be true before a Connect button is anything
+ * but a trap — a deployment with an OAuth client and no encryption key sends
+ * somebody all the way to Google's consent screen, has them read a page about
+ * granting us the ability to manage their users, and then refuses at the last
+ * step. Far better to say so on the screen before anybody leaves the site.
+ *
+ * Returns the variable's *name*, never its value. The name is documentation
+ * and appears in `.env.example`; the value is the only thing standing between
+ * a copy of this file and somebody else's Workspace.
+ */
+export function googleStorageStatus(): {
+  ready: boolean;
+  variable: string;
+  /** Empty when ready. Safe to show; says what to do. */
+  message: string;
+} {
+  const key = encryptionKey();
+  return key.ok
+    ? { ready: true, variable: KEY_VAR, message: "" }
+    : { ready: false, variable: KEY_VAR, message: key.message };
+}
+
+export interface NewGoogleConnection {
+  /** The standing permission. Sealed before it touches the disk. */
+  refreshToken: string;
+  domain: string | null;
+  adminEmail: string | null;
+  scopes: string[];
+}
+
+export type SaveConnectionResult =
+  { ok: true; account: Account } | { ok: false; message: string };
+
+/**
+ * Stores a completed consent against an account, or refuses to store anything.
+ *
+ * Refusing is the important branch and it is why this returns a result rather
+ * than writing what it can. With no key there are only two things this
+ * function could do: write the refresh token in the clear, or decline. Writing
+ * it in the clear is the worse failure by a wide margin, and it is the one
+ * that looks like success — a connection that appears in the UI, works, and
+ * quietly leaves a standing authorisation over somebody else's company in a
+ * plain JSON file for as long as the deployment lives. Declining costs the
+ * person one confusing minute and a variable.
+ *
+ * A second consent replaces the first outright rather than merging. Google
+ * issues a refresh token only on a fresh grant, so arriving here means
+ * somebody has just consented again — usually because the old permission was
+ * revoked — and keeping any of the old record would mean the domain, the
+ * admin's address or the reconnect flag describing a grant that no longer
+ * exists. `needsReconnect` clearing itself here is the same argument: this is
+ * the act that fixes it.
+ *
+ * Nothing is logged. Not the token, obviously, but also not the domain or the
+ * admin's address — the caller knows both and is better placed to decide what
+ * to say about them.
+ */
+export function saveGoogleConnection(
+  email: string,
+  input: NewGoogleConnection,
+): SaveConnectionResult {
+  const key = encryptionKey();
+  if (!key.ok) return { ok: false, message: key.message };
+
+  const { accounts } = store();
+  const id = normalise(email);
+  const account = accounts.get(id);
+
+  if (!account) {
+    return {
+      ok: false,
+      message:
+        "That account no longer exists, so there was nothing to attach the connection to. Nothing was stored.",
+    };
+  }
+
+  if (!input.refreshToken) {
+    return {
+      ok: false,
+      message:
+        "Google didn't return anything to store, so the connection was refused rather than saved half-made.",
+    };
+  }
+
+  /* Sealed against `id`, the same normalised email this record is keyed by, so
+     the ciphertext is only openable from this row. See `aad` above. */
+  account.google = {
+    token: seal(input.refreshToken, key.key, id),
+    domain: input.domain,
+    adminEmail: input.adminEmail,
+    scopes: [...input.scopes],
+    connectedAt: Math.floor(Date.now() / 1000),
+    needsReconnect: false,
+  };
+
+  save(accounts);
+  return { ok: true, account: publicView(account) };
+}
+
+export type GoogleConnectionResult =
+  | {
+      ok: true;
+      connection: GoogleConnection;
+      /**
+       * Their Workspace domain, returned beside the connection because the
+       * two are needed together and separating them invites the bug.
+       *
+       * `createUser` needs a primary email on a domain the customer's tenant
+       * actually owns, so a caller holding a connection and no domain has
+       * nothing it can build an address from — and the tempting substitutes
+       * are all wrong: the account's own email domain is where they signed up,
+       * and a domain typed into a workflow field is a domain somebody can
+       * typo. This one is Google's answer, from the id token, recorded at
+       * consent. Never null on a stored connection: the callback refuses to
+       * store one without it.
+       */
+      domain: string;
+    }
+  | {
+      ok: false;
+      /**
+       * `not-connected` is the calm one — nobody has consented, which is where
+       * every account starts. `unreadable` means a connection is on the record
+       * and this process cannot open it, which is a different conversation
+       * with a different person: the key changed, or the file was edited.
+       */
+      reason: "not-connected" | "unreadable";
+      message: string;
+    };
+
+/**
+ * The one way to get a usable connection out of this file.
+ *
+ * The only function here that ever produces a plaintext refresh token, and it
+ * hands it straight to `GoogleConnection` — the shape `lib/google` takes —
+ * with `accountId` set from the same normalised email the record is keyed by.
+ * That pairing is what makes "read for one account while acting for another"
+ * hard to do by accident: the token and the id it belongs to are constructed
+ * together, in one expression, from one lookup. A caller cannot end up holding
+ * one account's token beside another's id without assembling the object
+ * themselves.
+ *
+ * `unreadable` is deliberately not folded into `not-connected`. They look the
+ * same from the calling code and are opposites to the person reading the
+ * screen: one is "press Connect", the other is "the connection is still there,
+ * this server just can't open it — check the key before anybody reconnects and
+ * loses their grant for nothing".
+ *
+ * Never logs, and never returns the token in an error path.
+ */
+export function googleConnectionFor(email: string): GoogleConnectionResult {
+  const id = normalise(email);
+  const stored = store().accounts.get(id)?.google;
+
+  if (!stored) {
+    return {
+      ok: false,
+      reason: "not-connected",
+      message:
+        "This account hasn't connected Google Workspace yet, so nothing was attempted. A Workspace admin needs to connect it once; after that this runs on its own.",
+    };
+  }
+
+  const key = encryptionKey();
+  if (!key.ok) {
+    return { ok: false, reason: "unreadable", message: key.message };
+  }
+
+  const refreshToken = unseal(stored.token, key.key, id);
+  if (!refreshToken) {
+    return {
+      ok: false,
+      reason: "unreadable",
+      /* Both causes are named and neither is claimed, because this cannot
+         tell them apart: a rotated key, an edited file and a record moved
+         between accounts all fail the same authentication tag. Asserting "the
+         key is wrong" when the file was edited would send somebody off to
+         rotate a key that was fine. */
+      message: `The stored Google connection can't be opened on this server. That happens when ${KEY_VAR} has changed since it was saved, or when the account file has been edited by hand. The connection itself is still valid at Google's end — check the key before disconnecting, because reconnecting means asking a Workspace admin to consent all over again.`,
+    };
+  }
+
+  /* A stored connection always has a domain — the callback refuses one that
+     doesn't, because a connection with no domain can do nothing this product
+     wants. A record written before that check, or edited by hand, would be the
+     exception, and it is reported as unreadable rather than handed on: a
+     connection that can't name a domain is one that would fail at
+     `users.insert` with a `400` blaming the request. */
+  if (!stored.domain) {
+    return {
+      ok: false,
+      reason: "unreadable",
+      message:
+        "The stored Google connection doesn't say which Workspace domain it belongs to, so there is no address it could create anybody at. Connect Google Workspace again — the domain comes back with the consent.",
+    };
+  }
+
+  return {
+    ok: true,
+    connection: { accountId: id, refreshToken },
+    domain: stored.domain,
+  };
+}
+
+/**
+ * Records that a live connection has stopped working.
+ *
+ * For whatever calls Google and gets `needs-reconnect` back: the account still
+ * has a refresh token, it is simply no longer honoured, and the person who
+ * needs to know is a Workspace admin rather than whoever happened to trigger
+ * the run. Flagged rather than deleted, so the screen can say "this stopped
+ * working on the 4th" instead of quietly reverting to a Connect button and
+ * leaving somebody to wonder whether they ever pressed it.
+ *
+ * Deliberately cheap and silent when there is nothing to flag, so a caller can
+ * call it on any failure path without checking first.
+ */
+export function markGoogleNeedsReconnect(email: string): void {
+  const { accounts } = store();
+  const account = accounts.get(normalise(email));
+  if (!account?.google || account.google.needsReconnect) return;
+
+  account.google.needsReconnect = true;
+  save(accounts);
+}
+
+/**
+ * Forgets the connection, which means deleting the token rather than hiding it.
+ *
+ * The record is removed from the account and the file is rewritten without it,
+ * so what is left on disk after this is a file that never mentioned Google.
+ * A "disconnected" flag next to a retained token would be the version of this
+ * that reads the same on screen and is a lie — the standing authorisation over
+ * somebody's company would still be sitting there, one bug away from being
+ * used, and the person who pressed the button would have been told otherwise.
+ *
+ * Returns whether there was anything to delete, which is what lets a caller
+ * distinguish "disconnected" from "already was", without either being an
+ * error. Note what this does *not* do: tell Google. The grant itself lives at
+ * myaccount.google.com and only its owner can revoke it there — so what this
+ * honestly promises is that this deployment no longer holds the credential,
+ * which is the half we control.
+ */
+export function disconnectGoogle(email: string): boolean {
+  const { accounts } = store();
+  const account = accounts.get(normalise(email));
+  if (!account?.google) return false;
+
+  delete account.google;
+  save(accounts);
+  return true;
+}
+
 /**
  * Back to nothing. What the sandbox's reset button is for.
  *
@@ -301,6 +880,12 @@ export async function verifyCredentials(
  * starts empty and only ever contains what actually happened, and a reset that
  * left one behind would make that a claim rather than a demonstration. Sessions
  * die with them: `currentUser` refuses a session whose account has gone.
+ *
+ * Google connections go with the accounts they belong to, since they are a
+ * field on the record and the file is deleted whole. That is the right
+ * behaviour and worth saying out loud: a reset that emptied the account store
+ * but left refresh tokens on disk would leave the most dangerous thing here
+ * as the only survivor.
  */
 export function clearAccounts(): void {
   store().accounts.clear();

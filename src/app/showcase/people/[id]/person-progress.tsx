@@ -23,7 +23,9 @@ import {
   ShowcaseNavRail,
 } from "@/components/showcase/showcase-nav";
 import {
+  Bolt,
   CheckCircle,
+  Cloud,
   Delete,
   Groups,
   Schedule,
@@ -78,6 +80,8 @@ import { dueDateFrom } from "@/lib/workflow/library";
 const TICK_ENDPOINT = "/api/showcase/tick";
 /** Where taking the seat back goes. */
 const PERSON_ENDPOINT = "/api/showcase/person";
+/** Where "how is that account getting on" goes. */
+const SEAT_ENDPOINT = "/api/showcase/seat";
 
 /**
  * The person, as much of them as this screen draws.
@@ -98,6 +102,16 @@ export interface PersonView {
   workflowName: string;
   invitedAt: string;
   steps: JoinerStep[];
+  /**
+   * Ids of automated steps that claimed themselves and never came back.
+   *
+   * A list from the server rather than a comparison done here, because it is a
+   * fact about the current time: worked out during render it would be worked
+   * out twice, in two places, moments apart — which React reports as a
+   * hydration mismatch and a reader experiences as a status that changes when
+   * they blink. Same rule as every date on this page.
+   */
+  interrupted: string[];
 }
 
 /**
@@ -114,8 +128,20 @@ export interface PersonProgressView {
   finished: boolean;
   /** Whoever the whole thing is waiting on next, or null when it isn't. */
   next: { title: string; actor: StepActor } | null;
-  /** The new starter's own half, so the column can split the remaining work. */
+  /**
+   * The same total, split three ways, so the column can say who each remaining
+   * piece belongs to.
+   *
+   * Counted per actor on the server rather than derived from each other here.
+   * The reader's own share used to be the subtraction — everything, minus the
+   * new starter's — and that was correct for exactly as long as there were two
+   * kinds of step. A third kind arriving would have silently reported Craig's
+   * work as the reader's, in amber, under a heading saying it was waiting on
+   * them.
+   */
   theirs: { done: number; total: number };
+  mine: { done: number; total: number };
+  craig: { done: number; total: number };
 }
 
 export function PersonProgress({
@@ -147,7 +173,13 @@ export function PersonProgress({
   const [confirming, setConfirming] = React.useState(false);
   const [removing, setRemoving] = React.useState(false);
 
-  const busy = saving !== null || refreshing || removing;
+  /* Which automated step is being asked about, by id, for the same reason
+     `saving` is a single id rather than a set: one at a time is all anybody
+     needs, and refusing the second is cheaper to reason about than reconciling
+     two answers that can arrive in either order. */
+  const [checking, setChecking] = React.useState<string | null>(null);
+
+  const busy = saving !== null || refreshing || removing || checking !== null;
 
   /**
    * Tick a step, or take the tick back.
@@ -202,6 +234,45 @@ export function PersonProgress({
           "That didn't reach the server. Reload the page to see where the step actually stands.",
         );
       }
+    },
+    [busy, person.id, router],
+  );
+
+  /**
+   * Ask Google where an automated step actually stands, because somebody asked.
+   *
+   * `manual: true` on every call from here, and that flag is doing real work at
+   * the other end. It forces the check past the throttle — a person who presses
+   * a button expects the answer to be from now, not from fifty seconds ago —
+   * and it is what permits the route to *run* a step that has been sitting in
+   * `waiting`. That permission is deliberately not granted by merely looking at
+   * the page: an account appearing inside somebody's company because a
+   * colleague opened a tab is a surprise nobody should get.
+   *
+   * The page is re-read afterwards rather than patched, exactly like the tick
+   * beside it. What comes back from this endpoint is one word about one step;
+   * the screen is a view of a record that a second person is also writing to,
+   * and the moment it starts drawing from a response instead of from the store
+   * it becomes a second copy that can disagree.
+   */
+  const check = React.useCallback(
+    async (stepId: string) => {
+      if (busy) return;
+      setChecking(stepId);
+      setError(null);
+
+      const result = await askAboutSeat(person.id, stepId, true);
+
+      if (!result.ok) {
+        setChecking(null);
+        setError(result.error);
+        return;
+      }
+
+      startRefresh(() => {
+        router.refresh();
+        setChecking(null);
+      });
     },
     [busy, person.id, router],
   );
@@ -262,6 +333,78 @@ export function PersonProgress({
     }
   }, [busy, person.id, router]);
 
+  /**
+   * The steps worth asking Google about the moment this page is opened.
+   *
+   * A seat that exists and hasn't been accepted, and a run that claimed itself
+   * and never came back. Both are questions whose answer lives at Google and
+   * changes without anybody here doing anything, which is precisely the shape
+   * of thing a screen should refresh rather than display from memory.
+   *
+   * Derived from props with no reference to the clock — the interrupted list
+   * was worked out on the server for exactly that reason — so this stays a pure
+   * function of what was rendered.
+   */
+  const worthAsking = React.useMemo(
+    () =>
+      person.steps
+        .filter(
+          (step) =>
+            step.actor === "craig" &&
+            (step.run?.state === "awaiting" ||
+              person.interrupted.includes(step.id)),
+        )
+        .map((step) => step.id),
+    [person.steps, person.interrupted],
+  );
+
+  /**
+   * Checking when somebody looks, which is the whole of the polling schedule.
+   *
+   * There is no cron and no webhook, and both absences are argued for on the
+   * route this calls. What is left is this: the person who cares whether a new
+   * starter has signed in yet is the person who just opened their page, so
+   * their opening it is the trigger. It costs one Directory read, throttled on
+   * the server to once a minute per step, so a page somebody leaves open and
+   * reloads twenty times asks Google once.
+   *
+   * Once per mount, guarded by a ref rather than by state. State would put a
+   * render between deciding to ask and asking, and — more to the point —
+   * `router.refresh()` re-renders this component with fresh props, so anything
+   * derived from those props would arm the effect again and it would ask for
+   * ever. The ref survives the refresh; the props don't.
+   *
+   * Nothing here sets state. That is not only the React 19 rule about effects,
+   * it is the right behaviour: a check nobody asked for should not put a
+   * spinner on a page somebody is reading. It is silent, and if it learns
+   * anything the page quietly redraws with the answer.
+   */
+  const askedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (askedRef.current || worthAsking.length === 0) return;
+    askedRef.current = true;
+
+    let live = true;
+
+    void (async () => {
+      let learned = false;
+      for (const stepId of worthAsking) {
+        const result = await askAboutSeat(person.id, stepId, false);
+        learned = learned || result.ok;
+      }
+
+      /* Only if the component is still mounted, and only if something was
+         actually asked. A refresh scheduled after somebody has navigated away
+         is a re-render of a page that isn't there. */
+      if (live && learned) React.startTransition(() => router.refresh());
+    })();
+
+    return () => {
+      live = false;
+    };
+  }, [worthAsking, person.id, router]);
+
   return (
     <>
       <Detail
@@ -269,6 +412,7 @@ export function PersonProgress({
         progress={progress}
         user={user}
         tick={{ saving, busy, onTick: tick }}
+        seat={{ checking, busy, onCheck: check }}
         error={error}
         onRemove={() => setConfirming(true)}
       />
@@ -283,6 +427,59 @@ export function PersonProgress({
   );
 }
 
+/**
+ * One request to the seat endpoint, with every outcome already a sentence.
+ *
+ * Module-level rather than a hook, because it has two callers who want opposite
+ * things from it. The button wants the message so it can put it on the page;
+ * the silent check on mount wants nothing at all — a failure there is a check
+ * that didn't happen, which is the same as the check not being due, and putting
+ * an error on the screen for it would mean a page that greets its reader with a
+ * complaint about a request they never made.
+ *
+ * Never throws, so neither caller needs a try/catch it might forget on the path
+ * where forgetting is silent.
+ */
+async function askAboutSeat(
+  joinerId: string,
+  stepId: string,
+  manual: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const response = await fetch(SEAT_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ joinerId, stepId, manual }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+    } | null;
+
+    if (!response.ok || !payload?.ok) {
+      return {
+        ok: false,
+        error:
+          payload?.error ??
+          "That didn't go through. The step is as it was — try it again.",
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    /* No response at all. Worded carefully, because the request may well have
+       reached the server: with a manual press that means the account may
+       genuinely have been created, and "try again" would be reckless advice.
+       Look, then decide. */
+    return {
+      ok: false,
+      error:
+        "That didn't reach the server. Reload the page to see where the step actually stands before trying again.",
+    };
+  }
+}
+
 /** What a step card needs to know about the tick in flight, in one bundle so
     the shape doesn't have to be threaded through three components as three
     separate props that can be passed in the wrong order. */
@@ -294,11 +491,22 @@ interface TickUi {
   onTick: (stepId: string, done: boolean) => void;
 }
 
+/** The same, for the one control on an automated step. Separate from `TickUi`
+    because they are different acts on different kinds of step, and a single
+    bundle would invite a card to offer whichever one it happened to have. */
+interface SeatUi {
+  /** The step being asked about, if any. */
+  checking: string | null;
+  busy: boolean;
+  onCheck: (stepId: string) => void;
+}
+
 function Detail({
   person,
   progress,
   user,
   tick,
+  seat,
   error,
   onRemove,
 }: {
@@ -306,6 +514,7 @@ function Detail({
   progress: PersonProgressView;
   user: Session;
   tick: TickUi;
+  seat: SeatUi;
   error: string | null;
   onRemove: () => void;
 }) {
@@ -313,7 +522,23 @@ function Detail({
   const addedOn = onDay(person.invitedAt);
 
   const steps = person.steps.map((step) =>
-    toCard(step, first, tick, person.startDate),
+    toCard(step, {
+      first,
+      tick,
+      seat,
+      startDate: person.startDate,
+      /* Whether everything ahead of it is finished — the same rule the server
+         applies before it will run anything, restated here so a step that
+         cannot run yet says why rather than offering a button that would be
+         refused. Pure data: no clock, no second source. */
+      due: person.steps
+        .slice(
+          0,
+          person.steps.findIndex((s) => s.id === step.id),
+        )
+        .every((s) => !s.actor || Boolean(s.completedAt)),
+      interrupted: person.interrupted.includes(step.id),
+    }),
   );
 
   /* Steps waiting on neither side. They are drawn like everything else and
@@ -377,6 +602,14 @@ function Detail({
             me — and leaving that to be totalled up from a column of badges is
             leaving the only question unanswered. */}
         <Lead person={person} progress={progress} first={first} />
+
+        {/* Anything Craig couldn't do, at the top, where it cannot be missed.
+            This is the whole difference between an automation and a promise: a
+            step that quietly failed is a person whose first week is going wrong
+            in a way nobody finds out about until they turn up and have no email
+            address. It is above the list on purpose — a red badge eight cards
+            down is a badge you find after you already knew. */}
+        <SeatTrouble person={person} first={first} />
 
         {/* Failures stay on the page rather than flashing past. A tick that
             didn't take is worth being able to see after you have looked away,
@@ -501,6 +734,21 @@ function Lead({
     );
   }
 
+  /* Craig's own. Neutral rather than accent, because there is nothing here for
+     the reader to do — which is the entire selling point of the step and would
+     be undermined by a callout that looked like a task. When it *does* need
+     them, it needs them for a specific reason, and that reason gets its own
+     panel underneath this one rather than being smuggled into the summary. */
+  if (progress.next.actor === "craig") {
+    return (
+      <Callout tone="neutral" icon={<Bolt />} title="I'm on the next one">
+        {progress.done} of {progress.total} done. Next is{" "}
+        <span className="font-medium">{progress.next.title}</span>, which I run
+        myself — nobody has to do anything for it.
+      </Callout>
+    );
+  }
+
   return (
     <Callout
       tone="neutral"
@@ -570,12 +818,21 @@ function dueOnDay(date: Date): string {
   }).format(date);
 }
 
-function toCard(
-  step: JoinerStep,
-  first: string,
-  tick: TickUi,
-  startDate: string,
-): WorkflowStep {
+/** Everything a card needs beyond the step itself, in one bundle rather than
+    six positional arguments that can be handed over in the wrong order. */
+interface CardContext {
+  first: string;
+  tick: TickUi;
+  seat: SeatUi;
+  startDate: string;
+  /** Whether everything ahead of this step has actually been finished. */
+  due: boolean;
+  /** Whether an automated run claimed this step and never came back. */
+  interrupted: boolean;
+}
+
+function toCard(step: JoinerStep, ctx: CardContext): WorkflowStep {
+  const { first, tick, startDate } = ctx;
   const done = Boolean(step.completedAt);
   const when = onDay(step.completedAt);
   const saving = tick.saving === step.id;
@@ -602,6 +859,12 @@ function toCard(
       value: dueOnDay(dueDate),
       label: overdue ? "was due" : "due",
     });
+  }
+
+  if (step.actor === "craig") {
+    dressAutomated(card, metrics, step, ctx);
+    card.metrics = metrics;
+    return card;
   }
 
   if (step.actor === "joiner") {
@@ -647,6 +910,212 @@ function toCard(
 
   card.metrics = metrics;
   return card;
+}
+
+/**
+ * A step Craig runs, in whichever of its six shapes it is actually in.
+ *
+ * Six, because the four states the block has are not the four things the reader
+ * needs told apart. Waiting splits into "nothing has unblocked it yet" and
+ * "it tried and there was nothing to try with", which are a shrug and a to-do
+ * respectively; running splits into "happening now" and "started and never came
+ * back", which are patience and a problem. Collapsing either pair would put the
+ * calm half and the urgent half behind the same words.
+ *
+ * The rule the rest of this page runs on holds here too, and holds harder: a
+ * step is complete because something completed it, never because it looks like
+ * it should have. `done` here means Google itself reported that the person
+ * signed in and accepted — not that an account was created, which happened
+ * weeks earlier and is not the same claim.
+ *
+ * Every state that a person can move gets a control, and every state that
+ * nobody can move gets none. A button that would be refused is worse than no
+ * button: it invites somebody to press it twice and conclude the page is
+ * broken.
+ */
+function dressAutomated(
+  card: WorkflowStep,
+  metrics: StepMetric[],
+  step: JoinerStep,
+  { first, seat, due, interrupted }: CardContext,
+) {
+  const run = step.run;
+  const state = run?.state ?? "waiting";
+  const checking = seat.checking === step.id;
+  const seatEmail = run?.seatEmail;
+
+  /* One label for the control, whichever it is, so the card can't be reading
+     one state and the button another. */
+  const press = (label: string) => ({
+    label: checking ? "Checking" : label,
+    onClick: () => seat.onCheck(step.id),
+  });
+
+  if (state === "done") {
+    card.status = "complete";
+    if (seatEmail)
+      metrics.push({ value: seatEmail, label: "is their address" });
+    metrics.push({
+      value: onDay(step.completedAt) ?? "Done",
+      label: "signed in",
+    });
+    card.description = `I created this account and ${first} has signed in and accepted it. Nothing else to do.`;
+    return;
+  }
+
+  if (state === "awaiting") {
+    /* In progress rather than complete, and the distinction is the whole point
+       of the step. The account has existed since the moment it was created;
+       what hasn't happened is a person going near it, and until they do this
+       company has provisioned a mailbox nobody reads. */
+    card.status = "in_progress";
+    if (seatEmail) metrics.push({ value: seatEmail, label: "was created" });
+    metrics.push({ value: first, label: "hasn't signed in yet" });
+    card.description = run?.emailProblem
+      ? run.emailProblem
+      : `The account is made. It finishes when ${first} signs in for the first time and accepts Google's terms — I check whenever this page is opened, and nothing here can do it for them.`;
+    card.primaryAction = press("Check now");
+    return;
+  }
+
+  if (state === "running" && interrupted) {
+    card.status = "blocked";
+    card.description =
+      run?.message ??
+      "This one started and never finished — the server was probably restarted mid-way. Checking asks Google what it actually managed to do, which is the only safe way to find out; nothing gets created twice.";
+    card.primaryAction = press("Check what happened");
+    return;
+  }
+
+  if (state === "running") {
+    card.status = "in_progress";
+    metrics.push({ value: "Me", label: "am doing this now" });
+    card.description =
+      "Creating the account now. This takes a second or two — reload the page and it'll say where it got to.";
+    return;
+  }
+
+  if (state === "failed") {
+    card.status = "blocked";
+    card.description =
+      run?.message ??
+      "This one didn't work, and no account was created. Try it again once whatever caused it has been sorted.";
+    card.primaryAction = press("Try again");
+    return;
+  }
+
+  /* Waiting, in its two quite different flavours. */
+  metrics.push({ value: "Me", label: "run this one" });
+
+  if (!due) {
+    card.description =
+      "I run this one myself, as soon as everything above it is finished. Nobody has to come back and start it.";
+    return;
+  }
+
+  card.description =
+    run?.message ??
+    "Ready to go. It runs itself when the step before it is finished — this button is only here for starting it by hand.";
+  card.primaryAction = press("Run it now");
+}
+
+/**
+ * Anything Craig couldn't do, said at the top of the page.
+ *
+ * The requirement this exists for is worth stating plainly: an automated step
+ * that fails silently is worse than no automation at all. A person ticks their
+ * own steps off, sees a list that is mostly green, and finds out on somebody's
+ * first morning that the account nobody was responsible for was never made. So
+ * a run that is stuck says so above the fold, in the reader's own words, with
+ * the next move in the sentence.
+ *
+ * Waiting on a connection is included and is deliberately not red. It is the
+ * state every deployment is in until somebody connects Google Workspace, it is
+ * a to-do rather than a fault, and `src/lib/google/result.ts` argues at length
+ * that painting it as a failure misrepresents the product. It still belongs
+ * here, because "nothing is happening and nothing will" is exactly the thing
+ * somebody needs to be told — quietly is not the same as not at all.
+ *
+ * A failed send of the password gets its own entry even though the step around
+ * it is fine, because it is the one problem here with a deadline attached: the
+ * account exists, the person doesn't know, and the only copy of the password is
+ * gone.
+ */
+function SeatTrouble({ person, first }: { person: PersonView; first: string }) {
+  const notices = person.steps.flatMap((step) => {
+    if (step.actor !== "craig") return [];
+
+    const run = step.run;
+    const state = run?.state ?? "waiting";
+    const out: {
+      key: string;
+      tone: "danger" | "warning" | "neutral";
+      icon: React.ReactNode;
+      title: string;
+      body: string;
+    }[] = [];
+
+    if (state === "failed" && run?.message) {
+      out.push({
+        key: `${step.id}-failed`,
+        tone: "danger",
+        icon: <Warning />,
+        title: `${step.title} didn't run`,
+        body: run.message,
+      });
+    }
+
+    if (state === "running" && person.interrupted.includes(step.id)) {
+      out.push({
+        key: `${step.id}-stuck`,
+        tone: "warning",
+        icon: <Warning />,
+        title: `${step.title} was interrupted`,
+        body:
+          run?.message ??
+          "It started and never finished. Check it below and I'll ask Google what it actually did — nothing gets created twice.",
+      });
+    }
+
+    if (state === "waiting" && run?.problem === "not-set-up" && run.message) {
+      out.push({
+        key: `${step.id}-setup`,
+        tone: "neutral",
+        icon: <Cloud />,
+        title: `${step.title} is waiting on a connection`,
+        body: run.message,
+      });
+    }
+
+    if (run?.emailProblem) {
+      out.push({
+        key: `${step.id}-email`,
+        tone: "warning",
+        icon: <Warning />,
+        title: `${first} hasn't been sent their password`,
+        body: run.emailProblem,
+      });
+    }
+
+    return out;
+  });
+
+  if (notices.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {notices.map((notice) => (
+        <Callout
+          key={notice.key}
+          tone={notice.tone}
+          icon={notice.icon}
+          title={notice.title}
+        >
+          {notice.body}
+        </Callout>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -720,16 +1189,17 @@ function onDay(iso: string | undefined) {
  * The menu column: the facts about their seat, who the outstanding work belongs
  * to, and the one way to take the seat back.
  *
- * The split between the two people is the part worth having. "3 of 6" tells you
- * the onboarding is half done and tells you nothing about whether that is your
- * problem; the two lines under it do, and they are the difference between a page
- * you glance at and a page you can act on.
+ * The split between the people is the part worth having. "3 of 6" tells you the
+ * onboarding is half done and tells you nothing about whether that is your
+ * problem; the lines under it do, and they are the difference between a page you
+ * glance at and a page you can act on.
  *
- * Every number is derived from what the server sent, so there is no second copy
- * of "how far along" to fall out of date. The reader's own share is arithmetic
- * rather than a third count — every step anybody can finish is either theirs or
- * the new starter's — which keeps the rule about who owns what in `progressOf`
- * where the rest of the product reads it.
+ * Every number is counted by `progressOf`, per actor, rather than worked out
+ * here. The reader's own share used to be arithmetic — everything, minus the new
+ * starter's — which was exactly right while there were two kinds of step and
+ * became a lie the day there were three: it would have put every account Craig
+ * was still creating in the amber "waiting on you" line, about work the reader
+ * cannot do and is not waiting for.
  */
 function PersonNav({
   person,
@@ -744,9 +1214,9 @@ function PersonNav({
 }) {
   const addedOn = onDay(person.invitedAt);
 
-  const mine = progress.total - progress.theirs.total;
-  const mineLeft = mine - (progress.done - progress.theirs.done);
+  const mineLeft = progress.mine.total - progress.mine.done;
   const theirsLeft = progress.theirs.total - progress.theirs.done;
+  const craigLeft = progress.craig.total - progress.craig.done;
 
   return (
     <div className="flex flex-col gap-5">
@@ -780,7 +1250,7 @@ function PersonNav({
                 reader's own. A number sitting in amber all day stops meaning
                 anything; a number that turns amber the moment something lands
                 on your desk is worth looking at. */}
-            {mine > 0 && (
+            {progress.mine.total > 0 && (
               <NavStat
                 label="Waiting on you"
                 value={mineLeft}
@@ -789,6 +1259,13 @@ function PersonNav({
             )}
             {progress.theirs.total > 0 && (
               <NavStat label={`Waiting on ${first}`} value={theirsLeft} />
+            )}
+            {/* Never amber, whatever the number. Craig's outstanding steps are
+                the one line here that is not a nudge — they are what the reader
+                bought, and colouring them like a task on their desk would turn
+                the feature's selling point into a source of guilt. */}
+            {progress.craig.total > 0 && (
+              <NavStat label="I'm handling" value={craigLeft} />
             )}
           </div>
         )}

@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { currentUser } from "@/lib/showcase/current-user";
+import { fireNextAutomatedStep } from "@/lib/showcase/automation";
 import { getJoiner, tickStep } from "@/lib/showcase/joiners";
 import { rateLimit } from "@/lib/showcase/rate-limit";
 
@@ -126,6 +127,19 @@ export async function POST(request: Request) {
 
   const updated = tickStep(joiner.id, stepId, input.done);
   if (!updated) return refuse("That isn't a step you can tick off.", 400);
+
+  /* A tick can move the workflow too, and it has to be able to. An automated
+     step sitting behind the admin's own name-tag step would otherwise wait for
+     the new starter to answer something — which, if their half is already
+     finished, is a wait with nothing on the other end of it.
+     `fireNextAutomatedStep` decides whether there is anything to do; unticking
+     is silently a no-op here, because taking a tick back doesn't unblock
+     anything and the automated step's own `waiting` state is what stops it.
+
+     After the response, not before it, for the same reason as the new starter's
+     route: this is a checkbox, and a checkbox that takes as long as somebody
+     else's API is a checkbox people press twice. */
+  fireNextAutomatedStep(updated, stepId, after);
 
   /* The step is echoed rather than the whole person. The screen re-renders from
      the server anyway — that is what makes the tick and the page incapable of

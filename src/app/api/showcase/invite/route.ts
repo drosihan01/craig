@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   ADMIN_TICK_PRESETS,
+  AUTOMATION_BY_PRESET,
   JOIN_PATH,
   JOINER_FIELD_BY_PRESET,
 } from "@/lib/showcase/contract";
@@ -347,14 +348,22 @@ function readableDate(value: unknown): string | null {
  * stops — and it would look like a screen that ignores you rather than like bad
  * data.
  *
- * A preset survives if it names a step somebody can actually complete — either
- * one the new starter answers (`JOINER_FIELD_BY_PRESET`) or one the admin ticks
- * off (`ADMIN_TICK_PRESETS`). Both, and it has to be both: keeping only the
- * first meant every admin step arrived with its preset stripped, so
- * `stepsFromBlocks` gave it no `actor`, and work the company had to do showed
- * up on the new starter's screen as "nobody's waiting on you" and never
- * appeared as a tick on the admin's. The step existed and neither side owned
- * it.
+ * A preset survives if it names a step somebody can actually complete — one the
+ * new starter answers (`JOINER_FIELD_BY_PRESET`), one the admin ticks off
+ * (`ADMIN_TICK_PRESETS`), or one Craig runs himself (`AUTOMATION_BY_PRESET`).
+ * All three, and it has to be all three: keeping only the first meant every
+ * admin step arrived with its preset stripped, so `stepsFromBlocks` gave it no
+ * `actor`, and work the company had to do showed up on the new starter's screen
+ * as "nobody's waiting on you" and never appeared as a tick on the admin's. The
+ * step existed and neither side owned it. The automated ones fail the same way
+ * and worse: a Google Workspace block whose preset was dropped here becomes a
+ * step that nothing will ever run, and the symptom is not an error — it is an
+ * account that silently never gets created.
+ *
+ * This list is the one place three separate facts about presets have to be kept
+ * in step, and the coupling is worth naming: adding a preset to any of those
+ * three collections without adding it here produces a block that looks correct
+ * on the canvas, invites correctly, and then does nothing.
  *
  * `Object.hasOwn` on the map rather than `in`, because it is a plain object
  * literal: a preset of `constructor` or `toString` would look up to something
@@ -411,7 +420,8 @@ function blocksFrom(value: unknown) {
       kind: oneLine(raw.kind, MAX_ID),
       preset:
         Object.hasOwn(JOINER_FIELD_BY_PRESET, preset) ||
-        ADMIN_TICK_PRESETS.has(preset)
+        ADMIN_TICK_PRESETS.has(preset) ||
+        Object.hasOwn(AUTOMATION_BY_PRESET, preset)
           ? preset
           : undefined,
     });

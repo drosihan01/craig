@@ -36,12 +36,21 @@ import type { JoinerField, StepActor } from "@/lib/showcase/contract";
  * them. So it is the shape the auth screens use instead: one column, centred,
  * one job.
  *
- * The three kinds of step are the substance of the design. Their own steps have
- * a box. The company's steps are shown and are visibly not theirs. And the
- * steps waiting on neither side are shown too — quietly, because a plan with
+ * The kinds of step are the substance of the design. Their own steps have a
+ * box. The company's steps are shown and are visibly not theirs. The steps
+ * Craig runs himself say so, and say what came out of them once something has.
+ * And the steps waiting on nobody are shown too — quietly, because a plan with
  * its middle deleted misrepresents both what is happening and how long it goes
  * on for. What none of them may ever do is read as something this person failed
  * to do: they are told whose each one is, in words, next to it.
+ *
+ * Nothing about how an automated step is *going* reaches this screen, and that
+ * is a deliberate omission rather than a gap. A Workspace account that can't be
+ * created because nobody has connected Google, or because the tenant is out of
+ * licences, is real news for the person who can fix it and is nothing but
+ * anxiety here — this person cannot connect anything, cannot buy a licence, and
+ * would be reading a fault report about their own first day. So every state
+ * short of finished reads the same to them: it is being sorted.
  */
 
 const ENDPOINT = "/api/showcase/step";
@@ -74,6 +83,29 @@ export interface PlanStep {
   field?: JoinerField;
   /** When it's due, already a real date. Absent once it's done. */
   dueOn?: string;
+  /**
+   * The whole sentence under an automated step's title, written on the server.
+   *
+   * A sentence rather than the state it was derived from, because the state is
+   * about Google and the sentence is about this person: five run states, one of
+   * which mentions an address they can now use and four of which mean "it's in
+   * hand". Deciding that here would mean the browser holding a record of
+   * somebody's provisioning going wrong in order to render a line that never
+   * mentions it.
+   */
+  detail?: string;
+  /**
+   * What the pill says, on the one step and in the one state where the generic
+   * wording is wrong.
+   *
+   * "Being handled" is the truth for an automated step right up until the
+   * account exists and is sitting there waiting to be signed into. That is the
+   * single moment this screen has something to hand this person, and leaving it
+   * under the same grey pill as the name tag nobody has made would waste it.
+   * Sent for that state and no other, which is why the badge that uses it is
+   * unconditionally an accent one.
+   */
+  badge?: string;
 }
 
 export interface JoinerView {
@@ -319,7 +351,11 @@ function PlanRow({
         />
       )}
 
-      <Marker done={done} current={current} theirs={theirs} />
+      {/* Dashed only for the steps waiting on nobody. An automated one gets the
+          solid ring every other real step gets, because something is genuinely
+          happening on it — dashing it would file it with the work this showcase
+          admits it doesn't do. */}
+      <Marker done={done} current={current} dashed={!step.actor} />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-0.5">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -332,7 +368,12 @@ function PlanRow({
           >
             {step.title}
           </h3>
-          <StepBadge done={done} current={current} actor={step.actor} />
+          <StepBadge
+            done={done}
+            current={current}
+            actor={step.actor}
+            label={step.badge}
+          />
 
           {/* Beside the title, quietly. A deadline on somebody's first week
               should read as information about the plan, not as pressure — so
@@ -345,7 +386,14 @@ function PlanRow({
           )}
         </div>
 
-        {done ? (
+        {/* Craig's steps carry their own line, finished or not, and it comes
+            first because it is the only one written for the state the step is
+            actually in. The branches below are about a step being done or being
+            somebody's — neither of which is the question an automated step
+            raises, which is what has come of it. */}
+        {step.detail ? (
+          <p className="text-sm text-text-muted">{step.detail}</p>
+        ) : done ? (
           <p className="text-sm text-text-muted">
             {step.answer ? (
               <>
@@ -387,17 +435,16 @@ function PlanRow({
   );
 }
 
-/** The dot in the left rail. Dashed when the step is somebody else's, which is
-    the one difference somebody scanning the column will read without being
-    told. */
+/** The dot in the left rail. Dashed when nobody is doing the step, which is the
+    one difference somebody scanning the column will read without being told. */
 function Marker({
   done,
   current,
-  theirs,
+  dashed,
 }: {
   done: boolean;
   current: boolean;
-  theirs: boolean;
+  dashed: boolean;
 }) {
   return (
     <span
@@ -406,8 +453,8 @@ function Marker({
         "relative z-10 mt-0.5 flex size-[27px] shrink-0 items-center justify-center rounded-full border bg-surface",
         done && "border-transparent bg-success-subtle text-success",
         !done && current && "border-accent bg-accent-subtle",
-        !done && !current && theirs && "border-border",
-        !done && !current && !theirs && "border-dashed border-border",
+        !done && !current && !dashed && "border-border",
+        !done && !current && dashed && "border-dashed border-border",
       )}
     >
       {done ? (
@@ -423,10 +470,14 @@ function StepBadge({
   done,
   current,
   actor,
+  label,
 }: {
   done: boolean;
   current: boolean;
   actor?: StepActor;
+  /** An automated step's own wording. Ignored once the step is finished, where
+      "Done" is the only thing worth saying and is the same for everybody. */
+  label?: string;
 }) {
   if (done) {
     return (
@@ -442,6 +493,18 @@ function StepBadge({
       </Badge>
     );
   }
+  if (label) {
+    /* Accent, because the only time an automated step overrides its badge is
+       the moment it has something for this person: an address that exists and a
+       password sitting in their inbox. A neutral pill there would put the one
+       actionable thing on the screen in the same grey as the six things that
+       aren't. */
+    return (
+      <Badge tone="accent" size="sm">
+        {label}
+      </Badge>
+    );
+  }
   if (actor === "joiner") {
     return (
       <Badge tone="neutral" size="sm">
@@ -449,12 +512,15 @@ function StepBadge({
       </Badge>
     );
   }
-  /* Both of the kinds that are not theirs get a badge that says so without
-     saying they are late. "Being handled" is the truth for the company's own
-     steps; the plainer one covers work neither side does from here. */
+  /* The kinds that are not theirs get a badge that says so without saying they
+     are late. "Being handled" is the truth for the company's own steps and for
+     Craig's — from where this person is sitting those are the same fact, and
+     "an automated integration is provisioning your account" is a distinction
+     that serves the product rather than the reader. The plainer one covers work
+     neither side does from here. */
   return (
     <Badge tone="neutral" size="sm">
-      {actor === "admin" ? "Being handled" : "On the plan"}
+      {actor === "admin" || actor === "craig" ? "Being handled" : "On the plan"}
     </Badge>
   );
 }

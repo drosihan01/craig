@@ -58,7 +58,7 @@ export default async function JoinerHomePage() {
       ? readableDate(joiner.startDate)
       : null,
     steps: joiner.steps.map((step) =>
-      toPlanStep(step, step.id === currentId, joiner.startDate),
+      toPlanStep(step, step.id === currentId, joiner),
     ),
     done: progress.done,
     total: progress.total,
@@ -84,8 +84,10 @@ export default async function JoinerHomePage() {
 function toPlanStep(
   step: Joiner["steps"][number],
   current: boolean,
-  startDate: string,
+  joiner: Joiner,
 ): PlanStep {
+  const { startDate } = joiner;
+
   /* Resolved here, where the start date is, and formatted here for the reason
      every other date on this page is: an ISO instant formatted during render
      is formatted twice in two timezones, which is a hydration mismatch and a
@@ -104,6 +106,8 @@ function toPlanStep(
         })()
       : undefined;
 
+  const automated = step.actor === "craig" ? craigWords(step, joiner) : null;
+
   return {
     id: step.id,
     title: step.title,
@@ -112,6 +116,63 @@ function toPlanStep(
     answer: step.value ? readableAnswer(step) : undefined,
     field: current ? step.field : undefined,
     dueOn,
+    detail: automated?.detail,
+    badge: automated?.badge,
+  };
+}
+
+/**
+ * An automated step, in the only two things this person needs to know about it.
+ *
+ * Five run states collapse to three sentences here, and the collapsing is the
+ * design rather than a shortcut. Waiting, running and failed are one sentence
+ * — it is being sorted — because from this chair they are the same fact: an
+ * account they have not got yet, that somebody else is responsible for. The
+ * fault that separates them is real and belongs on the admin's screen, where
+ * somebody can connect Google Workspace or buy a licence. Putting it here would
+ * hand a person on their first week a problem report about their own job, with
+ * no button on it.
+ *
+ * The two states that get their own words are the two where something has
+ * actually changed for them: an address that now exists and a password waiting
+ * in their inbox, and then the day they used it.
+ *
+ * Nothing in `run.message` is ever printed. That field is written for whoever
+ * can act on it and names environment variables, consent screens and Google
+ * console pages — a vocabulary that has no business on this screen even when it
+ * would technically be accurate.
+ */
+function craigWords(
+  step: Joiner["steps"][number],
+  joiner: Joiner,
+): { detail: string; badge?: string } {
+  const run = step.run;
+  const seat = run?.seatEmail;
+
+  if (run?.state === "done") {
+    /* The address, plainly, on a row that has already gone green. The date is
+       the same one the tick carries, so no second formatting rule. */
+    return {
+      detail: seat
+        ? `${seat} — that's your address here now.`
+        : `Your ${joiner.company} account is set up.`,
+    };
+  }
+
+  if (run?.state === "awaiting" && seat) {
+    return {
+      badge: "Check your email",
+      /* Their personal address is named on purpose. This message went to the
+         inbox they were hired through rather than to the new one — which they
+         cannot read yet, and which is the confusion this sentence exists to
+         head off before somebody spends ten minutes looking in the wrong
+         place. */
+      detail: `Your address is ${seat}. The password is in the email we sent to ${joiner.email} — sign in once, pick your own password, and this one's finished.`,
+    };
+  }
+
+  return {
+    detail: `Your ${joiner.company} email account is being set up. Nothing here for you to do — I'll email you the moment it's ready.`,
   };
 }
 

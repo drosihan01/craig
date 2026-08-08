@@ -280,8 +280,147 @@ export const JOINER_FIELD_BY_PRESET: Record<string, JoinerField> = {
  */
 export const ADMIN_TICK_PRESETS = new Set<string>(["name-tag"]);
 
+/**
+ * The things Craig does himself, keyed by the preset that produces them.
+ *
+ * The third kind of step, and the first one in this product that is work rather
+ * than bookkeeping. A joiner step waits for somebody to type; an admin step
+ * waits for somebody to say they did it; this one waits for nobody, because
+ * when the step before it completes Craig goes and does it.
+ *
+ * A map rather than a set, deliberately, and the same shape as
+ * `JOINER_FIELD_BY_PRESET` for the same reason: a preset is the admin's choice
+ * of block and the automation is what that choice *means* here, and the two are
+ * not the same list. Two presets could one day want the same automation with
+ * different wording, and a set would have collapsed that into "is it one of the
+ * automated ones" — which is the question, right up until somebody adds the
+ * second entry.
+ */
+export type StepAutomation = "google-workspace";
+
+export const AUTOMATION_BY_PRESET: Record<string, StepAutomation> = {
+  "google-workspace": "google-workspace",
+};
+
 /** Who a step is waiting on. Absent means neither — nothing to do here yet. */
-export type StepActor = "joiner" | "admin";
+export type StepActor = "joiner" | "admin" | "craig";
+
+/**
+ * Where an automated step has got to.
+ *
+ * Done and not-done is enough for a step a person completes, because a person
+ * completing something is instantaneous from the outside — they either typed it
+ * or they didn't. A step that reaches across the internet is not: it can be
+ * queued behind something, in flight, finished, or broken, and every one of
+ * those is a different sentence on both screens.
+ *
+ * `awaiting` is the state the other four don't cover and the one this feature
+ * turns on. The account exists — that happened in a second, weeks before
+ * anybody uses it — but an account nobody has signed into is not a person with
+ * an email address. Google says so itself, in `agreedToTerms`, and this is the
+ * state we sit in while we wait for that to flip. Folding it into `done` would
+ * mean the step reported itself complete at the moment it was least true, and
+ * folding it into `running` would claim something is happening when nothing is.
+ */
+export type RunState =
+  /** Not attempted, or attempted and there was nothing to attempt it with. */
+  | "waiting"
+  /** Claimed. Something is in flight, or was when the process last spoke. */
+  | "running"
+  /** The seat exists and nobody has taken it yet. */
+  | "awaiting"
+  /** They signed in and accepted. This is what completes the step. */
+  | "done"
+  /** It broke, and somebody has to do something about it. */
+  | "failed";
+
+/**
+ * Why a run is where it is, in the only three flavours the screens branch on.
+ *
+ * Named for who has to act rather than for what Google said, because that is
+ * the distinction the interface is built on and the one it is easiest to get
+ * wrong. `src/lib/google/result.ts` makes the argument at length: two of its
+ * failure reasons are not failures at all, and a screen that paints them red is
+ * lying about a product that spends most of its life in them.
+ *
+ * The Google reason itself is deliberately *not* stored. It would be a second
+ * vocabulary, imported from a `server-only` module into a record that a client
+ * component reads — and the three cases below are the whole of what anybody
+ * renders differently. The specifics travel in `message`, which is already a
+ * sentence written for a person.
+ */
+export type RunProblem =
+  /** Nobody has connected Google Workspace. Calm: it is a to-do, not a fault. */
+  | "not-set-up"
+  /** They connected and it has stopped working. Loud: new starters are stuck. */
+  | "needs-reconnect"
+  /** Google, or we, refused. Loud, and the message says what happened. */
+  | "refused";
+
+/**
+ * What an automated step has done so far, and the record that stops it doing it
+ * twice.
+ *
+ * This is the stored state the whole double-run guard rests on. Nothing here is
+ * derived at read time and nothing here is optimistic: `state` moves to
+ * `running` in the same synchronous turn that decides to run, *before* anything
+ * leaves the process, so a second request arriving a millisecond later reads
+ * `running` and stands down. See `claimAutomatedStep` in `joiners.ts`.
+ *
+ * What is conspicuously absent is the temporary password. It is generated
+ * inside `createUser`, handed to one email, and dropped — see the note on
+ * `CreatedSeat` in `directory.ts`, and the report. Storing it would put a live
+ * credential for somebody's work account in a JSON file on disk, readable by
+ * anything that can read the joiner store, to save an administrator one click
+ * in a console they already have open.
+ */
+export interface StepRun {
+  state: RunState;
+  /**
+   * ISO. When the current attempt claimed the step — the timestamp on the lock.
+   *
+   * Its only job is to tell a run that is happening from a run that stopped
+   * happening without saying so, which is what a process killed mid-flight
+   * leaves behind. A `running` older than a couple of minutes is not running.
+   */
+  startedAt?: string;
+  /** ISO. When it stopped, however it stopped. */
+  endedAt?: string;
+  /** Which kind of stuck this is. Absent on a run that hasn't been tried. */
+  problem?: RunProblem;
+  /**
+   * Safe to show the admin, and never shown to the new starter.
+   *
+   * Written for somebody who can act: which environment variable is missing,
+   * who has to reconnect, that the tenant is out of licences. None of that is
+   * the new starter's business or within their power, so their screen says
+   * their account is being set up and stops there.
+   */
+  message?: string;
+  /**
+   * The address the seat was created at.
+   *
+   * Derived rather than random — first name, surname, the customer's domain —
+   * which is what makes an interrupted run recoverable: the address a lost
+   * attempt would have used can be worked out again and looked up, so "did it
+   * get through?" is a question with an answer rather than a guess.
+   */
+  seatEmail?: string;
+  /** ISO, as Google returned it. */
+  seatCreatedAt?: string;
+  /**
+   * Why the welcome email didn't go, when it didn't.
+   *
+   * Its own field rather than a `failed` state, because the two failures are
+   * not the same size: the account exists and is fine, and only the one copy of
+   * the password is gone. That needs saying loudly to the admin — an
+   * administrator has to reset it in the Google console — without reporting a
+   * seat that was created successfully as a seat that wasn't.
+   */
+  emailProblem?: string;
+  /** ISO. The last time Google was asked whether they'd accepted. */
+  checkedAt?: string;
+}
 
 export interface JoinerStep {
   /** The block's id in the workflow this was taken from. */
@@ -298,6 +437,16 @@ export interface JoinerStep {
   actor?: StepActor;
   /** Only on `actor: "joiner"` steps. Which form they're shown. */
   field?: JoinerField;
+  /** Only on `actor: "craig"` steps. Which job it is Craig goes and does. */
+  automation?: StepAutomation;
+  /**
+   * Only on `actor: "craig"` steps. How far that job has got.
+   *
+   * Optional because it is optional on disk: the store predates this and holds
+   * people invited before automated steps existed. Everything that reads it
+   * treats absent as `waiting`, which is what those steps have always been.
+   */
+  run?: StepRun;
   /**
    * Days from their first day, copied off the block when they were invited.
    *
@@ -309,7 +458,16 @@ export interface JoinerStep {
   due?: number;
   /** What they gave, once they've given it. */
   value?: string;
-  /** ISO. Set together with `value`, and the only record that it happened. */
+  /**
+   * ISO. The one field that means "this step is finished", whoever finished it.
+   *
+   * Set with `value` when the new starter answers, on its own when the admin
+   * ticks, and together with `run.state: "done"` when Google says the person
+   * has accepted their seat. Deliberately still the single thing `progressOf`
+   * and both screens read: a third kind of step arriving with a third way of
+   * being complete is how a progress bar starts disagreeing with the list under
+   * it.
+   */
   completedAt?: string;
 }
 

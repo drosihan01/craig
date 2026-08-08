@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AppShell,
   Avatar,
@@ -47,6 +48,12 @@ import { renderEmail } from "@/lib/email/html";
 import { SECTIONS } from "@/app/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
 import { ShowcaseReset } from "@/components/sandbox/showcase-reset";
+import { GoogleConnect } from "@/components/sandbox/google-connect";
+import {
+  CONNECT_OUTCOME_PARAM,
+  SANDBOX_GOOGLE_TAB,
+  SANDBOX_TAB_PARAM,
+} from "@/lib/showcase/google-outcome";
 import { cn } from "@/lib/cn";
 
 /**
@@ -445,6 +452,7 @@ const SANDBOX_SECTIONS = [
   { value: "docs", label: "Docs" },
   { value: "backend", label: "Backend" },
   { value: "mail", label: "Mail" },
+  { value: SANDBOX_GOOGLE_TAB, label: "Google" },
   { value: "showcase", label: "Showcase" },
 ];
 
@@ -458,8 +466,54 @@ const DEMO_RUNS = [
   { value: "demo-v1", label: "Demo v1", note: "Katalis — mid-story" },
 ];
 
+/** Every section the URL is allowed to open, so `?tab=` can't name one that
+    doesn't exist and leave the page rendering nothing at all. */
+const SECTION_VALUES = new Set([
+  ...SANDBOX_SECTIONS.map((s) => s.value),
+  ...DEMO_RUNS.map((d) => d.value),
+]);
+
 export default function SandboxPage() {
-  const [tab, setTab] = React.useState("home");
+  return (
+    /* useSearchParams needs a boundary, and the fallback is nothing rather
+       than a second copy of the page — see the note on the same pattern in
+       src/app/page.tsx, where rendering the page twice meant neither copy was
+       ever interactive. */
+    <React.Suspense fallback={null}>
+      <SandboxWithParams />
+    </React.Suspense>
+  );
+}
+
+/**
+ * The Google connect flow leaves the site and comes back, so it has to be able
+ * to say where it landed and what happened. Both arrive as query parameters
+ * because a redirect from Google is the only way back in, and a redirect
+ * carries nothing else.
+ */
+function SandboxWithParams() {
+  const params = useSearchParams();
+  const asked = params.get(SANDBOX_TAB_PARAM);
+
+  return (
+    <Sandbox
+      initialSection={asked && SECTION_VALUES.has(asked) ? asked : "home"}
+      googleOutcome={params.get(CONNECT_OUTCOME_PARAM)}
+    />
+  );
+}
+
+function Sandbox({
+  initialSection,
+  googleOutcome,
+}: {
+  initialSection: string;
+  googleOutcome: string | null;
+}) {
+  /* The URL only chooses where this opens. After that the section is ordinary
+     state, so switching tabs doesn't push history entries nobody wants to walk
+     back through. */
+  const [tab, setTab] = React.useState(initialSection);
   /* Ticking a box is front-end state and nothing else — the same gap this list
      is mostly about. Said out loud on the Home tab rather than hidden. */
   const [done, setDone] = React.useState<ReadonlySet<string>>(new Set());
@@ -517,6 +571,9 @@ export default function SandboxPage() {
           {tab === "backend" && <BackendTab />}
           {tab.startsWith("demo") && <DemoTab run={tab} />}
           {tab === "showcase" && <ShowcaseReset />}
+          {tab === SANDBOX_GOOGLE_TAB && (
+            <GoogleConnect outcome={googleOutcome} />
+          )}
           {tab === "mail" && <MailTab />}
         </div>
       </div>

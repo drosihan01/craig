@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { currentJoiner } from "@/lib/showcase/current-joiner";
+import { fireNextAutomatedStep } from "@/lib/showcase/automation";
 import { completeStep } from "@/lib/showcase/joiners";
 import { rateLimit } from "@/lib/showcase/rate-limit";
 
@@ -28,6 +29,14 @@ import { rateLimit } from "@/lib/showcase/rate-limit";
  *    worth catching on the way in rather than in three weeks.
  *
  * Limited, and deliberately not against the model budget — see `spend` below.
+ *
+ * Since Craig got steps of his own, this is also where the workflow *moves*.
+ * Answering a step can unblock an automated one, and if it does, that step is
+ * claimed here and run after the response — see `fireNextAutomatedStep`. The
+ * ordering matters and is the whole reason it isn't simply awaited: this person
+ * is on their phone finishing a form, and making them hold the connection open
+ * while somebody else's API creates a mailbox would turn a hundred-millisecond
+ * save into however long Google feels like taking.
  */
 
 /** Longer than any name, and far longer than a date. */
@@ -170,6 +179,17 @@ export async function POST(request: Request) {
        answering honestly rather than reporting a save that didn't happen. */
     return refuse("That didn't save. Reload the page and try once more.", 409);
   }
+
+  /* The workflow moving, on the record as it is *after* the answer landed —
+     `updated` rather than `joiner`, because whether the next step is due is
+     decided by the completion that just happened, and the copy read at the top
+     of this handler predates it by a few lines and one write.
+
+     The claim is taken here, synchronously, which is what makes a double-submit
+     harmless: a second request arriving while this one is still in the handler
+     finds the step already claimed and does nothing. Only the slow half is
+     deferred. */
+  fireNextAutomatedStep(updated, stepId, after);
 
   /* The whole record back, not just an acknowledgement. It is what the screen
      is a view of, so a caller that wants to show the answer it just saved can

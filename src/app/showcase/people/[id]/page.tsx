@@ -1,5 +1,9 @@
 import { currentUser, requireUser } from "@/lib/showcase/current-user";
-import { getJoiner, progressOf } from "@/lib/showcase/joiners";
+import {
+  getJoiner,
+  isRunInterrupted,
+  progressOf,
+} from "@/lib/showcase/joiners";
 import type { Joiner } from "@/lib/showcase/contract";
 import { NoPerson, PersonProgress } from "./person-progress";
 
@@ -95,17 +99,26 @@ export default async function ShowcasePersonPage(
      one, and claiming a step is waiting on somebody when the record doesn't say
      who would be exactly the invented state this screen exists to avoid.
 
-     `theirs` comes along so the column can split the outstanding work between
-     the two people without deriving "which steps are whose" a second time. The
-     admin's own share is the subtraction — actionable steps are the joiner's
-     plus the admin's and nothing else — so there is one rule about who owns
-     what, and it lives in `progressOf`. */
+     The three shares come along so the column can split the outstanding work
+     without deriving "which steps are whose" a second time. Each is counted
+     rather than inferred from the others, so there is one rule about who owns
+     what and it lives in `progressOf`. */
   const next = progress.overall.next?.actor
     ? {
         title: progress.overall.next.title,
         actor: progress.overall.next.actor,
       }
     : null;
+
+  /* Worked out here rather than in the card, because it is a comparison against
+     the current time and a component that made it while rendering would make it
+     twice — once on the server and once in the browser a beat later. React
+     calls that a hydration mismatch; a person reads it as a status that changes
+     when they look away. The same reason every date on this page is already
+     words by the time it is a prop. */
+  const interrupted = joiner.steps
+    .filter((step) => isRunInterrupted(step))
+    .map((step) => step.id);
 
   return (
     <PersonProgress
@@ -120,13 +133,22 @@ export default async function ShowcasePersonPage(
         workflowName: joiner.workflowName,
         invitedAt: joiner.invitedAt,
         steps: joiner.steps,
+        interrupted,
       }}
       progress={{
         done: progress.overall.done,
         total: progress.overall.total,
         finished: progress.overall.finished,
         next,
-        theirs: { done: progress.done, total: progress.total },
+        /* Three shares rather than one and a subtraction. The column used to
+           work out the reader's own half by taking the new starter's away from
+           the total, which was exactly right with two kinds of step and became
+           wrong the day there were three: every account Craig was still
+           creating would have been counted as work sitting on the admin's desk,
+           in amber, with nothing they could do about it. */
+        theirs: progress.overall.joiner,
+        mine: progress.overall.admin,
+        craig: progress.overall.craig,
       }}
     />
   );

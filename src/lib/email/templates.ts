@@ -117,6 +117,23 @@ export const MERGE_FIELDS: MergeField[] = [
   { token: "step", label: "The step it's about", example: "Sign contract" },
   { token: "owner", label: "Who owns the step", example: PEOPLE.jason.name },
   { token: "link", label: "Where it points", example: "craig.app/s/8f2a" },
+  /**
+   * The two the Workspace account email needs, and the only two that describe
+   * something a step *made* rather than something somebody typed.
+   *
+   * They are in the vocabulary rather than passed straight into `render` so the
+   * preview resolves them like every other token — a template holding a literal
+   * `{{work_email}}` in the editor is a template whose author can't see what it
+   * says. `unknownTokens` reads the same list, so leaving them out would have
+   * flagged a correct template as broken.
+   *
+   * The password's example is deliberately a shape rather than a plausible
+   * secret. It is rendered on a preview screen and stored in nothing, and a
+   * fixture that looked like a real credential is a fixture somebody eventually
+   * tries.
+   */
+  { token: "work_email", label: "Their new work address", example: NEW_HIRE.email },
+  { token: "temporary_password", label: "One-time password", example: "example-password-not-a-real-one" },
 ];
 
 export type Audience = "starter" | "owner" | "admin";
@@ -187,6 +204,50 @@ Your own checklist is below. You don't have to finish it in one sitting: it keep
 
 If something on there doesn't look right, {{sender}} is the person to ask.`,
     cta: "Open your checklist",
+  },
+  /**
+   * The one Craig sends himself, at the end of a step he ran himself.
+   *
+   * Google creates the account and tells nobody — the Directory API sends no
+   * welcome mail, has no option to, and the person it belongs to has no way of
+   * finding out it exists. So this is not a courtesy on top of the automation;
+   * it is the half of the automation that reaches a human, and without it the
+   * step creates a mailbox nobody ever opens.
+   *
+   * Addressed to their *personal* inbox, which is the only address that works:
+   * the whole point of the message is that they can't read the new one yet.
+   *
+   * Same voice as the invitation, for the same reason. This person agreed to
+   * work at {{company}}; they have never heard of Craig and never will again,
+   * and a message about their new work account arriving from a third-party tool
+   * reads as phishing rather than as their employer being organised. Craig gets
+   * the one watermark in the footer that every template here gets.
+   *
+   * The password is in the prose rather than behind the button, and that is the
+   * one place this template departs from the invitation's rule about links.
+   * There is nothing to click through to — the credential *is* the message —
+   * and a "collect your password" link would be one more page between somebody
+   * and their first morning, sitting on a URL that would itself have to be a
+   * secret.
+   */
+  {
+    id: "workspace-account",
+    name: "Workspace account",
+    trigger: "The Google Workspace block, once the account actually exists",
+    audience: "starter",
+    subject: "Your {{company}} email address",
+    preheader: "Your work address and a one-time password to get in with.",
+    body: `Hi {{first_name}},
+
+Your {{company}} account is set up. This is the address everything else here runs on, so it's worth signing in before your first day rather than on it.
+
+Your address: {{work_email}}
+Temporary password: {{temporary_password}}
+
+You'll be asked to choose your own password the first time you sign in, and this one stops working the moment you do. Nobody here can see what you pick.
+
+If it won't let you in, reply to this — it reaches a person.`,
+    cta: "Sign in and pick a password",
   },
   {
     id: "step-assigned",
