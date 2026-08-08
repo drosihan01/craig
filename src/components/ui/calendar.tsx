@@ -1,8 +1,20 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { CalendarToday, ChevronLeft, ChevronRight } from "./icons";
 import { cn } from "@/lib/cn";
+
+/* Mount detection without setState-in-an-effect: the server snapshot is false
+   and the client's is true, so the portal only renders after hydration. */
+const neverChanges = () => () => {};
+function useMounted() {
+  return React.useSyncExternalStore(
+    neverChanges,
+    () => true,
+    () => false,
+  );
+}
 
 /**
  * Month grid and a date input built on it. No date library: onboarding only
@@ -55,7 +67,11 @@ function buildGrid(month: Date, weekStartsOn: number) {
   start.setDate(first.getDate() - offset);
 
   return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const d = new Date(
+      start.getFullYear(),
+      start.getMonth(),
+      start.getDate() + i,
+    );
     return { date: d, outside: d.getMonth() !== month.getMonth() };
   });
 }
@@ -232,11 +248,81 @@ export function DatePicker({
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const popoverRef = React.useRef<HTMLDivElement>(null);
+  const mounted = useMounted();
+
+  /**
+   * Position the month, in the document rather than in the field.
+   *
+   * It used to be absolutely positioned inside this component, which works
+   * everywhere except the one place it matters most: a dialog panel is
+   * `overflow-hidden` so its rounded corners clip its contents, and a calendar
+   * hanging below the last field of a form got cut off at the panel's edge. Any
+   * scrolling ancestor does the same. So it goes to the body, and the price of
+   * that is having to place it by hand.
+   *
+   * Written straight to the node's style in a layout effect rather than held in
+   * state: measuring and then re-rendering is a second pass with the popover
+   * visible at the wrong coordinates for one frame, and `PromptBar` sizes its
+   * textarea the same way for the same reason.
+   */
+  React.useLayoutEffect(() => {
+    if (!open) return;
+
+    function place() {
+      const trigger = triggerRef.current;
+      const el = popoverRef.current;
+      if (!trigger || !el) return;
+
+      const rect = trigger.getBoundingClientRect();
+      const { offsetHeight: h, offsetWidth: w } = el;
+      const GAP = 6;
+      const EDGE = 8;
+
+      /* Above when there isn't room below and there is room above — a month
+         is tall, and the field it belongs to is usually near the bottom of
+         whatever contains it. */
+      const roomBelow = window.innerHeight - rect.bottom;
+      const flip = roomBelow < h + GAP && rect.top > roomBelow;
+
+      el.style.top = `${
+        flip
+          ? Math.max(EDGE, rect.top - h - GAP)
+          : Math.min(rect.bottom + GAP, window.innerHeight - h - EDGE)
+      }px`;
+      /* Clamped to the viewport so a field near the right edge doesn't push
+         the month off it. */
+      el.style.left = `${Math.min(
+        Math.max(EDGE, rect.left),
+        window.innerWidth - w - EDGE,
+      )}px`;
+    }
+
+    place();
+    /* Capture, so a scroll inside any ancestor moves it and not just a scroll
+       of the window. An open popover left behind by its field is worse than
+       one that closes. */
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
 
   React.useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      /* Both, now that the month is no longer a descendant of the field —
+         checking only the root would treat every click on a date as a click
+         outside and close before the click landed. */
+      if (
+        !rootRef.current?.contains(target) &&
+        !popoverRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -286,21 +372,30 @@ export function DatePicker({
         <span className="truncate">{label}</span>
       </button>
 
-      {open && (
-        <div className="absolute left-0 top-full z-30 mt-1.5 rounded-lg border border-border bg-surface-raised shadow-e3 motion-safe:animate-[dialog-in_140ms_cubic-bezier(0.32,0.72,0,1)]">
-          <Calendar
-            value={value}
-            min={min}
-            max={max}
-            locale={locale}
-            onChange={(d) => {
-              onChange?.(d);
-              setOpen(false);
-              triggerRef.current?.focus();
-            }}
-          />
-        </div>
-      )}
+      {open &&
+        mounted &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            /* `fixed`, and above the dialog's own layer — it is now a sibling
+               of the dialog rather than a child, so it no longer inherits a
+               stacking context that would keep it on top. */
+            className="fixed z-[60] rounded-lg border border-border bg-surface-raised shadow-e3 motion-safe:animate-[dialog-in_140ms_cubic-bezier(0.32,0.72,0,1)]"
+          >
+            <Calendar
+              value={value}
+              min={min}
+              max={max}
+              locale={locale}
+              onChange={(d) => {
+                onChange?.(d);
+                setOpen(false);
+                triggerRef.current?.focus();
+              }}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

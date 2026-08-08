@@ -629,12 +629,26 @@ export const NAV_TREE_ITEM_PROPS: PropDoc[] = [
   {
     name: "icon",
     type: "ReactNode",
-    description: "Boxed, so a column of them lines up under the rule.",
+    description:
+      "Drawn plain, at a fixed width so a column of them lines up. No colour of its own — it takes the row's, so it lifts on hover and on the row you're on.",
   },
   {
     name: "current",
     type: "boolean",
-    description: "Marks the page you're on. Sets aria-current.",
+    description:
+      "Marks the page you're on. Sets aria-current and fills the whole row, not just the icon — a mark confined to one square loses to the hover fill beside it.",
+  },
+  {
+    name: "disabled",
+    type: "boolean",
+    description:
+      "A room that exists but isn't open yet. Renders a span rather than a link or a button: there is no href to middle-click, nothing to tab to, and no press that could do nothing. Takes no fill, so the three states read as three.",
+  },
+  {
+    name: "reason",
+    type: "string",
+    description:
+      "Why it's shut, shown on hover and to assistive tech. Only read when disabled, and worth passing every time — a row that just declines to be pressed is a bug from the outside.",
   },
   {
     name: "trailing",

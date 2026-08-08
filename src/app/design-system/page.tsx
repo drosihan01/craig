@@ -1142,7 +1142,7 @@ export default function DesignSystemPage() {
       >
         <Demo
           title="A real nav"
-          note="flat items, an open group, a collapsed one, a count — every nav in this product is some arrangement of these"
+          note="flat items, an open group, a collapsed one, a count, a shut row — every nav in this product is some arrangement of these"
           className="items-stretch"
         >
           <NavTree className="w-64 rounded-lg border border-border bg-surface p-2">
@@ -1156,6 +1156,12 @@ export default function DesignSystemPage() {
                   12
                 </Badge>
               }
+            />
+            <NavTreeItem
+              label="Equipment"
+              icon={<LaptopMac />}
+              disabled
+              reason="Nothing to hand out until a workflow asks for it"
             />
             <NavTreeGroup label="Discovery" icon={<Search />}>
               <NavTreeItem label="Evidence" icon={<UploadFile />} />
@@ -1262,10 +1268,44 @@ export default function DesignSystemPage() {
           </p>
           <p className="mt-2">
             <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              disabled
+            </code>{" "}
+            drops the element instead of styling it: no{" "}
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              Link
+            </code>
+            , no button, just a{" "}
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              span
+            </code>{" "}
+            with{" "}
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              aria-disabled
+            </code>
+            , out of the tab order and with no href left in the markup for a
+            middle-click to find. Pass{" "}
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              reason
+            </code>{" "}
+            with it every time — it goes in the{" "}
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              title
+            </code>{" "}
+            and, off-screen, into the row&apos;s own text, so the row says what
+            would unlock it rather than only refusing. Use this where the place
+            exists but the account hasn&apos;t earned it yet; a row that will
+            never work for this person is a row to leave out.
+          </p>
+          <p className="mt-2">
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
               current
             </code>{" "}
-            is the only styled state. Hover is a transition, not a state — a nav
-            where hover looks like selection means you can never tell,
+            and{" "}
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
+              disabled
+            </code>{" "}
+            are the only styled states. Hover is a transition, not a state — a
+            nav where hover looks like selection means you can never tell,
             mid-mouse-move, which page you&apos;re actually on. The{" "}
             <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-xs">
               icon

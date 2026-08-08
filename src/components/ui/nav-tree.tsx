@@ -101,20 +101,48 @@ export function NavRailItem({
   icon,
   href,
   current,
+  disabled,
+  reason,
   onClick,
 }: {
   label: string;
   icon: React.ReactNode;
   href?: string;
   current?: boolean;
+  /** Somewhere the product has that this account can't get to yet. */
+  disabled?: boolean;
+  /** Why it's shut. Only read when `disabled`. */
+  reason?: string;
   onClick?: () => void;
 }) {
   const classes = cn(
     "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors [&_svg]:size-[1.125rem]",
-    current
-      ? "bg-accent-subtle text-accent-subtle-fg"
-      : "text-text-muted hover:bg-surface-hover hover:text-text",
+    disabled
+      ? "cursor-not-allowed text-text-subtle opacity-60"
+      : current
+        ? "bg-accent-subtle text-accent-subtle-fg"
+        : "text-text-muted hover:bg-surface-hover hover:text-text",
   );
+
+  /* A shut rail item is a span, not a dimmed link, for the same reason the
+     expanded row is — see `NavTreeItem` below. It matters more here, if
+     anything: the rail and the panel are one nav at two widths, so a rail that
+     still navigated would mean collapsing the panel was a way round a row that
+     had just refused you.
+
+     The strip shows no text, so the label and the reason both go in `title`
+     for the cursor and in an off-screen span for a screen reader. `aria-label`
+     is what the enabled branch uses and it can't be reused: it is prohibited
+     on an element with no role, and this one deliberately has none. */
+  if (disabled) {
+    const described = reason ? `${label} — ${reason}` : label;
+    return (
+      <span aria-disabled="true" title={described} className={classes}>
+        {icon}
+        <span className="sr-only">{described}</span>
+      </span>
+    );
+  }
 
   if (href) {
     return (
@@ -149,6 +177,29 @@ export interface NavTreeItemProps {
   icon?: React.ReactNode;
   /** Marks the row as the page you're on. */
   current?: boolean;
+  /**
+   * A place the product has that this account can't go to yet.
+   *
+   * The alternative is dropping the row until it works, and that is what this
+   * replaces: a nav that grows items is a nav you have to re-read, and the
+   * person never finds out what the product contains until it decides to tell
+   * them. A shut row says both things at once — this exists, and it isn't
+   * yours yet — which is also the honest shape of an empty account.
+   *
+   * Wins over `current`, on the grounds that a row can't be the page you're on
+   * and a page you can't reach. If both arrive, something upstream is confused
+   * and the safe reading is the one that refuses.
+   */
+  disabled?: boolean;
+  /**
+   * Why it's shut, in the product's own words. Only read when `disabled`.
+   *
+   * Optional, and worth passing every time: a row that just declines to be
+   * pressed is a bug from the outside, and the reason is what turns it into a
+   * condition somebody can meet. `title` rather than the `Tooltip` component
+   * for the reason given above `NavRailItem` — nav panels clip horizontally.
+   */
+  reason?: string;
   onClick?: () => void;
   trailing?: React.ReactNode;
   className?: string;
@@ -159,6 +210,8 @@ export function NavTreeItem({
   href,
   icon,
   current,
+  disabled,
+  reason,
   onClick,
   trailing,
   className,
@@ -174,9 +227,17 @@ export function NavTreeItem({
 
           No colour of its own either: it inherits the row's, so it lifts with
           the label on hover and on the current row instead of staying muted
-          against a highlight. */}
+          against a highlight. Shut, it drops further than the label does: one
+          step of grey is a difference you'd only notice with an enabled row
+          beside it, and the welcome screen shows two shut rows and nothing
+          else. */}
       {icon && (
-        <span className="flex size-6 shrink-0 items-center justify-center [&_svg]:size-4">
+        <span
+          className={cn(
+            "flex size-6 shrink-0 items-center justify-center [&_svg]:size-4",
+            disabled && "opacity-60",
+          )}
+        >
           {icon}
         </span>
       )}
@@ -195,14 +256,44 @@ export function NavTreeItem({
      row — the design system's own section nav is `bg-accent-subtle` with
      `accent-subtle-fg`, and has been all along. A neutral step was tried here
      and was simply harsher: a grey fill on a warm canvas reads as a disabled
-     band, where the accent tint reads as a place. */
+     band, where the accent tint reads as a place.
+
+     Which is why the shut row takes no fill at all. It's the only state with
+     nothing drawn behind it and nothing under the cursor, so the three read as
+     three: here, available, and not yours yet. Giving it the grey fill that
+     was rejected above would be technically apt and would put more weight on
+     the row you can't use than on the one you're on. */
   const classes = cn(
     "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-    current
-      ? "bg-accent-subtle font-medium text-accent-subtle-fg"
-      : "text-text-muted hover:bg-surface-hover hover:text-text",
+    disabled
+      ? "cursor-not-allowed text-text-subtle"
+      : current
+        ? "bg-accent-subtle font-medium text-accent-subtle-fg"
+        : "text-text-muted hover:bg-surface-hover hover:text-text",
     className,
   );
+
+  /* A span, so there is nothing to press and nothing to tab to. The two
+     obvious versions of this state both miss. A `Link` painted grey is the bug
+     this exists to prevent — it still navigates, to the exact empty page the
+     row is refusing you, and it leaves an href in the markup for a
+     middle-click or a screen reader's list of links to find. A `button` with
+     `disabled` on it doesn't navigate, but it is still a control, and a
+     control on a row with nothing to do is a promise of a press that will
+     never do anything. Dropping the element is what makes the row honest.
+
+     `aria-disabled` is the marker, and it is deliberately not the only one: on
+     an element with no role, assistive tech is free to ignore it. So the
+     reason is also rendered off-screen, which means the row reads as unusable
+     from its words rather than from an attribute anyone might skip. */
+  if (disabled) {
+    return (
+      <span aria-disabled="true" title={reason} className={classes}>
+        {inner}
+        {reason && <span className="sr-only">{reason}</span>}
+      </span>
+    );
+  }
 
   if (href) {
     return (

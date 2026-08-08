@@ -48,6 +48,11 @@ export function WelcomeScreen({ user }: { user: Session }) {
   const { gaps, facts, workflows } = useShowcase();
 
   const firstName = user.name.split(" ")[0];
+  /* Sign-up asked for it, so use it. "Tell me a little about your company" to
+     somebody who typed the company's name into the form two screens ago reads
+     as a product that wasn't listening. Falls back for a session minted before
+     the field existed, which can't be edited after the fact. */
+  const company = user.company?.trim();
 
   const started = messages.length > 0;
   const ready = !busy && readyToDraft(messages);
@@ -69,8 +74,10 @@ export function WelcomeScreen({ user }: { user: Session }) {
   const draft =
     workflows.length > before ? workflows[workflows.length - 1] : null;
 
-  /* Not `draft`. This one asks whether there is anywhere else in the product
-     worth going, and a workflow from last week counts for that. */
+  /* Not `draft`. That one is this conversation's output; this one asks whether
+     the two rooms in the nav have anything in them, and a workflow from last
+     week counts for that — coming back to write a second workflow can't shut
+     doors you have already walked through. */
   const drafted = workflows.length > 0;
 
   /**
@@ -133,27 +140,33 @@ export function WelcomeScreen({ user }: { user: Session }) {
          about somebody who has told us their name and nothing else. */
       account={{ name: user.name, email: user.email }}
       fill
-      navRail={<ShowcaseNavRail />}
+      navRail={<ShowcaseNavRail disabled={!drafted} />}
       nav={
-        /* The nav appears once there's somewhere to go. On a brand-new account
-           Workflows and People are both empty, and offering them would be
-           offering two dead ends — but the moment Craig drafts something, this
-           screen stops being the only place you can be, and without it you're
-           stranded on it. */
-        drafted ? (
-          <ShowcaseNav>
-            <Stepper steps={steps} compact />
-          </ShowcaseNav>
-        ) : (
-          <div className="flex flex-col gap-5">
-            <Stepper steps={steps} compact />
-            <Separator />
-            <p className="px-1 text-xs leading-relaxed text-text-subtle">
-              Craig drafts, you edit. Nothing runs against anyone until you
-              publish it and give somebody a seat.
-            </p>
-          </div>
-        )
+        /* The nav is always here; on a brand-new account both rows are shut.
+           It used to be hidden outright, on the argument that Workflows and
+           People are empty until Craig drafts something and offering two dead
+           ends is worse than offering nothing. The dead ends are still real —
+           a shut row is how they're answered now. Hiding them meant the first
+           thing this product showed a new person was a screen with no product
+           around it, and then two items arriving from nowhere the moment they
+           looked away. Shut, the column says what's here and what earns it,
+           and the only thing that changes later is that the rows start
+           working. */
+        <ShowcaseNav disabled={!drafted}>
+          <Stepper steps={steps} compact />
+          {/* Retired once there's a workflow. It's an answer to "what is
+              about to happen to me", which stops being the question the
+              moment something has. */}
+          {!drafted && (
+            <>
+              <Separator />
+              <p className="px-1 text-xs leading-relaxed text-text-subtle">
+                Craig drafts, you edit. Nothing runs against anyone until you
+                publish it and give somebody a seat.
+              </p>
+            </>
+          )}
+        </ShowcaseNav>
       }
       /* Held back until there's a conversation. At zero answers the meter is
          honest but it's addressed to nobody — a checklist of things you haven't
@@ -176,7 +189,8 @@ export function WelcomeScreen({ user }: { user: Session }) {
           <header className="flex shrink-0 flex-col gap-2 pb-8">
             <CraigMark className="size-8 text-accent" />
             <h1 className="text-3xl font-semibold tracking-[-0.02em]">
-              Hello {firstName} — tell me a little about your company.
+              Hello {firstName} — tell me a little about{" "}
+              {company ?? "your company"}.
             </h1>
             <p className="text-md leading-relaxed text-text-muted">
               There&apos;s nothing set up yet and nothing for me to read. What

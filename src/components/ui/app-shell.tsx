@@ -187,10 +187,6 @@ export function AppShell({
   title?: React.ReactNode;
   nav?: React.ReactNode;
   aside?: React.ReactNode;
-  /** Eyebrow above the aside. Omit when the panel's own content already says
-      what it is — a heading that repeats the thing under it is just a line of
-      shouting. The drawer still gets a name, since a sheet with no title is
-      unlabelled to a screen reader. */
   /**
    * The nav, collapsed to icons.
    *
@@ -202,6 +198,10 @@ export function AppShell({
    * screen has to say what its rail is.
    */
   navRail?: React.ReactNode;
+  /** Eyebrow above the aside. Omit when the panel's own content already says
+      what it is — a heading that repeats the thing under it is just a line of
+      shouting. The drawer still gets a name, since a sheet with no title is
+      unlabelled to a screen reader. */
   asideTitle?: string;
   /**
    * Drop the aside's top padding, keeping the bottom.
@@ -260,7 +260,11 @@ export function AppShell({
   /* Collapsed, but still showing something. Everything that has to line up
      with the nav column reads this rather than testing `navOpen` itself, so
      the header cell, the column and the panel footer can't disagree. */
-  const railed = Boolean(nav && navRail && !navOpen);
+  /* `isDesktop` too. Below `lg` the nav is a drawer and there is no column to
+     shrink, but the header's brand cell reads this to size itself — so without
+     it the cell squeezed to 52px and centred its toggle on a viewport where
+     the panel it was describing didn't exist. */
+  const railed = Boolean(nav && navRail && !navOpen && isDesktop);
 
   const vars = {
     "--craig-nav-w":

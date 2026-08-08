@@ -104,7 +104,7 @@ export function WorkflowCraig({
            you're at the top and then scrolls away with everything else — where
            the same 24px on the panel would be a permanent band that later
            messages pass behind and never occupy. */
-        className="scrollbar-thin -mr-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2 pt-6"
+        className="scrollbar-thin -mr-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4 pr-2 pt-6"
       >
         {messages.length === 0 ? (
           <p className="text-sm leading-relaxed text-text-muted">

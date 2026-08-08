@@ -21,10 +21,19 @@ import { AltRoute, Groups } from "@/components/ui/icons";
  * different navs is three different promises.
  *
  * Two items, not six. The showcase does workflows and people, and listing
- * rooms you can't walk into is a worse first impression than a short list.
+ * rooms the product doesn't have is a worse first impression than a short
+ * list. A room that exists and is empty is the other case, and it's `disabled`
+ * below rather than a missing row.
  *
  * Current is derived from the pathname rather than passed in, so a page can't
  * render a nav that disagrees with the route it's on.
+ *
+ * `disabled` is the one thing a page does get to say, because emptiness is a
+ * property of the account and not of the route: on a brand-new one both rooms
+ * are bare, and the welcome screen is the only screen that knows it. Shutting
+ * the rows rather than removing them is the argument in `NavTreeItem` — the
+ * short list is worth keeping, but a list that quietly grows an item is worse
+ * than one that says which door is locked.
  */
 
 /**
@@ -40,13 +49,36 @@ import { AltRoute, Groups } from "@/components/ui/icons";
  * `AltRoute` on every row of the list and on its own empty state, and a nav
  * that picked something else would be introducing a second symbol for a thing
  * the product has already named.
+ *
+ * The reason a room is shut lives here beside it rather than at the call site,
+ * because it belongs to the room: Workflows is empty for the same reason on
+ * every screen that finds it empty. So the nav owns the sentence and a page
+ * owns only the flag, and the second screen that needs to shut a row can't
+ * invent a second wording for a door this file has already described.
  */
 const ITEMS = [
-  { label: "Workflows", href: "/showcase/workflows", icon: <AltRoute /> },
-  { label: "People", href: "/showcase/people", icon: <Groups /> },
+  {
+    label: "Workflows",
+    href: "/showcase/workflows",
+    icon: <AltRoute />,
+    shut: "Craig drafts your first workflow from this conversation",
+  },
+  {
+    label: "People",
+    href: "/showcase/people",
+    icon: <Groups />,
+    shut: "You can give somebody a seat once there's a workflow to start them on",
+  },
 ];
 
-export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
+export function ShowcaseNav({
+  disabled,
+  children,
+}: {
+  /** Shuts both rows. See the note above `ITEMS`. */
+  disabled?: boolean;
+  children?: React.ReactNode;
+}) {
   const pathname = usePathname();
 
   return (
@@ -59,6 +91,8 @@ export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
             label={item.label}
             icon={item.icon}
             current={pathname.startsWith(item.href)}
+            disabled={disabled}
+            reason={item.shut}
           />
         ))}
       </NavTree>
@@ -86,8 +120,13 @@ export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
  * prose, and neither has an icon; a rail that tried to keep them would be
  * showing the parts of the column that survive squeezing rather than the parts
  * that matter.
+ *
+ * `disabled` for the same reason it's shared: a rail that still walked you
+ * into the empty page while the expanded panel refused would make collapsing
+ * the panel the way round the rule, and the two widths would be telling the
+ * person two different things about the same account.
  */
-export function ShowcaseNavRail() {
+export function ShowcaseNavRail({ disabled }: { disabled?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -99,6 +138,8 @@ export function ShowcaseNavRail() {
           label={item.label}
           icon={item.icon}
           current={pathname.startsWith(item.href)}
+          disabled={disabled}
+          reason={item.shut}
         />
       ))}
     </NavRail>
