@@ -3,6 +3,7 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { NavTreeItem, Separator } from "@/components/ui";
+import { AltRoute, Groups } from "@/components/ui/icons";
 
 /**
  * The showcase's left column.
@@ -20,9 +21,23 @@ import { NavTreeItem, Separator } from "@/components/ui";
  * render a nav that disagrees with the route it's on.
  */
 
+/**
+ * Iconed, which is the menu row as the design system draws it.
+ *
+ * These were bare labels — the right component, given none of what makes it
+ * legible. `NavTreeItem` puts the icon in a bordered tile that fills with the
+ * accent on the row you're on, so the current page is marked twice over rather
+ * than by weight alone; without one the row loses that and the column reads as
+ * two words stacked in a margin.
+ *
+ * The icons are the ones each thing already wears elsewhere. A workflow is
+ * `AltRoute` on every row of the list and on its own empty state, and a nav
+ * that picked something else would be introducing a second symbol for a thing
+ * the product has already named.
+ */
 const ITEMS = [
-  { label: "Workflows", href: "/showcase/workflows" },
-  { label: "People", href: "/showcase/people" },
+  { label: "Workflows", href: "/showcase/workflows", icon: <AltRoute /> },
+  { label: "People", href: "/showcase/people", icon: <Groups /> },
 ];
 
 export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
@@ -36,6 +51,7 @@ export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
             key={item.href}
             href={item.href}
             label={item.label}
+            icon={item.icon}
             current={pathname.startsWith(item.href)}
           />
         ))}
