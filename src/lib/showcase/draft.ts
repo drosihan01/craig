@@ -145,6 +145,16 @@ const TRIGGER: WorkflowBlock = {
 };
 
 /**
+ * The same trigger, for a workflow nobody drafted.
+ *
+ * A copy rather than the constant itself. The editor writes blocks back by
+ * replacing the list, but it patches fields in place on the way there, and one
+ * shared object sitting at the top of two different workflows is a rename in
+ * one of them showing up in the other.
+ */
+export const blankTrigger = (): WorkflowBlock => ({ ...TRIGGER });
+
+/**
  * Said on the block, because a plan is not an automation script.
  *
  * `unavailable` means Craig can't run the step himself — no provider account,

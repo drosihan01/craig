@@ -1,17 +1,19 @@
 "use client";
 
-import Link from "next/link";
+import * as React from "react";
 import {
   AppShell,
   Badge,
+  Button,
   EmptyState,
   List,
   ListIcon,
   ListItem,
   Separator,
-  buttonVariants,
 } from "@/components/ui";
-import { AltRoute, AutoAwesome, Warning } from "@/components/ui/icons";
+import { ShowcaseNav } from "@/components/showcase/showcase-nav";
+import { NewWorkflowDialog } from "@/components/showcase/new-workflow";
+import { Add, AltRoute, Warning } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import type { Session } from "@/lib/showcase/contract";
 import {
@@ -29,14 +31,19 @@ import {
  * being empty — so the empty state is the design and the list is what happens
  * to it, rather than the other way round.
  *
- * There's no "new workflow" button. Craig writes them, out of a conversation
- * about how the company actually works, and a button that dropped somebody
- * onto a blank canvas would be offering the version of this product that
- * doesn't work.
+ * The "new workflow" button doesn't make one. It asks how, and the asking is
+ * the point: Craig writing these out of a conversation about how the company
+ * actually works is still the version of this product that works, so he is the
+ * first thing in the dialog and blank is the deliberate second choice. What the
+ * dialog fixes is the other half of it — somebody who already knows exactly
+ * what they want shouldn't have to be interviewed to get a canvas, and having
+ * no button at all made that person's shortest route through the product a
+ * conversation they didn't need.
  */
 
 export function WorkflowList({ user }: { user: Session }) {
   const { workflows } = useShowcase();
+  const [choosing, setChoosing] = React.useState(false);
 
   const ready = workflows.filter(
     (w) => stepCount(w.blocks) > 0 && unconfiguredCount(w.blocks) === 0,
@@ -46,17 +53,36 @@ export function WorkflowList({ user }: { user: Session }) {
     <AppShell
       title="Workflows"
       account={{ name: user.name, email: user.email }}
-      nav={<ListNav total={workflows.length} ready={ready} />}
+      nav={
+        <ShowcaseNav>
+          <ListNav total={workflows.length} ready={ready} />
+        </ShowcaseNav>
+      }
     >
       <div className="mx-auto w-full max-w-3xl py-10">
-        <header className="mb-6 flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-[-0.02em]">
-            Workflows
-          </h1>
-          <p className="text-md text-text-muted">
-            One workflow per kind of hire. Open one to change its steps, answer
-            what Craig left open, or publish it.
-          </p>
+        <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="text-2xl font-semibold tracking-[-0.02em]">
+              Workflows
+            </h1>
+            <p className="text-md text-text-muted">
+              One workflow per kind of hire. Open one to change its steps,
+              answer what Craig left open, or publish it.
+            </p>
+          </div>
+
+          {/* Kept in the header on every state of this page, including the
+              empty one. It's the same button in both places rather than one
+              that appears once there's a list — a control that moves as the
+              page fills up is one you have to find again. */}
+          <Button
+            size="sm"
+            onClick={() => setChoosing(true)}
+            className="shrink-0"
+          >
+            <Add />
+            New workflow
+          </Button>
         </header>
 
         {workflows.length === 0 ? (
@@ -64,14 +90,17 @@ export function WorkflowList({ user }: { user: Session }) {
             icon={<AltRoute />}
             title="Nothing here yet"
             description="Craig writes the first one out of a conversation about your company — what you sell, who does what, and who's arriving."
+            /* Opens the same dialog as the header rather than going straight
+               to Craig. The description still says he writes the first one and
+               the dialog still recommends him — but an empty account is exactly
+               where somebody arrives having already decided, and sending the
+               only button on the screen into a conversation was how they found
+               out there was another way afterwards. */
             action={
-              <Link
-                href="/showcase/welcome"
-                className={buttonVariants({ size: "sm" })}
-              >
-                <AutoAwesome />
-                Talk to Craig
-              </Link>
+              <Button size="sm" onClick={() => setChoosing(true)}>
+                <Add />
+                New workflow
+              </Button>
             }
           />
         ) : (
@@ -82,6 +111,11 @@ export function WorkflowList({ user }: { user: Session }) {
           </List>
         )}
       </div>
+
+      {/* One dialog for both buttons. Two would be two pieces of state that
+          can disagree, and the copy inside it would be free to drift into two
+          different accounts of what the choice is. */}
+      <NewWorkflowDialog open={choosing} onClose={() => setChoosing(false)} />
     </AppShell>
   );
 }

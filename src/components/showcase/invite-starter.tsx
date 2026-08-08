@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  Badge,
   Button,
   Callout,
   DatePicker,
@@ -10,7 +11,7 @@ import {
   Input,
   toISODate,
 } from "@/components/ui";
-import { Mail, Warning } from "@/components/ui/icons";
+import { CheckCircle, Mail, Warning } from "@/components/ui/icons";
 import { invitePerson, useShowcase } from "@/lib/showcase/store";
 
 /**
@@ -48,9 +49,24 @@ export function InviteStarter({
   onClose,
   workflowId,
   onInvited,
+  justPublished = false,
 }: {
   open: boolean;
   onClose: () => void;
+  /**
+   * Whether this opened off the back of pressing Publish.
+   *
+   * The dialog is the same either way, but arriving at it is not. From People
+   * you came here on purpose and the screen needs no preamble. From Publish
+   * you pressed a button that said Publish and got a form asking for somebody's
+   * name — so it has to say what happened to the thing you actually pressed,
+   * or the form reads as though the publish didn't take.
+   *
+   * A prop rather than something read from the workflow, because `published`
+   * is true for the rest of the workflow's life and this is only true for the
+   * few seconds after it changed.
+   */
+  justPublished?: boolean;
   /** Which workflow they're being put through. */
   workflowId: string;
   onInvited?: (person: InvitedPerson) => void;
@@ -155,9 +171,14 @@ export function InviteStarter({
       size="lg"
       title="Invite someone"
       description={
-        workflow
-          ? `They get a seat, and ${workflow.name} starts running against it.`
-          : "They get a seat, and their workflow starts running against it."
+        /* The name moves out of here when the line above is carrying it.
+           Saying it twice in two stacked sentences reads like a template that
+           didn't know what it had already said. */
+        justPublished
+          ? "They get a seat, and it starts running against them."
+          : workflow
+            ? `They get a seat, and ${workflow.name} starts running against it.`
+            : "They get a seat, and their workflow starts running against it."
       }
       footer={
         <>
@@ -171,6 +192,25 @@ export function InviteStarter({
       }
     >
       <div className="flex flex-col gap-5 px-5 py-5">
+        {/* Deliberately a line rather than a panel. It's an acknowledgement of
+            the button you just pressed, and giving it a bordered box of its own
+            would make the first thing in the dialog a notice to be dismissed
+            rather than a sentence to be read on the way to the fields. */}
+        {justPublished && (
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <Badge tone="success" size="sm">
+              <CheckCircle />
+              Published
+            </Badge>
+            <p className="text-base text-text-muted">
+              <span className="font-medium text-text">
+                {workflow ? workflow.name : "Your workflow"}
+              </span>{" "}
+              is live. Now give it someone to run.
+            </p>
+          </div>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Full name">
             <Input

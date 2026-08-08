@@ -10,6 +10,7 @@ import {
   type WorkflowEdit,
 } from "@/lib/showcase/contract";
 import { missingRequired } from "@/lib/workflow/library";
+import { blankTrigger } from "@/lib/showcase/draft";
 
 /**
  * Everything the showcase knows, which to begin with is nothing.
@@ -272,6 +273,71 @@ export function publishWorkflow(id: string) {
     verb: "Published",
     what: `${workflow.name} — it runs the next time somebody is given a seat`,
   });
+}
+
+/**
+ * Throwing one away.
+ *
+ * People who are given a seat are left alone. It reads like an oversight —
+ * delete the workflow, delete the rows it made — but a person is not a detail
+ * of the workflow that invited them: they were emailed, they have a start date,
+ * and they exist at the company whether or not the plan that greeted them still
+ * does. Removing them here would mean tidying up a draft quietly un-hires
+ * somebody.
+ *
+ * The activity line stays too, for the same reason the rows do. It is a record
+ * of what happened, and a history that edits itself to match the present is a
+ * history you can't use to work out what went wrong.
+ */
+export function deleteWorkflow(id: string) {
+  const workflow = state.workflows.find((w) => w.id === id);
+  if (!workflow) return;
+
+  set({ workflows: state.workflows.filter((w) => w.id !== id) });
+  logActivity({
+    verb: "Deleted",
+    what: workflow.published
+      ? `${workflow.name} — it stops running for anyone new`
+      : workflow.name,
+  });
+}
+
+/**
+ * A workflow with nothing in it but the thing every workflow starts with.
+ *
+ * The other way in is a conversation, and it is the better one — Craig writes a
+ * plan out of how the company actually works, which is not a thing anybody
+ * arrives at by staring at an empty canvas. But it is not the only way somebody
+ * legitimately wants to start. People who already know exactly what they want
+ * do not want to be interviewed about it, and making them talk their way to a
+ * blank page is a worse experience than handing them one.
+ *
+ * So: a trigger and nothing else, which is not really blank. The trigger isn't
+ * a choice anywhere in this product, and starting somebody on a canvas with
+ * genuinely nothing on it would open with a question that has one answer.
+ *
+ * `revealedAt` is set here rather than left for the editor. The reveal exists
+ * so a draft you didn't watch get written assembles itself in front of you;
+ * there is nothing to reveal about a workflow with one block that you just
+ * asked for, and animating it in would be a flourish spent on nothing.
+ */
+export function createBlankWorkflow(): ShowcaseWorkflow {
+  const now = new Date().toISOString();
+  const workflow: ShowcaseWorkflow = {
+    id: crypto.randomUUID(),
+    name: "New workflow",
+    blocks: [blankTrigger()],
+    createdAt: now,
+    revealedAt: now,
+  };
+
+  /* Not `addWorkflow` — that one logs "Drafted … from what you told me",
+     which is true of Craig's and a lie about this one. Nobody told anybody
+     anything; they pressed a button. */
+  set({ workflows: [...state.workflows, workflow] });
+  logActivity({ verb: "Started", what: `${workflow.name} from blank` });
+
+  return workflow;
 }
 
 export function invitePerson(person: Omit<ShowcasePerson, "id">) {

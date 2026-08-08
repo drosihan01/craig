@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { InviteStarter } from "@/components/showcase/invite-starter";
+import { ShowcaseNav } from "@/components/showcase/showcase-nav";
 import {
   AppShell,
   BackLink,
@@ -10,6 +12,7 @@ import {
   BlockInspector,
   BlockSetup,
   Button,
+  Dialog,
   EmptyState,
   Field,
   Input,
@@ -27,11 +30,13 @@ import {
   AutoAwesome,
   Check,
   ChevronLeft,
+  Delete,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { WorkflowCraig } from "@/components/showcase/workflow-craig";
 import type { Session } from "@/lib/showcase/contract";
 import {
+  deleteWorkflow,
   markRevealed,
   publishWorkflow,
   setWorkflowBlocks,
@@ -98,19 +103,115 @@ const nextId = () => `b${Date.now()}-${seq++}`;
 
 export function WorkflowEditor({ id, user }: { id: string; user: Session }) {
   const { workflows, people } = useShowcase();
+  const router = useRouter();
   const workflow = workflows.find((w) => w.id === id);
 
-  if (!workflow) return <NoWorkflow user={user} />;
+  /* Both the confirmation and the delete itself live out here rather than in
+     `Editor`, because `Editor` is the thing being deleted. A component cannot
+     own the state that decides whether it still exists. */
+  const [confirming, setConfirming] = React.useState(false);
+  const [leaving, setLeaving] = React.useState(false);
+
+  function remove() {
+    if (!workflow) return;
+    /* `leaving` is set in the same batch as the store write, and it has to be:
+       removing the workflow re-renders this component with nothing to find, and
+       the branch below would show the "no such workflow" screen. Deleting one
+       on purpose would flash an error at you on the way out. */
+    setLeaving(true);
+    deleteWorkflow(workflow.id);
+    router.push("/showcase/workflows");
+  }
+
+  if (!workflow) return leaving ? null : <NoWorkflow user={user} />;
 
   return (
-    <Editor
-      /* Keyed so opening a different workflow starts with nothing selected,
-         rather than carrying a block id that belongs to the last one. */
-      key={workflow.id}
-      workflow={workflow}
-      user={user}
-      people={people}
-    />
+    <>
+      <Editor
+        /* Keyed so opening a different workflow starts with nothing selected,
+           rather than carrying a block id that belongs to the last one. */
+        key={workflow.id}
+        workflow={workflow}
+        user={user}
+        people={people}
+        onDelete={() => setConfirming(true)}
+      />
+      <ConfirmDelete
+        open={confirming}
+        workflow={workflow}
+        onCancel={() => setConfirming(false)}
+        onConfirm={remove}
+      />
+    </>
+  );
+}
+
+/**
+ * The one screen in here that asks whether you're sure.
+ *
+ * Everywhere else this product states what will happen instead of asking —
+ * the invite dialog says an email goes out the moment you press it, and that's
+ * better than a confirmation, because a warning you can read is worth more than
+ * a button you can click twice. This is the exception, and it earns it by being
+ * the only action with nothing to undo it: there is no draft history and no
+ * restore, so the workflow is simply gone.
+ *
+ * The published case gets its own sentence. Deleting a draft loses work;
+ * deleting a published workflow also stops something that is currently running
+ * the company's onboarding, and those are not the same decision.
+ */
+function ConfirmDelete({
+  open,
+  workflow,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  workflow: ShowcaseWorkflow;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const steps = stepCount(workflow.blocks);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      /* Not `sm`. The title carries the workflow's name and the body has two
+         sentences to say, and 24rem wraps a four-word name onto three lines. */
+      size="md"
+      title={`Delete ${workflow.name}?`}
+      description="This can't be undone."
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="danger" size="sm" onClick={onConfirm}>
+            Delete workflow
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 px-5 py-5">
+        <p className="text-base leading-relaxed text-text-muted">
+          {steps === 0
+            ? "There are no steps in it yet."
+            : `Its ${steps} ${steps === 1 ? "step goes" : "steps go"} with it.`}{" "}
+          {workflow.published
+            ? "It's published, so nobody given a seat from now on will be put through it."
+            : "It was never published, so nothing has run against it."}
+        </p>
+
+        {/* Said plainly, because the opposite is what people brace for. Anybody
+            already part-way through this workflow is a real person at the
+            company, and tidying up a plan is not a reason for them to vanish
+            from the account. */}
+        <p className="text-sm leading-relaxed text-text-subtle">
+          Everyone already invited keeps their seat and stays in People.
+        </p>
+      </div>
+    </Dialog>
   );
 }
 
@@ -118,10 +219,12 @@ function Editor({
   workflow,
   user,
   people,
+  onDelete,
 }: {
   workflow: ShowcaseWorkflow;
   user: Session;
   people: ShowcasePerson[];
+  onDelete: () => void;
 }) {
   const blocks = workflow.blocks;
 
@@ -275,13 +378,16 @@ function Editor({
       account={{ name: user.name, email: user.email }}
       fill
       nav={
-        <EditorNav
-          workflow={workflow}
-          blocks={blocks}
-          steps={steps}
-          unconfigured={unconfigured}
-          onSelect={select}
-        />
+        <ShowcaseNav>
+          <EditorNav
+            workflow={workflow}
+            blocks={blocks}
+            steps={steps}
+            unconfigured={unconfigured}
+            onSelect={select}
+            onDelete={onDelete}
+          />
+        </ShowcaseNav>
       }
       actions={
         workflow.published ? (
@@ -433,6 +539,7 @@ function Editor({
         open={inviting}
         onClose={() => setInviting(false)}
         workflowId={workflow.id}
+        justPublished
       />
     </AppShell>
   );
@@ -474,12 +581,14 @@ function EditorNav({
   steps,
   unconfigured,
   onSelect,
+  onDelete,
 }: {
   workflow: ShowcaseWorkflow;
   blocks: WorkflowBlock[];
   steps: number;
   unconfigured: number;
   onSelect: (id: string) => void;
+  onDelete: () => void;
 }) {
   const open = blocks.filter(isUnconfigured);
   const manual = blocks.filter((b) => byHand(b)).length;
@@ -554,6 +663,28 @@ function EditorNav({
           ? "Published. Everyone given a seat from now on starts at step one and works down."
           : "A workflow cannot be published while any step is unconfigured."}
       </p>
+
+      {/* Last in the column and nowhere near Publish. The two live at opposite
+          ends of the screen on purpose — they are the two irreversible things
+          you can do here, and putting them within a thumb's width of each
+          other is how one gets done instead of the other. A quiet link rather
+          than a red button, because the confirmation is where the weight
+          belongs; a danger button sitting in the furniture all day stops
+          reading as a warning. */}
+      <button
+        type="button"
+        onClick={onDelete}
+        /* `mx-0.5 px-1.5` rather than the `-mx-1.5` the worklist buttons use.
+           Those sit inside a `px-2` wrapper and pull back out of it; this is a
+           direct child of the column, so the same trick would hang it a step
+           left of every other line in here. 2px of margin plus 6px of padding
+           puts the label on the same 8px as its siblings, and leaves the hover
+           fill wider than the text. */
+        className="mx-0.5 mt-1 flex items-center gap-1.5 self-start rounded-md px-1.5 py-1 text-xs text-text-subtle transition-colors hover:bg-danger-subtle hover:text-danger"
+      >
+        <Delete className="size-3.5" />
+        Delete workflow
+      </button>
     </div>
   );
 }

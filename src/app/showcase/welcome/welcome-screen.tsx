@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   AppShell,
   CraigMark,
@@ -14,6 +15,7 @@ import {
 import { DraftStrength } from "@/components/showcase/draft-strength";
 import type { Session } from "@/lib/showcase/contract";
 import { useShowcase } from "@/lib/showcase/store";
+import { ShowcaseNav } from "@/components/showcase/showcase-nav";
 import { useCraigChat } from "@/lib/showcase/use-craig-chat";
 
 /**
@@ -44,7 +46,27 @@ export function WelcomeScreen({ user }: { user: Session }) {
 
   const started = messages.length > 0;
   const ready = !busy && readyToDraft(messages);
-  const draft = workflows[workflows.length - 1] ?? null;
+
+  /**
+   * How many workflows existed when this screen opened.
+   *
+   * Lazy initial state rather than a ref, because it is read while rendering
+   * and a ref cannot be. It is captured once and never updated, which is the
+   * whole point of it.
+   *
+   * Without it, coming back here to start a second workflow shows a stepper
+   * with every phase already ticked — "Build workflow: complete" — because the
+   * account does contain a workflow, just not one from this conversation. The
+   * column would be describing your history at you while you tried to make
+   * something new. What it should track is this run, so that is what it counts.
+   */
+  const [before] = React.useState(() => workflows.length);
+  const draft =
+    workflows.length > before ? workflows[workflows.length - 1] : null;
+
+  /* Not `draft`. This one asks whether there is anywhere else in the product
+     worth going, and a workflow from last week counts for that. */
+  const drafted = workflows.length > 0;
 
   const steps: Step[] = [
     /* Not "Upload". v3's first phase was reading the documents somebody had
@@ -76,14 +98,25 @@ export function WelcomeScreen({ user }: { user: Session }) {
       account={{ name: user.name, email: user.email }}
       fill
       nav={
-        <div className="flex flex-col gap-5">
-          <Stepper steps={steps} compact />
-          <Separator />
-          <p className="px-1 text-xs leading-relaxed text-text-subtle">
-            Craig drafts, you edit. Nothing runs against anyone until you
-            publish it and give somebody a seat.
-          </p>
-        </div>
+        /* The nav appears once there's somewhere to go. On a brand-new account
+           Workflows and People are both empty, and offering them would be
+           offering two dead ends — but the moment Craig drafts something, this
+           screen stops being the only place you can be, and without it you're
+           stranded on it. */
+        drafted ? (
+          <ShowcaseNav>
+            <Stepper steps={steps} compact />
+          </ShowcaseNav>
+        ) : (
+          <div className="flex flex-col gap-5">
+            <Stepper steps={steps} compact />
+            <Separator />
+            <p className="px-1 text-xs leading-relaxed text-text-subtle">
+              Craig drafts, you edit. Nothing runs against anyone until you
+              publish it and give somebody a seat.
+            </p>
+          </div>
+        )
       }
       /* Held back until there's a conversation. At zero answers the meter is
          honest but it's addressed to nobody — a checklist of things you haven't
