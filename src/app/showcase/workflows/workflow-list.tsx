@@ -71,18 +71,23 @@ export function WorkflowList({ user }: { user: Session }) {
             </p>
           </div>
 
-          {/* Kept in the header on every state of this page, including the
-              empty one. It's the same button in both places rather than one
-              that appears once there's a list — a control that moves as the
-              page fills up is one you have to find again. */}
-          <Button
-            size="sm"
-            onClick={() => setChoosing(true)}
-            className="shrink-0"
-          >
-            <Add />
-            New workflow
-          </Button>
+          {/* Only once there's a list. On an empty account the empty state
+              below is already the whole page and already carries this exact
+              button, so a second one up here is the same offer made twice on a
+              screen with nothing else on it — and the one in the header is the
+              weaker of the two, since it's the one with no explanation next to
+              it. Once there are workflows the empty state is gone and this
+              becomes the only way to add another. */}
+          {workflows.length > 0 && (
+            <Button
+              size="sm"
+              onClick={() => setChoosing(true)}
+              className="shrink-0"
+            >
+              <Add />
+              New workflow
+            </Button>
+          )}
         </header>
 
         {workflows.length === 0 ? (
