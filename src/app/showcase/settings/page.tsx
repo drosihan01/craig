@@ -1,5 +1,8 @@
+import { subscriptionFor } from "@/lib/showcase/accounts";
 import { requireUser } from "@/lib/showcase/current-user";
 import { CONNECT_OUTCOME_PARAM } from "@/lib/showcase/google-outcome";
+import { listJoiners } from "@/lib/showcase/joiners";
+import { seatEntitlement } from "@/lib/showcase/seats";
 import { SettingsScreen } from "./settings-screen";
 
 export const metadata = {
@@ -41,10 +44,24 @@ export default async function ShowcaseSettingsPage(
      as nothing rather than as prose of a stranger's choosing. */
   const outcome = (await props.searchParams)[CONNECT_OUTCOME_PARAM];
 
+  /* The plan, and how much of it is spoken for.
+   *
+   * Both halves are read here for the same reason People reads them together:
+   * "5 seats" is a fact about a subscription and "4 in use" is a fact about a
+   * joiner list, and a screen that learned them from two different places at
+   * two different times would eventually show a total smaller than its own
+   * count. `seatEntitlement` is the same function the paywall is quoted from,
+   * so Settings and the dialog cannot describe the same plan differently. */
+  const subscription = subscriptionFor(user.email);
+  const taken = listJoiners(user.email).length;
+
   return (
     <SettingsScreen
       user={user}
       outcome={typeof outcome === "string" ? outcome : null}
+      subscription={subscription}
+      taken={taken}
+      entitlement={seatEntitlement(subscription, taken)}
     />
   );
 }

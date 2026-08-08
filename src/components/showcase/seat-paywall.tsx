@@ -119,24 +119,39 @@ export function SeatPaywall({
       title="You're out of seats"
       description={headline({ seats, subscribed, holder })}
       footer={
-        <>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Not now
+        /* At the top of the plan there is nothing to sell, so nothing is
+           offered.
+
+           This used to show "Upgrade my seats" here too, which sent somebody
+           already paying for the largest plan we have to Stripe's billing
+           portal — a screen about cards and invoices, in answer to a question
+           about seats. It looked like an upsell and behaved like a filing
+           cabinet, and neither was what they asked for. One button that closes
+           is the honest end to a dialog whose news is "not yet". */
+        subscribed ? (
+          <Button size="sm" onClick={onClose}>
+            Close
           </Button>
-          {/* The word is the offer, not a receipt — nothing at this point has
-              taken anybody's money and the button must never read as though it
-              has. Falling back to `onClose` keeps that true on a deployment
-              with no checkout behind it: the flow ends rather than pretending
-              to continue, which is what it did before there was an `onUpgrade`
-              to hand it. */}
-          <Button
-            size="sm"
-            onClick={onUpgrade ?? onClose}
-            disabled={upgrading}
-          >
-            {upgrading ? "Opening checkout…" : "Upgrade my seats"}
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              Not now
+            </Button>
+            {/* The word is the offer, not a receipt — nothing at this point has
+                taken anybody's money and the button must never read as though
+                it has. Falling back to `onClose` keeps that true on a
+                deployment with no checkout behind it: the flow ends rather
+                than pretending to continue, which is what it did before there
+                was an `onUpgrade` to hand it. */}
+            <Button
+              size="sm"
+              onClick={onUpgrade ?? onClose}
+              disabled={upgrading}
+            >
+              {upgrading ? "Opening checkout…" : "Upgrade my seats"}
+            </Button>
+          </>
+        )
       }
     >
       <div className="flex flex-col gap-4 px-5 py-5">
@@ -145,9 +160,25 @@ export function SeatPaywall({
             what they don't know is why pressing it did nothing. */}
         {error && <Callout tone="danger">{error}</Callout>}
 
+        {/* Two different pieces of news. For a free account this is a door
+            with a price on it; at the top of the plan it is a wall, and
+            telling somebody to upgrade when they are already on the largest
+            plan we sell is the sentence that makes a product feel like it
+            isn't listening. */}
         <p className="text-base leading-relaxed text-text-muted">
-          Nothing has gone wrong — you&apos;ve just run out of room. Upgrade
-          your seats and the next person can be added the same way as the first.
+          {subscribed ? (
+            <>
+              Nothing has gone wrong — you&apos;ve filled every seat on the
+              plan. Bigger plans are something we&apos;re working on, and
+              they&apos;ll show up here when they&apos;re ready.
+            </>
+          ) : (
+            <>
+              Nothing has gone wrong — you&apos;ve just run out of room. Upgrade
+              your seats and the next person can be added the same way as the
+              first.
+            </>
+          )}
         </p>
 
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-sunken p-4">
@@ -161,8 +192,8 @@ export function SeatPaywall({
           {subscribed ? (
             <p className="text-base leading-relaxed text-text-muted">
               You&apos;re on {seats} {plural} already, and every one of them is
-              in use. More is a change to the plan you have rather than a new
-              one, so nothing here is bought twice.
+              in use. Your plan and payment details live in Settings, if
+              that&apos;s what you came looking for.
             </p>
           ) : (
             <>
@@ -185,18 +216,27 @@ export function SeatPaywall({
             </>
           )}
 
-          <Separator />
+          {/* "If you don't" is the answer to a decision, and at the top of the
+              plan there isn't one — nothing is being offered, so nothing is
+              being declined. Leaving it up would read as a consequence for
+              refusing something they were never asked. */}
+          {!subscribed && (
+            <>
+              <Separator />
 
-          <div className="flex flex-col gap-1.5">
-            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-              If you don&apos;t
-            </p>
-            <p className="text-sm leading-relaxed text-text-muted">
-              {holder ? `${holder.split(" ")[0]}'s` : "The"} onboarding carries
-              on exactly as it is, and your workflows stay written. The only
-              thing that changes is that Craig can&apos;t start anybody new.
-            </p>
-          </div>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+                  If you don&apos;t
+                </p>
+                <p className="text-sm leading-relaxed text-text-muted">
+                  {holder ? `${holder.split(" ")[0]}'s` : "The"} onboarding
+                  carries on exactly as it is, and your workflows stay written.
+                  The only thing that changes is that Craig can&apos;t start
+                  anybody new.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </Dialog>
