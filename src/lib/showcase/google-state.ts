@@ -101,6 +101,37 @@ interface StatePayload {
   e: string;
   /** Unix seconds. */
   x: number;
+  /**
+   * Where to land afterwards, when it isn't the default.
+   *
+   * Inside the signed payload rather than on the query string, and that is the
+   * whole reason it is safe to have at all. A `?returnTo=` a caller can write
+   * is an open redirect wearing a helpful name: somebody sends a link to
+   * `/api/google/connect?returnTo=https://evil.example`, the victim connects,
+   * and our own callback bounces them somewhere else with their session
+   * intact. Signed, it cannot be written by anybody without the key.
+   *
+   * Still validated on the way in and on the way out — the signature proves we
+   * minted it, not that we minted it correctly, and a bug that let a bad value
+   * be signed would otherwise be a bug that made it trusted.
+   */
+  r?: string;
+}
+
+/**
+ * A path this server will send somebody back to.
+ *
+ * Deliberately strict rather than clever: one leading slash, then a path we
+ * recognise. `//evil.example` is a protocol-relative URL that browsers treat as
+ * another origin, and a backslash is read as a slash by some of them — both are
+ * the classic way an "internal paths only" check is walked straight past.
+ */
+export function safeReturnTo(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (!value.startsWith("/")) return null;
+  if (value.startsWith("//") || value.includes("\\")) return null;
+  if (!value.startsWith("/showcase/")) return null;
+  return value.length > 200 ? null : value;
 }
 
 export interface MintedState {
@@ -122,13 +153,18 @@ export interface MintedState {
  * already stops anybody signing in; a caller that has a session at all has
  * proved the key is there.
  */
-export async function mintGoogleState(email: string): Promise<MintedState> {
+export async function mintGoogleState(
+  email: string,
+  /** Where the callback should land. Validated here, not trusted. */
+  returnTo?: string | null,
+): Promise<MintedState> {
   const nonce = encode(crypto.getRandomValues(new Uint8Array(NONCE_BYTES)));
 
   const payload: StatePayload = {
     n: nonce,
     e: email.trim().toLowerCase(),
     x: Math.floor(Date.now() / 1000) + STATE_MAX_AGE,
+    r: safeReturnTo(returnTo) ?? undefined,
   };
 
   const body = encode(new TextEncoder().encode(JSON.stringify(payload)));
@@ -145,7 +181,7 @@ export async function mintGoogleState(email: string): Promise<MintedState> {
 }
 
 export type StateCheck =
-  | { ok: true; email: string }
+  | { ok: true; email: string; returnTo: string | null }
   | {
       ok: false;
       /**
@@ -233,7 +269,9 @@ export async function checkGoogleState(
 
     if (!constantTimeEqual(payload.n, state)) return refused;
 
-    return { ok: true, email: payload.e };
+    /* Re-validated coming out. The signature says we wrote it; it does not say
+       we were right to. */
+    return { ok: true, email: payload.e, returnTo: safeReturnTo(payload.r) };
   } catch {
     /* `atob` and `JSON.parse` both throw on input somebody else controls
        entirely, and a cookie is exactly that. */

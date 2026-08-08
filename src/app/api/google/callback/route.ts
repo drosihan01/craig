@@ -62,11 +62,21 @@ const noStore = { "Cache-Control": "no-store" };
  * a `Set-Cookie` whose path doesn't match the original doesn't replace it, it
  * adds a second cookie beside it and leaves the first sitting there.
  */
-function done(request: Request, outcome: ConnectOutcome) {
-  const response = NextResponse.redirect(
-    new URL(connectLandingPath(outcome), request.url),
-    { headers: noStore },
-  );
+function done(
+  request: Request,
+  outcome: ConnectOutcome,
+  /* Only ever the value that came back out of the signed state, already
+     validated twice. Never a query parameter from this request. */
+  returnTo?: string | null,
+) {
+  const landing = connectLandingPath(outcome);
+  const target = returnTo
+    ? `${returnTo}${returnTo.includes("?") ? "&" : "?"}google=${outcome}`
+    : landing;
+
+  const response = NextResponse.redirect(new URL(target, request.url), {
+    headers: noStore,
+  });
   response.cookies.set(GOOGLE_STATE_COOKIE, "", {
     ...GOOGLE_STATE_COOKIE_OPTIONS,
     maxAge: 0,
@@ -114,11 +124,16 @@ export async function GET(request: NextRequest) {
     return done(request, "mismatch");
   }
 
+  /* From here on, every exit goes back to wherever they pressed Connect —
+     which is the block panel, usually. The refusals above deliberately do not:
+     a state that did not verify is a state whose return path did not either,
+     so those land on the one page this route can be certain of. */
+
   const code = params.get("code");
   if (!code) {
     /* Google returned neither a code nor an error, which should not happen and
        is not something the customer can act on beyond trying again. */
-    return done(request, "invalid-request");
+    return done(request, "invalid-request", state.returnTo);
   }
 
   const exchanged = await exchangeCode(code);
@@ -126,7 +141,7 @@ export async function GET(request: NextRequest) {
     /* The reason only. `exchangeCode` has already logged Google's own words
        server-side, and the code that failed is not going anywhere near here. */
     console.error(`[google/callback] exchange failed: ${exchanged.reason}`);
-    return done(request, exchanged.reason);
+    return done(request, exchanged.reason, state.returnTo);
   }
 
   /* No domain means Google did not send an `hd` claim, and Google only sets
@@ -142,7 +157,7 @@ export async function GET(request: NextRequest) {
      points at our configuration rather than at the account somebody picked.
      One sentence now, while they are still here and can pick the other one. */
   if (!exchanged.connection.domain) {
-    return done(request, "personal-account");
+    return done(request, "personal-account", state.returnTo);
   }
 
   const saved = saveGoogleConnection(session.email, {
@@ -160,8 +175,8 @@ export async function GET(request: NextRequest) {
        it did not exist. The settings screen says this one is ours to fix; the
        sandbox is where the missing piece is named. */
     console.error("[google/callback] connection not stored");
-    return done(request, "not-stored");
+    return done(request, "not-stored", state.returnTo);
   }
 
-  return done(request, "connected");
+  return done(request, "connected", state.returnTo);
 }

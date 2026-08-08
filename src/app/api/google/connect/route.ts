@@ -71,7 +71,13 @@ export async function GET(request: Request) {
   const storage = googleStorageStatus();
   if (!storage.ready) return back(request, "no-key");
 
-  const minted = await mintGoogleState(session.email);
+  /* Where they were when they pressed it, so the callback can put them back.
+     Read from the query and validated inside `mintGoogleState`, which is what
+     makes it safe to carry: it ends up inside the signed state rather than on
+     a URL anybody can write, so nobody can turn this into an open redirect by
+     sending somebody a link. */
+  const from = new URL(request.url).searchParams.get("from");
+  const minted = await mintGoogleState(session.email, from);
 
   const consent = consentUrl({
     state: minted.state,

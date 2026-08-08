@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import {
   Badge,
   Button,
@@ -667,9 +668,20 @@ function ConnectLink({
   label: string;
   variant?: "primary" | "secondary";
 }) {
+  /* Where to come back to. Connecting is a detour — you were configuring a
+     block, and Google's consent screen is a round trip through somebody else's
+     site — so landing on a settings page afterwards leaves you to find your
+     way back to what you were actually doing.
+
+     It travels as a query parameter here and ends up inside the *signed* state
+     on the server, which is what stops it being an open redirect: a value
+     anybody could write into a link they send you would let this route bounce
+     somebody off our domain with their session live. */
+  const pathname = usePathname();
+
   return (
     <a
-      href="/api/google/connect"
+      href={`/api/google/connect?from=${encodeURIComponent(pathname)}`}
       className={cn(buttonVariants({ variant, size: "sm" }), "self-start")}
     >
       <Refresh />
