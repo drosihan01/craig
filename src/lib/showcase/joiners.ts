@@ -86,7 +86,13 @@ function store(): JoinerStore {
  * The trigger is dropped, because it is not a step anybody does.
  */
 export function stepsFromBlocks(
-  blocks: { id: string; title: string; kind: string; preset?: string }[],
+  blocks: {
+    id: string;
+    title: string;
+    kind: string;
+    preset?: string;
+    due?: number;
+  }[],
 ): JoinerStep[] {
   return blocks
     .filter((b) => b.kind !== "trigger")
@@ -102,6 +108,7 @@ export function stepsFromBlocks(
             ? ("admin" as const)
             : undefined,
         field,
+        due: b.due,
       };
     });
 }

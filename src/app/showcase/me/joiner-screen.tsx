@@ -72,6 +72,8 @@ export interface PlanStep {
    * screen cannot render a control against it even by mistake.
    */
   field?: JoinerField;
+  /** When it's due, already a real date. Absent once it's done. */
+  dueOn?: string;
 }
 
 export interface JoinerView {
@@ -331,6 +333,16 @@ function PlanRow({
             {step.title}
           </h3>
           <StepBadge done={done} current={current} actor={step.actor} />
+
+          {/* Beside the title, quietly. A deadline on somebody's first week
+              should read as information about the plan, not as pressure — so
+              it sits at the end of the line in the same weight as everything
+              else, and it disappears the moment the step is done. */}
+          {step.dueOn && (
+            <span className="shrink-0 text-2xs text-text-subtle">
+              Due {step.dueOn}
+            </span>
+          )}
         </div>
 
         {done ? (

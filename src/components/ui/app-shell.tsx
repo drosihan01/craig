@@ -289,18 +289,29 @@ export function AppShell({
           {/* Left cell — tracks the nav column's width, same rule. */}
           <div
             className={cn(
-              "flex shrink-0 items-center lg:border-r lg:border-dotted lg:border-border",
-              /* Centred and unpadded in rail mode: at 52px the wordmark is
-                 gone and the toggle is the only thing left, so it takes the
-                 cell rather than sitting at the end of one. */
-              railed ? "justify-center px-0" : "gap-1 pl-4 pr-2",
-              (navOpen || railed) && nav ? "craig-col-nav" : "lg:w-auto",
+              /* The rule is drawn at every width now. It used to be `lg:` only,
+                 which left the toggle on a narrow screen floating against the
+                 page with nothing marking it off from the title beside it. */
+              "flex shrink-0 items-center border-r border-dotted border-border",
+              /* Centred and unpadded whenever the cell is just the toggle —
+                 in the rail, and on any screen too narrow for a column. The
+                 wordmark is gone in both, so the control takes the cell rather
+                 than sitting at the end of one. */
+              railed || !isDesktop ? "justify-center px-2" : "gap-1 pl-4 pr-2",
+              /* Only ever as wide as the column it's tracking. Below `lg`
+                 there is no column, so the cell is as wide as its contents —
+                 without this it took the persisted 224px on a phone. */
+              (navOpen || railed) && nav && isDesktop
+                ? "craig-col-nav"
+                : "lg:w-auto",
             )}
           >
-            {/* The mark goes with the wordmark. A brand cell holding an icon
-                and a toggle at 52px reads as two controls, one of which does
-                nothing when you press it. */}
-            {!railed && (
+            {/* The mark goes with the wordmark, and both go whenever the cell
+                is narrow — in the rail, and below `lg`. A brand cell holding
+                an icon and a toggle in that space reads as two controls, one
+                of which does nothing when you press it, and on a phone the
+                room is better spent on the page's own title. */}
+            {!railed && isDesktop && (
               <>
                 <CraigMark className="size-5" />
                 <span className="truncate text-base font-semibold tracking-[-0.01em]">

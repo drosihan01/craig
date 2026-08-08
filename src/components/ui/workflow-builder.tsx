@@ -17,6 +17,7 @@ import {
   Warning,
 } from "./icons";
 import { Badge } from "./badge";
+import { dueLabel } from "@/lib/workflow/library";
 import { Skeleton } from "./feedback";
 import { BlockPicker } from "./block-picker";
 import { DropdownMenu, type DropdownItem } from "./dropdown";
@@ -127,6 +128,22 @@ export interface WorkflowBlock {
   owner?: string;
   /** Answers to the preset's setup fields, keyed by field id. */
   config?: Record<string, string | string[]>;
+  /**
+   * When this step is due, in days relative to the person's first day.
+   *
+   * Negative is before day one, `0` is day one, positive is after. Absent
+   * means no date was set, which is different from being due on day one and
+   * has to stay different — most steps genuinely have no deadline, and giving
+   * them all a default would fill the canvas with dates nobody chose.
+   *
+   * An offset rather than a date, because a workflow is a template. It is run
+   * again for the next hire and the one after, so a real date on a block would
+   * be the same day for everybody and wrong for all but the first. The date
+   * only exists once there is a person: `dueDateFrom` resolves it against
+   * their start date, which is why their screen can say "due Thursday" and the
+   * builder can only say "the day before".
+   */
+  due?: number;
   /**
    * A gap the admin has to close that isn't a missing field — "nobody owns
    * this yet", "the doc it points at is out of date". Sits alongside the
@@ -802,6 +819,9 @@ function BlockCard({
   const Icon = type.icon;
   const isTrigger = block.kind === "trigger";
   const warning = setupWarning(block);
+  /* Null when nobody set one, which is most steps — a deadline is a decision
+     somebody made, not a field every block has to carry. */
+  const due = dueLabel(block.due);
 
   /**
    * What the grip's menu offers, gathered before the render so an empty one
@@ -926,6 +946,19 @@ function BlockCard({
               <span className="truncate text-2xs text-text-subtle">
                 {block.owner}
               </span>
+            </>
+          )}
+
+          {/* On the eyebrow beside the owner, not down with the warning. Who
+              does it and when it's due are the two facts you scan a column of
+              these for, and a badge below the title would have pushed every
+              card taller for something four words long. */}
+          {due && (
+            <>
+              <span aria-hidden className="text-text-subtle">
+                ·
+              </span>
+              <span className="shrink-0 text-2xs text-text-subtle">{due}</span>
             </>
           )}
         </div>

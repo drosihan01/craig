@@ -217,8 +217,13 @@ function blocksFrom(value: unknown) {
   if (!Array.isArray(value)) return [];
 
   const seen = new Set<string>();
-  const blocks: { id: string; title: string; kind: string; preset?: string }[] =
-    [];
+  const blocks: {
+    id: string;
+    title: string;
+    kind: string;
+    preset?: string;
+    due?: number;
+  }[] = [];
 
   for (const entry of value.slice(0, MAX_BLOCKS)) {
     if (!entry || typeof entry !== "object") continue;
@@ -230,9 +235,25 @@ function blocksFrom(value: unknown) {
     seen.add(id);
 
     const preset = oneLine(raw.preset, MAX_ID);
+
+    /* A whole number of days, within a year either side. It ends up in
+       arithmetic on a date, so a string, a fraction or an Infinity would
+       produce an `Invalid Date` on somebody's checklist rather than an error
+       anyone would see — and a deadline eight thousand years out is not a
+       deadline, it is a number that got through. */
+    const rawDue = raw.due;
+    const due =
+      typeof rawDue === "number" &&
+      Number.isInteger(rawDue) &&
+      rawDue >= -365 &&
+      rawDue <= 365
+        ? rawDue
+        : undefined;
+
     blocks.push({
       id,
       title,
+      due,
       kind: oneLine(raw.kind, MAX_ID),
       preset:
         Object.hasOwn(JOINER_FIELD_BY_PRESET, preset) ||

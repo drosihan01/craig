@@ -1430,3 +1430,63 @@ export function timingOf(
   const options = field.options ?? WHEN_OPTIONS;
   return options.find((o) => o.id === raw)?.label ?? raw;
 }
+
+/* --- Due dates ------------------------------------------------------------ */
+
+/**
+ * When a step is due, offered as the handful of answers people actually give.
+ *
+ * Offsets in days from the person's first day, so a workflow stays a template:
+ * the same plan run for the next hire produces different dates without anybody
+ * editing it.
+ *
+ * A short list rather than a date field or a free number. Onboarding deadlines
+ * cluster — before they sign, the week before, the day before, day one, end of
+ * the first week, end of the first month — and a number box invites precision
+ * nobody has ("is the laptop due on day 3 or day 4?") while making the common
+ * answers slower to give than the rare ones.
+ *
+ * `-14` rather than "two weeks" as the stored value, because the storage has
+ * to survive this list changing. Relabelling an option or adding one between
+ * two others rewrites nothing; storing "two-weeks-before" would mean the day a
+ * label changes, every workflow holding it means something slightly different.
+ */
+export const DUE_OPTIONS: { days: number; label: string; short: string }[] = [
+  { days: -14, label: "Two weeks before they start", short: "2 weeks before" },
+  { days: -7, label: "A week before they start", short: "1 week before" },
+  { days: -1, label: "The day before they start", short: "Day before" },
+  { days: 0, label: "Their first day", short: "Day one" },
+  { days: 4, label: "End of their first week", short: "First week" },
+  { days: 30, label: "End of their first month", short: "First month" },
+];
+
+/** The short form for a stored offset, or null when nothing is set. */
+export function dueLabel(due: number | undefined): string | null {
+  if (due === undefined) return null;
+  const known = DUE_OPTIONS.find((o) => o.days === due);
+  if (known) return known.short;
+
+  /* An offset that isn't on the list is still readable — a workflow written
+     before an option was removed, or one edited by hand. Saying "day 3" is
+     better than saying nothing about a step that has a deadline. */
+  if (due === 0) return "Day one";
+  return due < 0 ? `${-due} days before` : `Day ${due + 1}`;
+}
+
+/**
+ * The real date, once there is a person to have one.
+ *
+ * `startDate` is `YYYY-MM-DD` and is parsed as local rather than through
+ * `new Date(string)`, which reads a bare date as UTC — that lands on the
+ * previous day for anyone west of Greenwich and turns a due date into an
+ * off-by-one nobody can reproduce in the office it was written in.
+ */
+export function dueDateFrom(
+  startDate: string,
+  due: number | undefined,
+): Date | null {
+  if (due === undefined) return null;
+  const [y, m, d] = startDate.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d + due);
+}

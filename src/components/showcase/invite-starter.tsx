@@ -162,6 +162,7 @@ export function InviteStarter({
             kind: b.kind,
             title: b.title,
             preset: b.preset,
+            due: b.due,
           })),
         }),
       });

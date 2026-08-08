@@ -298,6 +298,15 @@ export interface JoinerStep {
   actor?: StepActor;
   /** Only on `actor: "joiner"` steps. Which form they're shown. */
   field?: JoinerField;
+  /**
+   * Days from their first day, copied off the block when they were invited.
+   *
+   * Snapshotted with the rest of the step for the same reason: the admin can
+   * move a deadline afterwards, and somebody who was told Thursday should not
+   * find it silently became Tuesday. Absent when the step has no deadline,
+   * which is most of them.
+   */
+  due?: number;
   /** What they gave, once they've given it. */
   value?: string;
   /** ISO. Set together with `value`, and the only record that it happened. */

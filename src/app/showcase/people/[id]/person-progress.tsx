@@ -38,6 +38,7 @@ import type {
   StepActor,
 } from "@/lib/showcase/contract";
 import { readable } from "../people-list";
+import { dueDateFrom } from "@/lib/workflow/library";
 
 /**
  * One person's onboarding, as whoever gave them the seat watches it.
@@ -311,7 +312,9 @@ function Detail({
   const first = person.name.split(" ")[0];
   const addedOn = onDay(person.invitedAt);
 
-  const steps = person.steps.map((step) => toCard(step, first, tick));
+  const steps = person.steps.map((step) =>
+    toCard(step, first, tick, person.startDate),
+  );
 
   /* Steps waiting on neither side. They are drawn like everything else and
      counted in nothing, which is right — `progressOf` leaves them out of both
@@ -545,10 +548,46 @@ const ANSWER_LABEL: Record<JoinerField, string> = {
  * refused for as long as anything is saving, and the card behind it re-renders
  * from the server the moment the answer lands.
  */
-function toCard(step: JoinerStep, first: string, tick: TickUi): WorkflowStep {
+/** Local midnight, so a step due today isn't overdue at nine in the morning. */
+function startOfToday(): number {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
+/**
+ * A due date, without the year.
+ *
+ * `readable` is for start dates and does the same job, but this one is built
+ * from a `Date` rather than a `YYYY-MM-DD` string — resolving an offset
+ * produces a real date, and routing it back through a string to reuse a
+ * formatter would be a conversion in each direction for nothing.
+ */
+function dueOnDay(date: Date): string {
+  return new Intl.DateTimeFormat("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(date);
+}
+
+function toCard(
+  step: JoinerStep,
+  first: string,
+  tick: TickUi,
+  startDate: string,
+): WorkflowStep {
   const done = Boolean(step.completedAt);
   const when = onDay(step.completedAt);
   const saving = tick.saving === step.id;
+
+  /* Only while it's outstanding. A deadline is a thing to act on, so once a
+     step is finished the date it was finished on is the fact worth carrying —
+     showing both invites the reader to work out whether it was late, which is
+     a judgement this page has no business making on its own. */
+  const dueDate = done ? null : dueDateFrom(startDate, step.due);
+  /* Local midnight both sides, so "today" is not overdue for the eleven hours
+     before the comparison instant. */
+  const overdue = dueDate ? dueDate.getTime() < startOfToday() : false;
 
   const card: WorkflowStep = {
     id: step.id,
@@ -557,6 +596,13 @@ function toCard(step: JoinerStep, first: string, tick: TickUi): WorkflowStep {
   };
 
   const metrics: StepMetric[] = [];
+
+  if (dueDate) {
+    metrics.push({
+      value: dueOnDay(dueDate),
+      label: overdue ? "was due" : "due",
+    });
+  }
 
   if (step.actor === "joiner") {
     if (done) {

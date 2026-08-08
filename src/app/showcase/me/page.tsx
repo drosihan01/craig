@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { currentJoiner, requireJoiner } from "@/lib/showcase/current-joiner";
 import { progressOf } from "@/lib/showcase/joiners";
 import type { Joiner } from "@/lib/showcase/contract";
+import { dueDateFrom } from "@/lib/workflow/library";
 import { JoinerScreen, type JoinerView, type PlanStep } from "./joiner-screen";
 
 /**
@@ -56,7 +57,9 @@ export default async function JoinerHomePage() {
     startsOn: upcoming(joiner.startDate)
       ? readableDate(joiner.startDate)
       : null,
-    steps: joiner.steps.map((step) => toPlanStep(step, step.id === currentId)),
+    steps: joiner.steps.map((step) =>
+      toPlanStep(step, step.id === currentId, joiner.startDate),
+    ),
     done: progress.done,
     total: progress.total,
     finished: progress.finished,
@@ -78,7 +81,29 @@ export default async function JoinerHomePage() {
  * exactly one thing it can draw a box for, and cannot invent a second by
  * reading a flag the wrong way round.
  */
-function toPlanStep(step: Joiner["steps"][number], current: boolean): PlanStep {
+function toPlanStep(
+  step: Joiner["steps"][number],
+  current: boolean,
+  startDate: string,
+): PlanStep {
+  /* Resolved here, where the start date is, and formatted here for the reason
+     every other date on this page is: an ISO instant formatted during render
+     is formatted twice in two timezones, which is a hydration mismatch and a
+     wrong date.
+
+     Not shown once a step is done. A deadline is a thing to act on, and
+     "due Thursday" beside something already finished is either noise or, when
+     it was finished late, a reproach nobody needs on their first week. */
+  const dueOn =
+    !step.completedAt && step.due !== undefined
+      ? (() => {
+          const date = dueDateFrom(startDate, step.due);
+          return date
+            ? (readableDay(date.toISOString()) ?? undefined)
+            : undefined;
+        })()
+      : undefined;
+
   return {
     id: step.id,
     title: step.title,
@@ -86,6 +111,7 @@ function toPlanStep(step: Joiner["steps"][number], current: boolean): PlanStep {
     doneOn: (step.completedAt && readableDay(step.completedAt)) || undefined,
     answer: step.value ? readableAnswer(step) : undefined,
     field: current ? step.field : undefined,
+    dueOn,
   };
 }
 

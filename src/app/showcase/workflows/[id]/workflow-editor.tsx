@@ -19,6 +19,7 @@ import {
   EmptyState,
   Field,
   Input,
+  Select,
   Separator,
   Textarea,
   WorkflowBuilder,
@@ -51,7 +52,11 @@ import {
   type ShowcaseWorkflow,
 } from "@/lib/showcase/store";
 import { useCraigChat } from "@/lib/showcase/use-craig-chat";
-import { blockFromPreset, findPreset } from "@/lib/workflow/library";
+import {
+  DUE_OPTIONS,
+  blockFromPreset,
+  findPreset,
+} from "@/lib/workflow/library";
 import type { BlockPreset } from "@/lib/workflow/library";
 
 /**
@@ -487,6 +492,39 @@ function Editor({
                         patch(selected.id, { summary: e.target.value })
                       }
                     />
+                  </Field>
+
+                  {/* Relative to the person, because the workflow is a
+                      template — the same plan run for the next hire has to
+                      produce different dates without anybody editing it. The
+                      real date appears on their page, where there is a start
+                      date to count from. */}
+                  <Field
+                    label="Due"
+                    hint="Counted from their first day. Their page shows the date."
+                  >
+                    <Select
+                      value={selected.due ?? ""}
+                      onChange={(e) =>
+                        patch(selected.id, {
+                          /* Back to `undefined`, not `0`. No deadline and
+                             "due on day one" are different claims, and an
+                             empty select that saved as day one would put a
+                             date on every step somebody cleared. */
+                          due:
+                            e.target.value === ""
+                              ? undefined
+                              : Number(e.target.value),
+                        })
+                      }
+                    >
+                      <option value="">No date</option>
+                      {DUE_OPTIONS.map((o) => (
+                        <option key={o.days} value={o.days}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
                   </Field>
 
                   {/* What this particular step needs before it can run. The
