@@ -120,7 +120,12 @@ export {
 } from "./workflow-builder";
 export { BlockPicker } from "./block-picker";
 export { BlockSetup } from "./block-setup";
-export { NavTreeGroup, NavTreeItem, type NavTreeItemProps } from "./nav-tree";
+export {
+  NavTree,
+  NavTreeGroup,
+  NavTreeItem,
+  type NavTreeItemProps,
+} from "./nav-tree";
 export { TestRun } from "./test-run";
 export { EmailPreview } from "./email-preview";
 export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";

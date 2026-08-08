@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { NavTreeItem, Separator } from "@/components/ui";
+import { NavTree, NavTreeItem, Separator } from "@/components/ui";
 
 /**
  * The left panel for demo v3.
@@ -31,7 +31,7 @@ export function V3Nav({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-0.5">
+      <NavTree>
         {ITEMS.map((item) => {
           const current = pathname.startsWith(item.href);
 
@@ -44,7 +44,7 @@ export function V3Nav({ children }: { children?: React.ReactNode }) {
             />
           );
         })}
-      </div>
+      </NavTree>
 
       {/* Page-specific detail sits under the nav, not instead of it. */}
       {children && (

@@ -24,6 +24,40 @@ import { cn } from "@/lib/cn";
  * to drive it from outside.
  */
 
+/**
+ * The gap between rows, in one place.
+ *
+ * It was 2px, set independently at every call site, and it was chosen when a
+ * row was bare text — at which point the rows were legible as separate things
+ * because of the words. Now that the current row is filled, 2px reads as two
+ * blocks stuck together, and one of them having a background makes the
+ * tightness obvious rather than merely close.
+ *
+ * Here rather than in each nav so the next one built can't pick its own — the
+ * old spacing had already been copied into three navs and the group's own
+ * children, which is how a component ends up looking different in each place
+ * it's used.
+ */
+const ROW_GAP = "gap-1";
+
+/**
+ * The column rows sit in.
+ *
+ * Trivial, and worth having: spacing between items belongs to the list rather
+ * than the item, and without somewhere to put it every nav re-decided it.
+ */
+export function NavTree({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-col", ROW_GAP, className)}>{children}</div>
+  );
+}
+
 export interface NavTreeItemProps {
   label: string;
   href?: string;
@@ -46,14 +80,18 @@ export function NavTreeItem({
 }: NavTreeItemProps) {
   const inner = (
     <>
+      {/* Icon then text, with nothing drawn around the icon. It used to sit in
+          a bordered tile, which put a box on every row of a column that is
+          already a list of boxes — and made an icon that is a label read as a
+          control you could press separately from the row it labels. It also
+          didn't match `NavTreeGroup` two functions down, which has always
+          drawn its icon bare.
+
+          No colour of its own either: it inherits the row's, so it lifts with
+          the label on hover and on the current row instead of staying muted
+          against a highlight. */}
       {icon && (
-        <span
-          className={cn(
-            "flex size-6 shrink-0 items-center justify-center rounded-md border border-border text-text-subtle [&_svg]:size-3.5",
-            current &&
-              "border-transparent bg-accent-subtle text-accent-subtle-fg",
-          )}
-        >
+        <span className="flex size-6 shrink-0 items-center justify-center [&_svg]:size-4">
           {icon}
         </span>
       )}
@@ -62,10 +100,21 @@ export function NavTreeItem({
     </>
   );
 
+  /* Current fills the whole row rather than tinting the icon and bolding the
+     label. A highlight confined to a 24px square is a mark you have to look
+     for, and it competed with the hover fill — which does span the row — so
+     the page you were on could read as less selected than the one under your
+     cursor.
+
+     The accent pair, which is what this product already uses for a selected
+     row — the design system's own section nav is `bg-accent-subtle` with
+     `accent-subtle-fg`, and has been all along. A neutral step was tried here
+     and was simply harsher: a grey fill on a warm canvas reads as a disabled
+     band, where the accent tint reads as a place. */
   const classes = cn(
     "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
     current
-      ? "font-medium text-text"
+      ? "bg-accent-subtle font-medium text-accent-subtle-fg"
       : "text-text-muted hover:bg-surface-hover hover:text-text",
     className,
   );
@@ -121,7 +170,7 @@ export function NavTreeGroup({
         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
       >
         {icon && (
-          <span className="flex size-6 shrink-0 items-center justify-center text-text-subtle [&_svg]:size-4">
+          <span className="flex size-6 shrink-0 items-center justify-center [&_svg]:size-4">
             {icon}
           </span>
         )}
@@ -146,7 +195,10 @@ export function NavTreeGroup({
              between items when they have different heights. It starts inside
              the parent's icon column so it reads as descending from the
              group rather than sitting beside it. */
-          className="ml-[1.4rem] flex flex-col gap-0.5 border-l border-dotted border-border pl-2.5 pt-0.5"
+          className={cn(
+            "ml-[1.4rem] flex flex-col border-l border-dotted border-border pl-2.5 pt-0.5",
+            ROW_GAP,
+          )}
         >
           {children}
         </div>

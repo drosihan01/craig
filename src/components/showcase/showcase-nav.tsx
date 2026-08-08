@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { NavTreeItem, Separator } from "@/components/ui";
+import { NavTree, NavTreeItem, Separator } from "@/components/ui";
 import { AltRoute, Groups } from "@/components/ui/icons";
 
 /**
@@ -45,7 +45,7 @@ export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-0.5">
+      <NavTree>
         {ITEMS.map((item) => (
           <NavTreeItem
             key={item.href}
@@ -55,7 +55,7 @@ export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
             current={pathname.startsWith(item.href)}
           />
         ))}
-      </div>
+      </NavTree>
 
       {/* Page-specific detail sits under the nav, not instead of it — which
           is exactly the mistake that stranded the setup screen. */}

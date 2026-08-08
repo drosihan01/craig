@@ -34,6 +34,7 @@ import {
   List,
   ListIcon,
   ListItem,
+  NavTree,
   NavTreeGroup,
   NavTreeItem,
   TalkToCraig,
@@ -1144,7 +1145,7 @@ export default function DesignSystemPage() {
           note="flat items, an open group, a collapsed one, a count — every nav in this product is some arrangement of these"
           className="items-stretch"
         >
-          <div className="flex w-64 flex-col gap-0.5 rounded-lg border border-border bg-surface p-2">
+          <NavTree className="w-64 rounded-lg border border-border bg-surface p-2">
             <NavTreeItem label="Home" icon={<Description />} current />
             <NavTreeItem label="People" icon={<Groups />} />
             <NavTreeItem
@@ -1176,7 +1177,7 @@ export default function DesignSystemPage() {
               <NavTreeItem label="Workflows" />
               <NavTreeItem label="People" />
             </NavTreeGroup>
-          </div>
+          </NavTree>
         </Demo>
 
         <Demo
