@@ -45,7 +45,7 @@ import type { BlockKind, WorkflowBlock } from "@/components/ui";
  * Three ideas, and they're separate on purpose.
  *
  * `BlockKind` (in workflow-builder) is the *mechanism*: what the engine does
- * with a block. There are seven and there should stay seven.
+ * with a block. There are six and there should stay six.
  *
  * A `BlockPreset` is a *named piece of onboarding* sitting on one of those
  * mechanisms. "Set up MFA" and "Invite to GitHub" are both tasks as far as the

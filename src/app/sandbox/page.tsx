@@ -1104,30 +1104,21 @@ function SandboxNav({
         <p className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Sandbox
         </p>
-        {SANDBOX_SECTIONS.map((t) => {
-          const current = t.value === section;
-          return (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => onSection(t.value)}
-              aria-current={current ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
-                current
-                  ? "bg-accent-subtle font-medium text-accent-subtle-fg"
-                  : "text-text-muted hover:bg-surface-hover hover:text-text",
-              )}
-            >
-              {t.label}
-              {t.value === "home" && open > 0 && (
-                <Badge size="sm" tone="warning" className="ml-auto">
+        {SANDBOX_SECTIONS.map((t) => (
+          <NavTreeItem
+            key={t.value}
+            label={t.label}
+            current={t.value === section}
+            onClick={() => onSection(t.value)}
+            trailing={
+              t.value === "home" && open > 0 ? (
+                <Badge size="sm" tone="warning">
                   {open}
                 </Badge>
-              )}
-            </button>
-          );
-        })}
+              ) : undefined
+            }
+          />
+        ))}
 
         <NavTreeGroup
           label="Demo"
@@ -1153,13 +1144,7 @@ function SandboxNav({
           Craig
         </p>
         {ROUTES.map((r) => (
-          <Link
-            key={r.href}
-            href={r.href}
-            className="rounded-md px-2 py-1 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            {r.label}
-          </Link>
+          <NavTreeItem key={r.href} href={r.href} label={r.label} />
         ))}
       </div>
 

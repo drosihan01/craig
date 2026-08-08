@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Dialog, DialogClose } from "./dialog";
 import { AutoAwesome, ContentCopy, Description, Refresh } from "./icons";
+import { AgentPhase, AgentQuestion, PersonTurn } from "./agent";
 import { CraigMark } from "./craig-mark";
 import { DEFAULT_MODEL, type ChatModel } from "./model-picker";
 import { PromptBar } from "./prompt-bar";
@@ -131,7 +132,9 @@ export function ChatModal({
         <span className="flex size-6 items-center justify-center rounded-md bg-accent-subtle text-accent-subtle-fg">
           <AutoAwesome className="size-3.5" />
         </span>
-        <h2 className="text-base font-semibold tracking-[-0.01em]">Ask Craig</h2>
+        <h2 className="text-base font-semibold tracking-[-0.01em]">
+          Ask Craig
+        </h2>
         <span className="ml-auto" />
         <DialogClose onClose={onClose} />
       </header>
@@ -185,9 +188,7 @@ function Message({ message }: { message: ChatMessage }) {
             {message.attachment}
           </span>
         )}
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-xl rounded-br-sm bg-accent-subtle px-3.5 py-2.5 text-base leading-relaxed text-accent-subtle-fg">
-          {message.content}
-        </div>
+        <PersonTurn>{message.content}</PersonTurn>
       </div>
     );
   }
@@ -204,35 +205,15 @@ function Message({ message }: { message: ChatMessage }) {
           back to just the mark and the answer stands on its own. */}
       <div className="flex items-center gap-2">
         <CraigMark className="size-5 shrink-0 text-accent" />
-        {running && (
-          /* Keyed on the step id so swapping states remounts this and the
-             phase animation replays, rather than the label snapping. */
-          /* No spinner. The mark is already beside it and the label already
-             changes as it works — a spinning circle on top of both is a third
-             thing saying the same thing. */
-          <span
-            key={running.id}
-            className="text-sm text-text-muted motion-safe:animate-[step-phase_260ms_cubic-bezier(0.25,1,0.5,1),soft-pulse_2.2s_ease-in-out_260ms_infinite]"
-          >
-            {running.label}
-          </span>
-        )}
+        {/* Keyed on the step id as well as the label: two consecutive steps
+            could name the same thing, and the animation should still replay. */}
+        {running && <AgentPhase key={running.id} label={running.label} />}
       </div>
 
       <MessageBody content={message.content} streaming={message.streaming} />
 
-      {/* The question sits apart from the prose. Buried at the end of four
-          paragraphs it gets skimmed past, and then the reply options below
-          look like they belong to nothing.
-
-          Dotted outline, no fill — it's an aside asking something, not a card
-          announcing something, and dotted is already the system's language for
-          "this line is provisional". A filled block read as heavier than the
-          answer above it. */}
       {message.question && !message.streaming && (
-        <p className="mt-1.5 rounded-lg border border-dotted border-accent px-3.5 py-2.5 text-base leading-relaxed text-text">
-          {message.question}
-        </p>
+        <AgentQuestion className="mt-1.5">{message.question}</AgentQuestion>
       )}
 
       {!message.streaming && (

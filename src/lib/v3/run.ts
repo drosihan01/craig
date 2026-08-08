@@ -1,4 +1,4 @@
-import type { TaskStatus } from "@/components/ui";
+import type { Certainty, TaskStatus } from "@/components/ui";
 import { V3_PEOPLE, V3_STARTER } from "@/lib/v3/company";
 
 /**
@@ -15,8 +15,6 @@ import { V3_PEOPLE, V3_STARTER } from "@/lib/v3/company";
  *
  * Fixture data. Goes when there's a scheduler.
  */
-
-export type Certainty = "verified" | "confirmed" | "assumed";
 
 export interface V3RunStep {
   id: string;
@@ -75,7 +73,8 @@ export const V3_RUN_STEPS: V3RunStep[] = [
     status: "in_progress",
     owner: HER,
     waitingOn: HER,
-    craigNote: "Sent with her invite. Signing it is also how she gets her account.",
+    craigNote:
+      "Sent with her invite. Signing it is also how she gets her account.",
   },
   {
     id: "v3-payroll",

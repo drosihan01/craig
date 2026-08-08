@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
+  ActivityFeed,
   AppShell,
   Avatar,
   Badge,
   buttonVariants,
+  CERTAINTY,
+  CertaintyPill,
   CraigMark,
   EmptyState,
   Progress,
   Separator,
   WorkflowProgress,
+  type ActivityEntry,
   type StepMetric,
   type WorkflowStep,
 } from "@/components/ui";
@@ -19,7 +23,7 @@ import { Person, Schedule } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { V3Nav } from "@/components/v3/v3-nav";
 import { V3_ACCOUNT, V3_STARTER } from "@/lib/v3/company";
-import { V3_RUN, type Certainty, type V3RunStep } from "@/lib/v3/run";
+import { V3_RUN, type V3RunStep } from "@/lib/v3/run";
 import { runComplete, runDone, useV3 } from "@/lib/v3/store";
 
 /**
@@ -40,35 +44,6 @@ import { runComplete, runDone, useV3 } from "@/lib/v3/store";
  * The right panel is Craig's, and it's live. It's what separates this from a
  * project tracker: things move on it while Theo isn't doing anything.
  */
-
-/**
- * What "done" is worth.
- *
- * Mirrored from the Katalis fixture rather than imported. v3 declares its own
- * `Certainty` type for the same reason — a page about Calder shouldn't have to
- * reach into another company's demo data to find out what "verified" means, and
- * both copies get deleted together when there's a real run behind this.
- */
-const CERTAINTY: Record<
-  Certainty,
-  { label: string; note: string; tone: "success" | "neutral" | "warning" }
-> = {
-  verified: {
-    label: "Verified",
-    note: "I checked this one myself",
-    tone: "success",
-  },
-  confirmed: {
-    label: "Confirmed",
-    note: "Somebody told me — I can't check it",
-    tone: "neutral",
-  },
-  assumed: {
-    label: "Not checked",
-    note: "Nobody has said either way",
-    tone: "warning",
-  },
-};
 
 /* Calder is nine people and Checkmate is a vendor, so first names are
    unambiguous and a full name in a 14px metric line is mostly surname. */
@@ -183,17 +158,11 @@ export default function V3PersonPage() {
 function toCard(step: V3RunStep): WorkflowStep {
   const metrics: StepMetric[] = [];
 
-  const certainty = step.certainty ? CERTAINTY[step.certainty] : null;
-
   if (step.status === "complete") {
-    if (certainty) {
+    if (step.certainty) {
       metrics.push({
-        value: (
-          <Badge tone={certainty.tone} size="sm">
-            {certainty.label}
-          </Badge>
-        ),
-        label: certainty.note,
+        value: <CertaintyPill certainty={step.certainty} size="sm" />,
+        label: CERTAINTY[step.certainty].note,
       });
     }
   } else {
@@ -235,7 +204,7 @@ function RunAside({
   withSomeone,
   later,
 }: {
-  feed: { id: string; note: string; when: string }[];
+  feed: ActivityEntry[];
   withSomeone: V3RunStep[];
   later: V3RunStep[];
 }) {
@@ -249,28 +218,11 @@ function RunAside({
           </p>
         </div>
 
-        {feed.length === 0 ? (
-          <p className="text-xs leading-relaxed text-text-subtle">
-            Nothing yet. Everything I do to her onboarding lands here as I do
-            it, whether or not you asked for it.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {feed.map((f, i) => (
-              <li key={f.id} className="flex flex-col gap-0.5">
-                <span className="text-xs leading-relaxed text-text-muted">
-                  {f.note}
-                </span>
-                {/* Only the newest is stamped. A week compressed into ninety
-                    seconds gives every entry the same timestamp, and twelve
-                    rows of "Just now" is noise around the one that's true. */}
-                {i === 0 && (
-                  <span className="text-2xs text-text-subtle">{f.when}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <ActivityFeed
+          items={feed}
+          stamp="newest"
+          empty="Nothing yet. Everything I do to her onboarding lands here as I do it, whether or not you asked for it."
+        />
       </div>
 
       <Separator />

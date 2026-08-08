@@ -3,9 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CraigMark, PromptBar } from "@/components/ui";
+import {
+  AgentPhase,
+  CraigMark,
+  PersonTurn,
+  PromptBar,
+  useAgentWork,
+} from "@/components/ui";
 import { Close } from "@/components/ui/icons";
-import { cn } from "@/lib/cn";
 import { NEW_HIRE, PEOPLE } from "@/lib/demo";
 import { ACTIVITY, outstanding } from "@/lib/craig-activity";
 import { logActivity } from "@/lib/activity-store";
@@ -82,21 +87,18 @@ const STATUS =
 
 export function useHomeChat() {
   const [lines, setLines] = React.useState<ChatLine[]>([]);
-  const [thinking, setThinking] = React.useState<string | null>(null);
-  const timersRef = React.useRef<number[]>([]);
+  const work = useAgentWork();
 
-  React.useEffect(() => {
-    const pending = timersRef.current;
-    return () => pending.forEach(clearTimeout);
-  }, []);
-
-  return { lines, setLines, thinking, setThinking, timersRef };
+  return { lines, setLines, work };
 }
 
 export type HomeChat = ReturnType<typeof useHomeChat>;
 
 export function useAskCraig(chat: HomeChat, workflows: DemoWorkflow[]) {
-  const { setLines, setThinking, timersRef } = chat;
+  const { setLines } = chat;
+  /* The runner on its own. The work object changes identity with every phase,
+     and `ask` below shouldn't be rebuilt on the beat. */
+  const { run: work } = chat.work;
   const router = useRouter();
 
   const add = React.useCallback(
@@ -106,28 +108,6 @@ export function useAskCraig(chat: HomeChat, workflows: DemoWorkflow[]) {
         { id: crypto.randomUUID(), from, text, refs },
       ]),
     [setLines],
-  );
-
-  /* Phases first, then the answer. Each label names something he'd actually
-     have to do, so the wait explains itself rather than being a spinner. */
-  const work = React.useCallback(
-    (phases: string[], done: () => void) => {
-      timersRef.current.forEach(clearTimeout);
-      timersRef.current = [];
-      const beat = 620;
-      phases.forEach((label, i) => {
-        timersRef.current.push(
-          window.setTimeout(() => setThinking(label), i * beat),
-        );
-      });
-      timersRef.current.push(
-        window.setTimeout(() => {
-          setThinking(null);
-          done();
-        }, phases.length * beat),
-      );
-    },
-    [setThinking, timersRef],
   );
 
   return React.useCallback(
@@ -367,7 +347,8 @@ export function CraigDock({
   placeholder?: string;
   footnote?: React.ReactNode;
 }) {
-  const { lines, thinking, setLines, setThinking, timersRef } = chat;
+  const { lines, setLines, work } = chat;
+  const thinking = work.phase;
   const open = lines.length > 0 || Boolean(thinking);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -380,9 +361,7 @@ export function CraigDock({
   }, [lines, thinking]);
 
   function close() {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-    setThinking(null);
+    work.cancel();
     setLines([]);
   }
 
@@ -440,26 +419,14 @@ export function CraigDock({
                 )}
               </div>
             ) : (
-              <p
-                key={l.id}
-                className={cn(
-                  "ml-auto max-w-[85%] rounded-xl rounded-br-sm px-3 py-2",
-                  "bg-accent-subtle text-base text-accent-subtle-fg",
-                )}
-              >
-                {l.text}
-              </p>
+              <PersonTurn key={l.id}>{l.text}</PersonTurn>
             ),
           )}
 
-          {thinking && (
-            <span
-              key={thinking}
-              className="text-sm text-text-muted motion-safe:animate-[step-phase_260ms_cubic-bezier(0.25,1,0.5,1),soft-pulse_2.2s_ease-in-out_260ms_infinite]"
-            >
-              {thinking}
-            </span>
-          )}
+          {/* No mark beside it here. The panel is headed with one already, and
+              a second on the pending turn reads as him introducing himself
+              twice inside a box the width of the composer. */}
+          <AgentPhase label={thinking} />
         </div>
 
         {/* Same composer, still at the bottom of the same object. */}

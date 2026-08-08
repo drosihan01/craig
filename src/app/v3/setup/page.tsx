@@ -1,12 +1,12 @@
 "use client";
 
-import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   AppShell,
   CraigMark,
   Separator,
   Stepper,
+  useAgentWork,
   type Step,
 } from "@/components/ui";
 import { V3_ACCOUNT, V3_COMPANY, V3_FOUNDER } from "@/lib/v3/company";
@@ -41,31 +41,18 @@ const BUILD_STEPS = [
 export default function V3SetupPage() {
   const router = useRouter();
   const { turn, scene } = useV3();
-  const [buildStep, setBuildStep] = React.useState(0);
-  const timersRef = React.useRef<number[]>([]);
-
-  React.useEffect(() => {
-    const pending = timersRef.current;
-    return () => pending.forEach(clearTimeout);
-  }, []);
+  /* The last line stays up while the router does its bit. Clearing it would
+     leave him finished and silent on a screen that says he's still writing. */
+  const writing = useAgentWork({ beat: 1100, hold: 600, keepLast: true });
 
   const building = scene === "building";
 
   function build() {
     setScene("building");
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = BUILD_STEPS.map((_, i) =>
-      window.setTimeout(() => setBuildStep(i), i * 1100),
-    );
-    timersRef.current.push(
-      window.setTimeout(
-        () => {
-          setScene("builder");
-          router.push("/v3/workflows/qsa");
-        },
-        BUILD_STEPS.length * 1100 + 600,
-      ),
-    );
+    writing.run(BUILD_STEPS, () => {
+      setScene("builder");
+      router.push("/v3/workflows/qsa");
+    });
   }
 
   const steps: Step[] = [
@@ -110,7 +97,11 @@ export default function V3SetupPage() {
     >
       <div className="mx-auto flex h-[calc(100vh-3rem)] w-full max-w-2xl flex-col pt-10">
         {building ? (
-          <Building step={buildStep} />
+          /* The director puts the scene into "building" itself rather than
+             pressing the button, so the phases never start and there's nothing
+             for the screen to stand on. It holds the first line instead, which
+             is what it did before any of this ran on a timer. */
+          <Building label={writing.phase ?? BUILD_STEPS[0]} />
         ) : (
           <>
             <header className="flex shrink-0 flex-col gap-2 pb-8">
@@ -141,7 +132,7 @@ export default function V3SetupPage() {
  * a single changing line reads as one continuous act of attention, which is
  * closer to what's actually being claimed.
  */
-function Building({ step }: { step: number }) {
+function Building({ label }: { label: string }) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-5 text-center">
       <CraigMark className="size-10 text-accent" />
@@ -149,11 +140,14 @@ function Building({ step }: { step: number }) {
         <h1 className="text-2xl font-semibold tracking-[-0.02em]">
           Writing your workflow
         </h1>
+        {/* Not the inline `AgentPhase`. That one pulses because it sits beside
+            an answer arriving; this is the whole screen, and a heading-sized
+            line breathing under it is a page that won't settle. */}
         <p
-          key={step}
+          key={label}
           className="text-md text-text-muted motion-safe:animate-[step-phase_300ms_cubic-bezier(0.25,1,0.5,1)]"
         >
-          {BUILD_STEPS[step]}
+          {label}
         </p>
       </div>
     </div>

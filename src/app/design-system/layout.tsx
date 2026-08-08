@@ -1,5 +1,6 @@
 import { AppShell, Badge, type AppNotification } from "@/components/ui";
 import { ACCOUNT } from "@/lib/demo";
+import { ALL_IDS } from "./sections";
 import { SectionNav } from "./_components/section-nav";
 import { ShellAside } from "./_components/shell-aside";
 
@@ -12,7 +13,9 @@ const NOTIFICATIONS: AppNotification[] = [
     id: "d1",
     kind: "info",
     title: "Design system v0.1",
-    description: "24 sections, zero UI dependencies.",
+    /* Counted rather than written down — it was three sections out of date
+       the moment someone added one. */
+    description: `${ALL_IDS.length} sections, zero UI dependencies.`,
     timestamp: new Date(Date.now() - 20 * 60_000),
   },
 ];

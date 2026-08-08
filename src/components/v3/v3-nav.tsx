@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Separator } from "@/components/ui";
+import { NavTreeItem, Separator } from "@/components/ui";
 
 /**
  * The left panel for demo v3.
@@ -37,18 +36,12 @@ export function V3Nav({ children }: { children?: React.ReactNode }) {
           const current = pathname.startsWith(item.href);
 
           return (
-            <Link
+            <NavTreeItem
               key={item.href}
               href={item.href}
-              aria-current={current ? "page" : undefined}
-              className={
-                current
-                  ? "rounded-md bg-accent-subtle px-2 py-1 text-sm font-medium text-accent-subtle-fg"
-                  : "rounded-md px-2 py-1 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-              }
-            >
-              {item.label}
-            </Link>
+              label={item.label}
+              current={current}
+            />
           );
         })}
       </div>

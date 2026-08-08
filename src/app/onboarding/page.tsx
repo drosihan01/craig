@@ -2,9 +2,11 @@
 
 import * as React from "react";
 import {
+  ActivityFeed,
   AppShell,
   Badge,
   Button,
+  CERTAINTY,
   CraigMark,
   Progress,
   PromptBar,
@@ -17,13 +19,7 @@ import {
 } from "@/components/ui";
 import { Check, Schedule } from "@/components/ui/icons";
 import { COMPANY, NEW_HIRE, PEOPLE } from "@/lib/demo";
-import {
-  CERTAINTY,
-  RUN,
-  RUN_STEPS,
-  runSummary,
-  type RunStep,
-} from "@/lib/demo-run";
+import { RUN, RUN_STEPS, runSummary, type RunStep } from "@/lib/demo-run";
 import { ACTIVITY, ACTIVITY_VERB } from "@/lib/craig-activity";
 
 /**
@@ -111,10 +107,9 @@ function StarterView() {
             ) : (
               <>
                 {mine.length} {mine.length === 1 ? "thing" : "things"} for you
-                to do. {waiting.length}{" "}
-                {waiting.length === 1 ? "is" : "are"} with someone else and
-                I&apos;m chasing {waiting.length === 1 ? "it" : "them"}. Nothing
-                here is urgent.
+                to do. {waiting.length} {waiting.length === 1 ? "is" : "are"}{" "}
+                with someone else and I&apos;m chasing{" "}
+                {waiting.length === 1 ? "it" : "them"}. Nothing here is urgent.
               </>
             )}
           </p>
@@ -252,20 +247,18 @@ function StarterAside({
           <CraigMark className="size-4 text-accent" />
           <p className="text-sm font-medium">What I&apos;ve been doing</p>
         </div>
-        <ul className="flex flex-col gap-2">
-          {ACTIVITY.slice(0, 4).map((a) => (
-            <li key={a.id} className="flex flex-col gap-0.5">
-              <span className="text-xs leading-relaxed text-text-muted">
-                <span className="text-text-subtle">{ACTIVITY_VERB[a.kind]}</span>{" "}
-                {a.what.replace(/^\w+ /, "")}
-              </span>
-              <span className="text-2xs text-text-subtle">
-                {a.when}
-                {a.outstanding && " · still waiting"}
-              </span>
-            </li>
-          ))}
-        </ul>
+        {/* Four, not six: he's here to do his own list, and the point is only
+            that somebody is already on the things he can't move. */}
+        <ActivityFeed
+          limit={4}
+          items={ACTIVITY.map((a) => ({
+            id: a.id,
+            verb: ACTIVITY_VERB[a.kind],
+            what: a.what.replace(/^\w+ /, ""),
+            when: a.when,
+            note: a.outstanding ? "still waiting" : undefined,
+          }))}
+        />
       </div>
 
       <Separator />

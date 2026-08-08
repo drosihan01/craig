@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Badge, Separator } from "@/components/ui";
+import { Badge, NavTreeItem, Separator } from "@/components/ui";
 
 /**
  * The admin's left panel — one nav across every admin screen, so moving
@@ -33,21 +32,17 @@ export function AdminNav({ children }: { children?: React.ReactNode }) {
       <div className="flex flex-col gap-0.5">
         {ITEMS.map((item) => {
           const current =
-            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
 
           return (
-            <Link
+            <NavTreeItem
               key={item.href}
               href={item.href}
-              aria-current={current ? "page" : undefined}
-              className={
-                current
-                  ? "rounded-md bg-accent-subtle px-2 py-1 text-sm font-medium text-accent-subtle-fg"
-                  : "rounded-md px-2 py-1 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-              }
-            >
-              {item.label}
-            </Link>
+              label={item.label}
+              current={current}
+            />
           );
         })}
       </div>

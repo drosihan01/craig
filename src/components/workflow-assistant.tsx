@@ -2,9 +2,12 @@
 
 import * as React from "react";
 import {
+  AgentPhase,
   Button,
   CraigMark,
+  PersonTurn,
   PromptBar,
+  useAgentWork,
   type WorkflowBlock,
 } from "@/components/ui";
 import {
@@ -162,26 +165,12 @@ export function useCraigPanel(blocks: WorkflowBlock[]) {
   const [offerOpen, setOfferOpen] = React.useState(() =>
     gaps.some((b) => b.preset === "slack"),
   );
-  /* What he's doing right now, or null when he isn't. An agent that answers
-     instantly is a lookup table; showing the work is most of what makes the
-     difference legible. */
-  const [thinking, setThinking] = React.useState<string | null>(null);
-  const timersRef = React.useRef<number[]>([]);
+  /* What he's doing right now, and the timers that get him there. An agent
+     that answers instantly is a lookup table; showing the work is most of what
+     makes the difference legible. */
+  const work = useAgentWork();
 
-  React.useEffect(() => {
-    const pending = timersRef.current;
-    return () => pending.forEach(clearTimeout);
-  }, []);
-
-  return {
-    lines,
-    setLines,
-    offerOpen,
-    setOfferOpen,
-    thinking,
-    setThinking,
-    timersRef,
-  };
+  return { lines, setLines, offerOpen, setOfferOpen, work };
 }
 
 export type CraigPanel = ReturnType<typeof useCraigPanel>;
@@ -199,15 +188,8 @@ export function WorkflowAssistant({
   onInsert: (block: WorkflowBlock) => void;
   onSelect: (id: string) => void;
 }) {
-  const {
-    lines,
-    setLines,
-    offerOpen,
-    setOfferOpen,
-    thinking,
-    setThinking,
-    timersRef,
-  } = chat;
+  const { lines, setLines, offerOpen, setOfferOpen, work } = chat;
+  const thinking = work.phase;
 
   const gaps = blocks.filter((b) => {
     const preset = b.preset ? findPreset(b.preset) : undefined;
@@ -238,31 +220,6 @@ export function WorkflowAssistant({
       { id: crypto.randomUUID(), from, text, blockId },
     ]);
 
-  /**
-   * Do the phases, then answer.
-   *
-   * The labels aren't decoration — each one names a thing Craig would actually
-   * have to do, in the order he'd do it, so the wait explains itself. The
-   * change lands with the last phase rather than at the start, because a panel
-   * that updates while he's still "checking" gives the game away.
-   */
-  function work(phases: string[], done: () => void) {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-    const beat = 620;
-    phases.forEach((label, i) => {
-      timersRef.current.push(
-        window.setTimeout(() => setThinking(label), i * beat),
-      );
-    });
-    timersRef.current.push(
-      window.setTimeout(() => {
-        setThinking(null);
-        done();
-      }, phases.length * beat),
-    );
-  }
-
   const blockFor = (preset: string) => blocks.find((b) => b.preset === preset);
 
   function acceptSuggestion() {
@@ -274,7 +231,7 @@ export function WorkflowAssistant({
       add("craig", "There's no Slack step in this workflow any more.");
       return;
     }
-    work(
+    work.run(
       [
         `Looking at ${JASON}'s channels`,
         "Checking which ones a new engineer needs",
@@ -297,7 +254,7 @@ export function WorkflowAssistant({
   function declineSuggestion() {
     setOfferOpen(false);
     add("ada", "I'll tell you.");
-    work(["Standing down"], () =>
+    work.run(["Standing down"], () =>
       add(
         "craig",
         "Go on then — type them below with the hashes and I'll put them in.",
@@ -317,7 +274,7 @@ export function WorkflowAssistant({
     if (url) {
       const link = LINKS.find((l) => l.match.test(url));
       if (!link) {
-        work(["Reading the link"], () =>
+        work.run(["Reading the link"], () =>
           add("craig", `I don't know which step ${url} belongs to. Which one?`),
         );
         return;
@@ -330,7 +287,7 @@ export function WorkflowAssistant({
         );
         return;
       }
-      work(
+      work.run(
         [`Reading the ${link.label} link`, `Filling in the ${link.label} step`],
         () => {
           onPatch(block.id, { config: { ...block.config, [link.field]: url } });
@@ -350,7 +307,7 @@ export function WorkflowAssistant({
         add("craig", "There's no Slack step in this workflow.");
         return;
       }
-      work(["Setting the Slack channels"], () => {
+      work.run(["Setting the Slack channels"], () => {
         onPatch(slack.id, { config: { ...slack.config, channels } });
         onSelect(slack.id);
         add(
@@ -382,7 +339,7 @@ export function WorkflowAssistant({
         add("craig", `I can't do ${preset.label} yet — ${preset.unavailable}.`);
         return;
       }
-      work(
+      work.run(
         [`Looking up ${preset.label}`, "Adding it to the end of the workflow"],
         () => {
           const block = blockFromPreset(preset, `b${Date.now()}`);
@@ -435,30 +392,14 @@ export function WorkflowAssistant({
               </button>
             </div>
           ) : (
-            <p
-              key={l.id}
-              className="ml-auto max-w-[85%] rounded-xl rounded-br-sm bg-accent-subtle px-3 py-2 text-sm text-accent-subtle-fg"
-            >
+            <PersonTurn key={l.id} size="sm">
               {l.text}
-            </p>
+            </PersonTurn>
           ),
         )}
 
-        {/* The pending turn. Mark in place, phase beside it — no spinner, for
-            the reason the main chat gives: the mark and the changing label are
-            already two signals that he's going. Keyed so each phase replays
-            the animation instead of the text snapping. */}
-        {thinking && (
-          <div className="flex items-center gap-2">
-            <CraigMark className="size-5 shrink-0 text-accent" />
-            <span
-              key={thinking}
-              className="text-sm text-text-muted motion-safe:animate-[step-phase_260ms_cubic-bezier(0.25,1,0.5,1),soft-pulse_2.2s_ease-in-out_260ms_infinite]"
-            >
-              {thinking}
-            </span>
-          </div>
-        )}
+        {/* The pending turn: mark in place, phase beside it. */}
+        <AgentPhase label={thinking} mark />
       </div>
 
       {offerOpen && !thinking && (

@@ -8,6 +8,7 @@ import {
   Button,
   CraigMark,
   Separator,
+  useAgentWork,
   WorkflowBuilder,
   WorkflowCanvas,
 } from "@/components/ui";
@@ -143,26 +144,19 @@ function Questions({
   blocks: ReturnType<typeof useV3>["blocks"];
   onSelect: (id: string) => void;
 }) {
-  const [busy, setBusy] = React.useState<string | null>(null);
-  const timersRef = React.useRef<number[]>([]);
-
-  React.useEffect(() => {
-    const pending = timersRef.current;
-    return () => pending.forEach(clearTimeout);
-  }, []);
+  /* One phase, and it's the id of the question he's writing in rather than a
+     label — the button says what he's doing, so a second sentence beside it
+     would be him narrating a click. The beat is the point: an answer that
+     lands the instant you ask for it reads as a value that was always there. */
+  const work = useAgentWork({ beat: 1100 });
+  const busy = work.phase;
 
   const open = openBlocks(blocks);
 
   function answer(id: string) {
     const a = V3_ANSWERS[id];
     if (!a || busy) return;
-    setBusy(id);
-    timersRef.current.push(
-      window.setTimeout(() => {
-        answerBlock(id, a.config);
-        setBusy(null);
-      }, 1100),
-    );
+    work.run([id], () => answerBlock(id, a.config));
   }
 
   if (open.length === 0) {

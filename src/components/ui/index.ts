@@ -15,6 +15,16 @@ export {
   type TaskStatus,
   type BadgeProps,
 } from "./badge";
+export { CERTAINTY, CertaintyPill, type Certainty } from "./certainty";
+export {
+  AgentPhase,
+  AgentQuestion,
+  PersonTurn,
+  useAgentWork,
+  type AgentWork,
+  type AgentWorkOptions,
+} from "./agent";
+export { ActivityFeed, type ActivityEntry } from "./activity";
 export {
   Card,
   CardHeader,
@@ -42,12 +52,7 @@ export {
   type SortState,
 } from "./filters";
 export { Tabs, SegmentedControl } from "./tabs";
-export {
-  Progress,
-  Stepper,
-  type Step,
-  type StepState,
-} from "./progress";
+export { Progress, Stepper, type Step, type StepState } from "./progress";
 export { Callout, EmptyState, Tooltip, Skeleton } from "./feedback";
 export {
   WorkflowProgress,

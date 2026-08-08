@@ -3,7 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AppShell, Button, buttonVariants, CraigMark } from "@/components/ui";
+import {
+  ActivityFeed,
+  AppShell,
+  Button,
+  buttonVariants,
+  CraigMark,
+} from "@/components/ui";
 import { Add, Description, PersonAdd } from "@/components/ui/icons";
 import { V3Nav } from "@/components/v3/v3-nav";
 import { V3AddSeat } from "@/components/v3/v3-add-seat";
@@ -85,7 +91,17 @@ export default function V3HomePage() {
       nav={<V3Nav />}
       account={V3_ACCOUNT}
       asideTitle="What I've done"
-      aside={<Activity feed={feed} />}
+      /* Craig's running commentary, beside the work rather than inside it —
+         the answer to "what has this thing actually done", which is what a
+         founder who has been burned by software asks on day three. */
+      aside={
+        <ActivityFeed
+          items={feed}
+          limit={8}
+          className="gap-3"
+          empty="Nothing yet. Anything I do gets written down here with the time it happened, which is most of what a training record is."
+        />
+      }
     >
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-10">
         {/* No card. A card is a boundary and there's nothing here for it to be
@@ -282,40 +298,6 @@ function openItems(
 /* -------------------------------------------------------------------------- */
 /*  Panel                                                                     */
 /* -------------------------------------------------------------------------- */
-
-/**
- * Craig's running commentary, beside the work rather than inside it.
- *
- * It's also the answer to "what has this thing actually done", which is the
- * question a founder who has been burned by software asks on day three.
- */
-function Activity({
-  feed,
-}: {
-  feed: { id: string; note: string; when: string }[];
-}) {
-  if (feed.length === 0) {
-    return (
-      <p className="text-xs leading-relaxed text-text-subtle">
-        Nothing yet. Anything I do gets written down here with the time it
-        happened, which is most of what a training record is.
-      </p>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      {feed.slice(0, 8).map((entry) => (
-        <div key={entry.id} className="flex flex-col gap-0.5">
-          <p className="text-xs leading-relaxed text-text-muted">
-            {entry.note}
-          </p>
-          <p className="text-2xs text-text-subtle">{entry.when}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function QuickAdd({
   icon,

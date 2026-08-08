@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import type { WorkflowBlock } from "@/components/ui";
+import type { ActivityEntry, Certainty, WorkflowBlock } from "@/components/ui";
 import { V3_BLOCKS } from "@/lib/v3/workflow";
-import { V3_RUN_STEPS, type V3RunStep, type Certainty } from "@/lib/v3/run";
+import { V3_RUN_STEPS, type V3RunStep } from "@/lib/v3/run";
 import { V3_STARTER } from "@/lib/v3/company";
 
 /**
@@ -48,7 +48,7 @@ interface V3State {
   seatTaken: boolean;
   run: V3RunStep[];
   /** Craig's running commentary on the instance, newest first. */
-  feed: { id: string; note: string; when: string }[];
+  feed: ActivityEntry[];
   /** True while the play button is driving. */
   playing: boolean;
 }
@@ -165,16 +165,14 @@ export function advanceRun(
 ) {
   set({
     run: state.run.map((s) =>
-      s.id === step
-        ? { ...s, status, certainty, waitingOn: undefined }
-        : s,
+      s.id === step ? { ...s, status, certainty, waitingOn: undefined } : s,
     ),
   });
 }
 
-export function logBeat(note: string) {
+export function logBeat(what: string) {
   set({
-    feed: [{ id: crypto.randomUUID(), note, when: "Just now" }, ...state.feed],
+    feed: [{ id: crypto.randomUUID(), what, when: "Just now" }, ...state.feed],
   });
 }
 

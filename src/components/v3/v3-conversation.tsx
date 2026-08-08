@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Button, CraigMark, PromptBar } from "@/components/ui";
+import {
+  AgentPhase,
+  AgentQuestion,
+  Button,
+  CraigMark,
+  PersonTurn,
+  PromptBar,
+  useAgentWork,
+} from "@/components/ui";
 import { V3_SESSION } from "@/lib/v3/session";
 import {
   setDraft,
@@ -30,13 +38,11 @@ const BEAT = 900;
 
 export function V3Conversation({ onFinish }: { onFinish: () => void }) {
   const { turn, thinking, draft } = useV3();
-  const timersRef = React.useRef<number[]>([]);
+  /* The phase lives in the store rather than in this component, because the
+     director drives the same conversation and both have to be looking at one
+     copy of it. */
+  const work = useAgentWork({ beat: BEAT, onPhase: setThinking });
   const endRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const pending = timersRef.current;
-    return () => pending.forEach(clearTimeout);
-  }, []);
 
   /* The reply lands below the fold from the second turn on. */
   React.useLayoutEffect(() => {
@@ -48,14 +54,6 @@ export function V3Conversation({ onFinish }: { onFinish: () => void }) {
   const done = turn >= V3_SESSION.length;
 
   /**
-   * Say the next thing, then let Craig work before he answers.
-   *
-   * The phases aren't decoration — each names a document he'd have to open,
-   * and Theo gave him three that disagree. Showing the reconciliation as work
-   * is the difference between an assistant that read your files and one that
-   * claims to have.
-   */
-  /**
    * Fill the composer, then send it.
    *
    * Two beats rather than one. Jumping straight to the message skips the only
@@ -64,31 +62,25 @@ export function V3Conversation({ onFinish }: { onFinish: () => void }) {
    */
   function say() {
     if (!next || thinking) return;
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
+    work.cancel();
     typeDraft(next.ada);
-    timersRef.current.push(window.setTimeout(send, 2000));
+    work.after(send, 2000);
   }
 
+  /**
+   * Say it, then let him work before he answers.
+   *
+   * The phases aren't decoration — each names a document he'd have to open,
+   * and Theo gave him three that disagree. Showing the reconciliation as work
+   * is the difference between an assistant that read your files and one that
+   * claims to have.
+   */
   function send() {
     if (!next || thinking) return;
 
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
     setDraft("");
     setTurn(turn + 0.5);
-
-    next.steps.forEach((label, i) => {
-      timersRef.current.push(
-        window.setTimeout(() => setThinking(label), i * BEAT),
-      );
-    });
-    timersRef.current.push(
-      window.setTimeout(() => {
-        setThinking(null);
-        setTurn(turn + 1);
-      }, next.steps.length * BEAT),
-    );
+    work.run(next.steps, () => setTurn(turn + 1));
   }
 
   return (
@@ -104,17 +96,7 @@ export function V3Conversation({ onFinish }: { onFinish: () => void }) {
         {turn % 1 !== 0 && next && (
           <div className="flex flex-col gap-4">
             <Said text={next.ada} attachment={next.attachment} />
-            {thinking && (
-              <div className="flex items-center gap-2">
-                <CraigMark className="size-5 shrink-0 text-accent" />
-                <span
-                  key={thinking}
-                  className="text-sm text-text-muted motion-safe:animate-[step-phase_260ms_cubic-bezier(0.25,1,0.5,1),soft-pulse_2.2s_ease-in-out_260ms_infinite]"
-                >
-                  {thinking}
-                </span>
-              </div>
-            )}
+            <AgentPhase label={thinking} mark />
           </div>
         )}
 
@@ -166,13 +148,8 @@ function Turn({ turn: t }: { turn: (typeof V3_SESSION)[number] }) {
       <div className="flex flex-col gap-2">
         <CraigMark className="size-5 text-accent" />
         <Body text={t.craig} />
-        {/* The ask, pulled out of the prose. Buried at the end of four
-            paragraphs it gets skimmed past, and then the reply below reads as
-            answering nothing. */}
         {t.question && (
-          <p className="mt-1 rounded-lg border border-dotted border-accent px-3.5 py-2.5 text-base leading-relaxed text-text">
-            {t.question}
-          </p>
+          <AgentQuestion className="mt-1">{t.question}</AgentQuestion>
         )}
       </div>
     </div>
@@ -181,15 +158,13 @@ function Turn({ turn: t }: { turn: (typeof V3_SESSION)[number] }) {
 
 function Said({ text, attachment }: { text: string; attachment?: string }) {
   return (
-    <div className="ml-auto flex max-w-[85%] flex-col items-end gap-1.5">
+    <div className="flex flex-col items-end gap-1.5">
       {attachment && (
         <span className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text-muted">
           {attachment}
         </span>
       )}
-      <p className="whitespace-pre-wrap rounded-xl rounded-br-sm bg-accent-subtle px-3.5 py-2.5 text-base leading-relaxed text-accent-subtle-fg">
-        {text}
-      </p>
+      <PersonTurn>{text}</PersonTurn>
     </div>
   );
 }

@@ -7,7 +7,6 @@ import {
   DEFAULT_MODEL,
   Dialog,
   ModelPicker,
-  PromptBar,
   type ChatMessage,
   type ChatModel,
 } from "@/components/ui";
@@ -127,28 +126,6 @@ export function ChatDemo() {
   );
 }
 
-export function PromptBarDemo() {
-  const [sent, setSent] = React.useState<string[]>([]);
-
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <PromptBar
-        onSubmit={(text) => setSent((prev) => [text, ...prev].slice(0, 3))}
-        footnote="Enter sends · Shift+Enter for a new line"
-      />
-      {sent.length > 0 && (
-        <ul className="flex flex-col gap-1">
-          {sent.map((s, i) => (
-            <li key={`${s}-${i}`} className="text-sm text-text-subtle">
-              sent: <span className="text-text">{s}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 export function ModelPickerDemo() {
   const [model, setModel] = React.useState<ChatModel>(DEFAULT_MODEL);
   return (
@@ -194,8 +171,8 @@ export function DialogDemo() {
         <div className="px-5 py-4 text-base text-text-muted">
           <p>
             Once published, every new starter assigned to this role gets this
-            workflow automatically. Existing starters keep the version they
-            were assigned.
+            workflow automatically. Existing starters keep the version they were
+            assigned.
           </p>
         </div>
       </Dialog>

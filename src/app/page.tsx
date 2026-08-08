@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
+  ActivityFeed,
   AppShell,
   Avatar,
   Badge,
@@ -271,19 +272,17 @@ function HomeAside({ fresh }: { fresh: boolean }) {
             <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
               What I&apos;ve done
             </p>
-            <div className="flex flex-col gap-2">
-              {activity.slice(0, 6).map((a) => (
-                <div key={a.id} className="flex flex-col gap-0.5">
-                  <span className="text-xs leading-relaxed text-text-muted">
-                    <span className="text-text-subtle">
-                      {ACTIVITY_VERB[a.kind]}
-                    </span>{" "}
-                    {a.what.replace(/^\w+ /, "")}
-                  </span>
-                  <span className="text-2xs text-text-subtle">{a.when}</span>
-                </div>
-              ))}
-            </div>
+            {/* The sentence already opens with its own verb, so the verb is
+                stripped off and set apart rather than printed twice. */}
+            <ActivityFeed
+              limit={6}
+              items={activity.map((a) => ({
+                id: a.id,
+                verb: ACTIVITY_VERB[a.kind],
+                what: a.what.replace(/^\w+ /, ""),
+                when: a.when,
+              }))}
+            />
           </div>
 
           <Separator />
