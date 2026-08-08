@@ -11,7 +11,7 @@ import { createJoinerToken } from "@/lib/showcase/joiner-session";
 import { rateLimit } from "@/lib/showcase/rate-limit";
 import { findTemplate, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
-import { sendEmail } from "@/lib/email/send";
+import { fromHeader, sendEmail } from "@/lib/email/send";
 
 /**
  * Giving somebody a seat, which is the first thing in this product that
@@ -35,14 +35,27 @@ import { sendEmail } from "@/lib/email/send";
  * 4. **Signed in, and limited.** The session is what stands between a stranger
  *    and somebody else's provider key; the limiter is what stands between a
  *    signed-in caller and the same key, because a cookie doesn't stop a loop.
+ * 5. **Capped, per account and per deployment.** The limiter answers "how fast"
+ *    and answers it well; it does not answer "how much", and a patient script
+ *    inside the per-minute allowance still sends thousands a day. A signed
+ *    cookie is also a weak subject to cap against while sign-up is open, since
+ *    a fresh account is a fresh allowance — so the ceiling that actually holds
+ *    is the deployment-wide one. See `PER_DEPLOYMENT_PER_DAY` below.
+ * 6. **The company name is not a header the sender controls.** It reaches a
+ *    Subject line and a From display name, and it was typed at sign-up by
+ *    whoever signed up. A carriage return in it is header injection; a `"` or
+ *    an `@` in it is a display name impersonating somebody's bank, sent from a
+ *    domain we have verified and signed. It is sanitised on the way out of the
+ *    account store and again where the header is built — see the note beside
+ *    the company below, and `fromHeader` in `send.ts`.
  *
- * What remains after all four is a signed-in user mailing a small number of
+ * What remains after all six is a signed-in user mailing a small number of
  * addresses of their choosing a fixed, honest invitation. That is the product,
  * and it is also the residual risk — which is why the copy is fixed and the
  * volume is capped rather than the address being trusted.
  *
  * Since the new starter got a screen of their own, this route also mints the
- * credential that reaches it. That raises the stakes on all four points above:
+ * credential that reaches it. That raises the stakes on all six points above:
  * the thing being posted to a stranger is no longer only prose, it is a signed
  * token that signs the holder in as them. So the link is built here from a
  * joiner this route created, never from anything the caller sent, and it goes in
@@ -102,6 +115,147 @@ const MAX_ID = 64;
 const MAX_BLOCKS = 40;
 
 const noStore = { "Cache-Control": "no-store" };
+
+/* --- The sending ceiling --------------------------------------------------- */
+
+/**
+ * How much mail one account may send in a rolling day, and how much the whole
+ * deployment may.
+ *
+ * The per-session limiter above stops a loop; it does not stop patience. Twelve
+ * a minute sustained is seventeen thousand invitations a day from one cookie,
+ * every one of them a real message from a verified domain that costs money to
+ * send and reputation to have sent. So the limiter answers "how fast" and this
+ * answers "how much", and they are different questions.
+ *
+ * The global number is the one that actually matters, and it exists because
+ * sign-up is open. A per-account cap alone is a cap on nothing when accounts
+ * are free: mint a hundred of them and you have a hundred allowances. The
+ * deployment-wide ceiling is the number that holds no matter how many accounts
+ * somebody creates, which makes it the one standing between this showcase and a
+ * suspended Resend account.
+ *
+ * Both are generous for the thing this is. Somebody demonstrating the product
+ * invites two or three people; a founder onboarding a real team might do twenty
+ * in a week, not in a day.
+ *
+ * In memory and per process, which is a real limitation and belongs in writing
+ * rather than in a surprise: a restart returns every allowance. That is
+ * tolerable for a showcase on one machine and would not be for anything larger,
+ * where this becomes the same Redis call `rate-limit.ts` describes.
+ */
+const PER_ACCOUNT_PER_DAY = 20;
+const PER_DEPLOYMENT_PER_DAY = 100;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * On `globalThis` for the reason spelled out at length in `accounts.ts`: Next
+ * compiles route handlers into more than one module graph, and a module-level
+ * `const` would give this route a fresh, empty ledger per graph — a cap that
+ * silently multiplies is worse than no cap, because it reads as one in review.
+ */
+const LEDGER_KEY = "__craig_showcase_invite_ledger__";
+
+interface SendLedger {
+  /** Timestamps of sends, per account email, newest last. */
+  byAccount: Map<string, number[]>;
+  /** Timestamps of every send this process has made, newest last. */
+  everyone: number[];
+}
+
+function ledger(): SendLedger {
+  const scope = globalThis as typeof globalThis & {
+    [LEDGER_KEY]?: Partial<SendLedger>;
+  };
+  const existing = scope[LEDGER_KEY];
+  if (existing?.byAccount instanceof Map && Array.isArray(existing.everyone)) {
+    return existing as SendLedger;
+  }
+
+  const created: SendLedger = { byAccount: new Map(), everyone: [] };
+  scope[LEDGER_KEY] = created;
+  return created;
+}
+
+/** Drops everything older than the window. Ordered, so it's a prefix. */
+function trim(hits: number[], since: number) {
+  let i = 0;
+  while (i < hits.length && hits[i] < since) i += 1;
+  if (i > 0) hits.splice(0, i);
+}
+
+/**
+ * Whether there is room to send, and how long until there is.
+ *
+ * Deliberately split from `recordSend` below, which is the opposite of what
+ * `rate-limit.ts` does and needs the reason stated. That file checks and records
+ * together because a caller who forgets the second call is a caller who leaks.
+ * Here there is one call site and a specific hazard the combined version
+ * creates: a deployment with a bad Resend key would spend an account's entire
+ * daily allowance on twenty failures, then refuse for a day, and the person
+ * would have sent nothing at all. What this ceiling is protecting is mail that
+ * actually went out, so it counts mail that actually went out.
+ *
+ * The loop that combined checking and recording would otherwise guard against is
+ * already covered — the per-minute and per-hour limiter runs before this.
+ */
+function ceilingHit(email: string): { hit: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const { byAccount, everyone } = ledger();
+
+  trim(everyone, now - DAY_MS);
+  if (everyone.length >= PER_DEPLOYMENT_PER_DAY) {
+    return {
+      hit: true,
+      retryAfter: Math.ceil((everyone[0] + DAY_MS - now) / 1000),
+    };
+  }
+
+  const mine = byAccount.get(email);
+  if (mine) trim(mine, now - DAY_MS);
+  if (mine && mine.length >= PER_ACCOUNT_PER_DAY) {
+    return {
+      hit: true,
+      retryAfter: Math.ceil((mine[0] + DAY_MS - now) / 1000),
+    };
+  }
+
+  return { hit: false };
+}
+
+/** Called only after Resend has accepted the message. */
+function recordSend(email: string) {
+  const now = Date.now();
+  const { byAccount, everyone } = ledger();
+
+  everyone.push(now);
+  const mine = byAccount.get(email) ?? [];
+  mine.push(now);
+  byAccount.set(email, mine);
+
+  /* Accounts that stopped sending shouldn't sit in the map forever. Swept on
+     write rather than on a timer, so there is no interval to leak — the same
+     reasoning as the sweep in `rate-limit.ts`. */
+  if (byAccount.size > 64) {
+    for (const [key, hits] of byAccount) {
+      if (hits.length === 0 || hits[hits.length - 1] < now - DAY_MS) {
+        byAccount.delete(key);
+      }
+    }
+  }
+}
+
+/**
+ * One sentence for both ceilings, on purpose.
+ *
+ * Telling somebody whether they hit their own limit or the deployment's would
+ * tell them how many other people are sending and how much room is left, which
+ * is a number worth knowing only to somebody deciding whether it is worth
+ * carrying on.
+ */
+const CEILING_REACHED =
+  "That's as many invitations as can go out today. Try again tomorrow.";
 
 /**
  * A caller-supplied value, as one harmless line.
@@ -309,6 +463,23 @@ export async function POST(request: Request) {
     );
   }
 
+  /* Checked before the body is even read. Nothing below this line is free —
+     it writes a joiner to disk, mints a bearer token and calls a paid API — and
+     an account that has spent its allowance should not be able to make this
+     route do any of that. */
+  const ceiling = ceilingHit(session.email);
+  if (ceiling.hit) {
+    return NextResponse.json(
+      { ok: false, error: CEILING_REACHED },
+      {
+        status: 429,
+        headers: ceiling.retryAfter
+          ? { ...noStore, "Retry-After": String(ceiling.retryAfter) }
+          : noStore,
+      },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -359,7 +530,17 @@ export async function POST(request: Request) {
      name the invitation is signed with, and a value the caller could set would
      let this route send a convincing welcome to a company they have nothing to
      do with — the one merge field where being wrong is a lie rather than a
-     typo. */
+     typo.
+
+     Reading it from the account makes it *the signed-in user's* choice rather
+     than *this request's*, which is a smaller hole but not a closed one: they
+     typed it at sign-up, and sign-up is open. It is safe to put in a Subject
+     line and a From display name because it is sanitised twice on the way here
+     — by the store on the way out (`publicView` in accounts.ts, which is what
+     cleans records written before there was a rule) and by `send.ts` at the
+     moment it becomes a header. Neither of those is here, and that is
+     deliberate: a third copy of the rule in this file is a third thing to keep
+     in step. */
   const account = getAccount(session.email);
   if (!account) return refuse("Not signed in.", 401);
   if (!account.company) {
@@ -449,6 +630,11 @@ export async function POST(request: Request) {
     fromName,
   });
 
+  /* Counted here, against the ceiling checked at the top — after Resend has
+     accepted it, because this is a cap on mail that went out rather than on
+     attempts to send it. See the note on `ceilingHit`. */
+  if (result.ok) recordSend(session.email);
+
   if (!result.ok) {
     /* Configuration this deployment got wrong is a 500 — the caller did nothing
        unusual and can't fix it by asking differently. A provider that refused
@@ -494,7 +680,11 @@ export async function POST(request: Request) {
       joinerId: joiner.id,
       to,
       bcc: BCC,
-      from: `${fromName} <${SENDER.address}>`,
+      /* Built by the same function the transport uses, rather than assembled
+         again here. Two ways of writing the same header is how a response comes
+         to describe a message that wasn't sent — and this one is shown to the
+         admin as evidence of what a stranger received. */
+      from: fromHeader(fromName, SENDER.address),
       subject,
       person: { name, role, startDate },
       workflow: { id: workflowId, name: workflowName },

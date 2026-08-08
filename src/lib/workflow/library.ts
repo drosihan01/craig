@@ -1343,6 +1343,42 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
   },
 ];
 
+/**
+ * The blocks this showcase can actually carry out, end to end.
+ *
+ * Everything else in the library is a real onboarding step and stays in the
+ * library — the catalogue is the argument that Craig writes plans about how a
+ * company works rather than a list of integrations. What it is not, yet, is
+ * something that does anything when a new starter reaches it.
+ *
+ * Three of these the person answers themselves, one somebody here ticks off,
+ * and Google Workspace is the one being wired to a real API. A block that
+ * looks available and then sits there is worse than one that says it isn't
+ * ready: the first wastes somebody's first week waiting, the second is a
+ * roadmap.
+ *
+ * Gated here rather than by editing thirty presets, so turning one back on is
+ * one line and nothing about the block itself carries the state.
+ */
+export const SHOWCASE_PRESETS = new Set<string>([
+  "middle-name",
+  "name-tag",
+  "date-of-birth",
+  "google-workspace",
+]);
+
+/* Applied after the library is built, so each preset keeps whatever reason it
+   already had. `unavailable` is a sentence shown to the person choosing, and a
+   specific one ("Notion's API can't manage workspace members") is worth more
+   than the general one. */
+for (const category of BLOCK_LIBRARY) {
+  for (const preset of category.presets) {
+    if (!SHOWCASE_PRESETS.has(preset.id) && !preset.unavailable) {
+      preset.unavailable = "Not wired up yet — coming later";
+    }
+  }
+}
+
 export const ALL_PRESETS: BlockPreset[] = BLOCK_LIBRARY.flatMap(
   (c) => c.presets,
 );

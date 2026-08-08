@@ -38,6 +38,7 @@ import {
   Delete,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
+import { SeatPaywall, outOfSeats } from "@/components/showcase/seat-paywall";
 import { WorkflowCraig } from "@/components/showcase/workflow-craig";
 import type { Session } from "@/lib/showcase/contract";
 import {
@@ -48,7 +49,6 @@ import {
   stepCount,
   unconfiguredCount,
   useShowcase,
-  type ShowcasePerson,
   type ShowcaseWorkflow,
 } from "@/lib/showcase/store";
 import { useCraigChat } from "@/lib/showcase/use-craig-chat";
@@ -100,8 +100,26 @@ const byHand = (block: WorkflowBlock) =>
 let seq = 0;
 const nextId = () => `b${Date.now()}-${seq++}`;
 
-export function WorkflowEditor({ id, user }: { id: string; user: Session }) {
-  const { workflows, people } = useShowcase();
+export function WorkflowEditor({
+  id,
+  user,
+  seats,
+}: {
+  id: string;
+  user: Session;
+  /**
+   * Everyone holding a seat on this account, by name, read on the server.
+   *
+   * One prop for two questions, because they are the same question. Craig's
+   * panel wants the count — has this workflow actually run against anybody —
+   * and the step inspector wants the names, to offer as owners. A list and a
+   * separate number would be two things to keep in step, and the number is the
+   * one that used to be wrong: it came from the browser's own copy of the
+   * invitees, which never heard about a seat taken back on the server.
+   */
+  seats: string[];
+}) {
+  const { workflows } = useShowcase();
   const router = useRouter();
   const workflow = workflows.find((w) => w.id === id);
 
@@ -132,7 +150,7 @@ export function WorkflowEditor({ id, user }: { id: string; user: Session }) {
         key={workflow.id}
         workflow={workflow}
         user={user}
-        people={people}
+        seats={seats}
         onDelete={() => setConfirming(true)}
       />
       <ConfirmDelete
@@ -217,12 +235,13 @@ function ConfirmDelete({
 function Editor({
   workflow,
   user,
-  people,
+  seats,
   onDelete,
 }: {
   workflow: ShowcaseWorkflow;
   user: Session;
-  people: ShowcasePerson[];
+  /** Everyone holding a seat, by name, from the server. */
+  seats: string[];
   onDelete: () => void;
 }) {
   const blocks = workflow.blocks;
@@ -230,6 +249,13 @@ function Editor({
   /* Given the workflow's id, so his turns carry it and his editing tools have
      something to edit. Held here, above the panel that renders him. */
   const chat = useCraigChat(workflow.id);
+
+  /* Only to re-read the seats after an invitation goes out. They arrived as
+     props from the server, so the page that read them is the only thing that
+     can update them — and Craig's panel still saying nobody has been given a
+     seat, on the screen you just invited somebody from, would be the same
+     staleness this prop exists to end. */
+  const router = useRouter();
 
   /* Straight through to the store rather than into local state. A copy here
      would mean an answer given on this screen never reaching the list that
@@ -293,18 +319,14 @@ function Editor({
   /**
    * Everyone a step can be assigned to.
    *
-   * The account holder, anybody they've invited, the person arriving — and
+   * The account holder, anybody holding a seat, the person arriving — and
    * every name already written onto the draft. That last part is what makes
    * the list honest: Craig learned about Jason in the conversation and this
-   * account has never met him, so a list built only from People would render
+   * account has never met him, so a list built only from the seats would render
    * an owner that is very much set as "Not set".
    */
   const assignees = React.useMemo(() => {
-    const names = [
-      user.name,
-      ...people.filter((p) => !p.owner).map((p) => p.name),
-      NEW_STARTER,
-    ];
+    const names = [user.name, ...seats, NEW_STARTER];
 
     for (const block of blocks) {
       if (block.owner) names.push(block.owner);
@@ -317,7 +339,7 @@ function Editor({
     }
 
     return [...new Set(names)];
-  }, [user.name, people, blocks]);
+  }, [user.name, seats, blocks]);
 
   function insert(preset: BlockPreset, index: number) {
     const block = blockFromPreset(preset, nextId());
@@ -390,6 +412,7 @@ function Editor({
   const unconfigured = unconfiguredCount(blocks);
 
   const [inviting, setInviting] = React.useState(false);
+  const [paywall, setPaywall] = React.useState(false);
 
   function publish() {
     publishWorkflow(workflow.id);
@@ -400,8 +423,17 @@ function Editor({
        nothing, and the next thing you want is never "look at it again" — so
        the dialog opens rather than waiting to be found. Dismissing it leaves
        the workflow published and the button on People, which is the same
-       act one screen later. */
-    setInviting(true);
+       act one screen later.
+
+       Unless there is no seat to put anybody in, in which case the price comes
+       first. This is the same rule People applies to the same button, asked of
+       the same server count — publishing must not be a way round a limit that
+       the other screen enforces, and finding that out after typing somebody's
+       name and address would be a worse place to hear it. The workflow stays
+       published either way: it is live and waiting, which is exactly what the
+       paywall says happens if you decline. */
+    if (outOfSeats(seats.length)) setPaywall(true);
+    else setInviting(true);
   }
 
   return (
@@ -581,7 +613,7 @@ function Editor({
             blocks={blocks}
             revealing={revealing}
             published={workflow.published}
-            seats={people.filter((p) => !p.owner).length}
+            seats={seats.length}
           />
         )
       }
@@ -614,6 +646,17 @@ function Editor({
         onClose={() => setInviting(false)}
         workflowId={workflow.id}
         justPublished
+        onInvited={() => router.refresh()}
+      />
+
+      {/* The same dialog People opens, for the same reason and with the same
+          number in it. Written once and used twice rather than a second
+          version of the offer here, because two paywalls are two chances to
+          quote a different price to the same person. */}
+      <SeatPaywall
+        open={paywall}
+        onClose={() => setPaywall(false)}
+        holder={seats[0]}
       />
     </AppShell>
   );

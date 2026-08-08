@@ -24,12 +24,27 @@ import { Button, Dialog, Separator } from "@/components/ui";
 /**
  * How many people the free plan can add, not counting whoever holds the account.
  *
- * Here rather than on the page that enforces it, because the number and the
+ * Here rather than on a page that enforces it, because the number and the
  * screen that explains the number are the same fact — a limit raised in one
  * place and described in the other is a dialog that argues with the button that
  * opened it.
  */
 export const FREE_SEATS = 1;
+
+/**
+ * Whether another person can be given a seat, asked the same way everywhere.
+ *
+ * Two screens offer an invitation — People, and the editor the moment you
+ * publish — and the rule has to be one rule, or publishing becomes a way around
+ * a limit that People enforces. So the comparison lives beside the number and
+ * the dialog rather than being written out at each call site.
+ *
+ * `taken` is how many people hold a seat *now*, counted on the server. That is
+ * the whole point: this used to be checked against whichever list the calling
+ * screen happened to have in the browser, and a browser that had not heard
+ * about a removal would go on refusing an invitation for a seat that was free.
+ */
+export const outOfSeats = (taken: number) => taken >= FREE_SEATS;
 
 /** What the paid plan is, said once so the price and the promise can't drift. */
 const PRICE = "$49";

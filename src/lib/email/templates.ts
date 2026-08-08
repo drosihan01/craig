@@ -66,6 +66,13 @@ export const SENDER = {
    * Craig is still attributed, once, quietly, at the bottom of the email. That
    * is the whole of the white-labelling: the message belongs to the company,
    * the footer says what made it.
+   *
+   * This is a policy about *which* string is the display name, and not a
+   * sanitiser — it is imported by the preview, which runs in a browser, and it
+   * returns whatever it is given. The company it is usually given was typed by
+   * a stranger at sign-up, and a newline in it would be header injection. That
+   * is handled where the header is actually built, by `fromHeader` in
+   * `send.ts`; do not add a `trim()` here and take it for the same thing.
    */
   name: (company: string) => company,
 

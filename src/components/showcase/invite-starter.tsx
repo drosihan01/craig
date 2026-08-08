@@ -13,7 +13,7 @@ import {
   toISODate,
 } from "@/components/ui";
 import { CheckCircle, Mail, Warning } from "@/components/ui/icons";
-import { invitePerson, useShowcase } from "@/lib/showcase/store";
+import { logActivity, useShowcase } from "@/lib/showcase/store";
 
 /**
  * The first thing in this product that reaches somebody else.
@@ -28,9 +28,14 @@ import { invitePerson, useShowcase } from "@/lib/showcase/store";
  * unsent — so the dialog says exactly what will happen instead of asking
  * whether they're sure.
  *
- * The store is only written after the send succeeds. A row that appears in
- * People before the email lands is a row that will still be there when it
- * didn't, and "invited" would quietly come to mean "we tried".
+ * The seat itself is the route's to create, not this component's. It used to
+ * write a second copy of the person into the browser's store as well, and that
+ * copy was the bug: the new starter's progress and the admin's removals both
+ * happen on the server, so a browser list of invitees could only ever be a
+ * stale second answer to "who has a seat". `onInvited` fires instead, and the
+ * caller re-reads the server — which is also why the caller is told only after
+ * the send succeeds. A row that appeared before the email landed would still be
+ * there when it didn't, and "invited" would quietly come to mean "we tried".
  */
 
 const ENDPOINT = "/api/showcase/invite";
@@ -181,11 +186,15 @@ export function InviteStarter({
         return;
       }
 
-      invitePerson({
-        ...person,
-        role: person.role || "Not set",
-        startDate,
-        invitedAt: new Date().toISOString(),
+      /* The ledger, and nothing else. This is the account's record of what it
+         did, it is the one part of an invitation that isn't already on the
+         server, and an invite is the most consequential line it will ever
+         carry — so it is written here, where the send is known to have
+         succeeded, rather than lost along with the seat list that used to be
+         kept beside it. */
+      logActivity({
+        verb: "Invited",
+        what: `${person.name} and sent their first step`,
       });
       onInvited?.({ ...person, messageId: payload.id });
       reset();

@@ -1138,10 +1138,11 @@ function MailTab() {
         <EmailPreview template={template} />
       </div>
 
-      {/* The preview is Tailwind and flexbox; what leaves is tables and inline
-          styles, because Outlook renders through Word. Two renderings of one
-          design, which is a real cost — so the second one is visible here
-          rather than something you'd only find by reading the source. */}
+      {/* The same bytes the preview above is showing — it renders this string
+          in an iframe rather than drawing its own version of the design, so
+          there is nothing here that can disagree with what arrives. Tables and
+          inline styles, because Outlook renders through Word, and that is worth
+          being able to look at without going to find the file. */}
       <div className="flex flex-col gap-2">
         <button
           type="button"

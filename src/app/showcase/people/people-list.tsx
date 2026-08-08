@@ -20,7 +20,7 @@ import { CheckCircle, PersonAdd } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { InviteStarter } from "@/components/showcase/invite-starter";
 import { NewWorkflowDialog } from "@/components/showcase/new-workflow";
-import { FREE_SEATS, SeatPaywall } from "@/components/showcase/seat-paywall";
+import { SeatPaywall, outOfSeats } from "@/components/showcase/seat-paywall";
 import type { Session } from "@/lib/showcase/contract";
 import { useShowcase } from "@/lib/showcase/store";
 
@@ -80,6 +80,13 @@ export function PeopleList({
   people: SeatRow[];
 }) {
   const state = useShowcase();
+
+  /* The server's list is already everyone except whoever is reading this: the
+     account holder holds an account rather than a seat, so there is nothing to
+     filter out. Kept under its own name because that is the distinction every
+     count on this screen turns on, the seat limit included — they are about the
+     people who were invited, never about the row that is deliberately not
+     drawn. */
   const guests = people;
 
   const [inviting, setInviting] = React.useState(false);
@@ -103,7 +110,7 @@ export function PeopleList({
      own rather than a disabled button. Both are things the account can change,
      and a control that quietly refuses teaches nobody how. */
   const [choosing, setChoosing] = React.useState(false);
-  const [outOfSeats, setOutOfSeats] = React.useState(false);
+  const [paywall, setPaywall] = React.useState(false);
 
   /* The one that would actually run. A draft can be given a seat in the sense
      that a form would accept it, and then nothing happens — so the invitation
@@ -123,7 +130,9 @@ export function PeopleList({
    * Seats are checked before the workflow. Being out of seats is the harder
    * stop of the two: sending somebody off to write a workflow they then can't
    * use is a wasted trip, and the price is the thing they'd want to have been
-   * told first.
+   * told first. The count it checks is the server's — a seat given up on
+   * another device is a seat this page can offer again, and it could not have
+   * known that while it was counting a copy of its own.
    *
    * With no workflow it opens the chooser rather than a notice about needing
    * one. The empty state has already said why — this is the same press
@@ -131,7 +140,7 @@ export function PeopleList({
    * whose only outcome is another dialog.
    */
   const addPerson = React.useCallback(() => {
-    if (guests.length >= FREE_SEATS) setOutOfSeats(true);
+    if (outOfSeats(guests.length)) setPaywall(true);
     else if (!live) setChoosing(true);
     else setInviting(true);
   }, [guests.length, live]);
@@ -277,8 +286,8 @@ export function PeopleList({
       <NewWorkflowDialog open={choosing} onClose={() => setChoosing(false)} />
 
       <SeatPaywall
-        open={outOfSeats}
-        onClose={() => setOutOfSeats(false)}
+        open={paywall}
+        onClose={() => setPaywall(false)}
         holder={guests[0]?.name}
       />
     </AppShell>

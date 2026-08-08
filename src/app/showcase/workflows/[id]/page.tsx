@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/showcase/current-user";
+import { listJoiners } from "@/lib/showcase/joiners";
 import { WorkflowEditor } from "./workflow-editor";
 
 export const metadata = {
@@ -6,12 +7,21 @@ export const metadata = {
 };
 
 /**
- * A server component wrapping the editor, purely to hold the guard.
+ * A server component wrapping the editor, holding the guard and the seats.
  *
  * Same reasoning as every other `/showcase/*` page: the proxy turns anonymous
  * requests away at the edge, but it is a matcher rather than a wall and it can
  * only see the cookie. `requireUser()` is the check that knows whether the
  * account behind that cookie still exists.
+ *
+ * The seats are read here for the reason People reads them here: whoever holds
+ * one lives on the server, because the new starter fills their steps in on
+ * their own device and the admin who removes them does it from another screen
+ * again. The editor is a client component and cannot ask; before this it
+ * counted the browser's own list of invitees, which meant Craig's panel went on
+ * announcing somebody the account had already let go, and publishing offered an
+ * invitation the seat limit would have refused a page later. Read once, on the
+ * server, and handed down — the same shape People uses.
  *
  * The title is static because the workflow's name isn't server data — it lives
  * in the account's own state alongside everything else the showcase has
@@ -23,5 +33,11 @@ export default async function ShowcaseWorkflowPage(
   const user = await requireUser();
   const { id } = await props.params;
 
-  return <WorkflowEditor id={id} user={user} />;
+  /* Names, not whole records. The editor wants two things from this — how many
+     seats are taken, and who to offer as the owner of a step — and both are
+     answered by the names. Handing down each joiner's steps as well would put
+     one person's date of birth into the props of a page about a workflow. */
+  const seats = listJoiners(user.email).map((joiner) => joiner.name);
+
+  return <WorkflowEditor id={id} user={user} seats={seats} />;
 }

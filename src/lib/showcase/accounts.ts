@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { constantTimeEqual } from "./session";
+import { safeCompany } from "./sign-up";
 
 /**
  * The accounts, and where they actually live.
@@ -180,9 +181,29 @@ async function derive(password: string, saltHex: string): Promise<string> {
 /** Emails are matched the way mail servers match them, and stored that way. */
 const normalise = (email: string) => email.trim().toLowerCase();
 
-/** Strips the secrets. Everything that leaves this file goes through here. */
+/**
+ * Strips the secrets. Everything that leaves this file goes through here.
+ *
+ * Which is why the company name is sanitised here rather than only on the way
+ * in. This store predates the rule: it is a JSON file on disk holding whatever
+ * the earliest sign-ups typed, back when the field was passed through with a
+ * `trim()` and nothing else. The invite route reads the company straight out of
+ * here and hands it to a Subject line and a From display name, so a record
+ * written last month containing a carriage return would be a header injection
+ * that no amount of validation on the sign-up form could reach.
+ *
+ * Sanitising at the single exit covers every reader at once — the invite route,
+ * the session, and whatever reads it next — and it costs two regex passes on a
+ * record that is already in memory. `safeCompany` is idempotent, so doing it
+ * here as well as in `createAccount` changes nothing for a clean value.
+ */
 const publicView = ({ name, email, company, createdAt }: StoredAccount) =>
-  ({ name, email, company, createdAt }) satisfies Account;
+  ({
+    name,
+    email,
+    company: safeCompany(company),
+    createdAt,
+  }) satisfies Account;
 
 /* --- Store ----------------------------------------------------------------- */
 
@@ -228,10 +249,17 @@ export async function createAccount(input: {
      winner is the one outcome this store exists to prevent. */
   if (accounts.has(email)) return null;
 
+  /* The company is stored already sanitised, not merely trimmed. `publicView`
+     would clean it on the way out anyway, so this is about what sits on disk:
+     a record containing a carriage return or a bidirectional override is a
+     record that will eventually be read by something that isn't `publicView` —
+     a debug script, a future export, whoever opens the JSON file — and the
+     cheapest way to make sure the hostile value has nowhere to be read from is
+     never to write it down. */
   const account: StoredAccount = {
     name: input.name.trim(),
     email,
-    company: input.company.trim(),
+    company: safeCompany(input.company),
     createdAt: Math.floor(Date.now() / 1000),
     salt,
     hash,

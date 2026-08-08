@@ -2,6 +2,7 @@ import type { WorkflowBlock } from "@/components/ui";
 import {
   ALL_PRESETS,
   BLOCK_LIBRARY,
+  SHOWCASE_PRESETS,
   WHEN_OPTIONS,
   blockFromPreset,
   findPreset,
@@ -42,7 +43,26 @@ import {
  * that says what a step is. An id outside the library isn't rejected — it
  * cannot be expressed.
  */
-export const PRESET_IDS = ALL_PRESETS.map((p) => p.id) as [string, ...string[]];
+/**
+ * Only the blocks that do something.
+ *
+ * `unavailable` has always meant "Craig can't run this himself, somebody ticks
+ * it off" — which is why he was allowed to draft those: a plan without "meet
+ * your manager" in it is a thin, software-only plan.
+ *
+ * `SHOWCASE_PRESETS` is a different claim, and a stricter one: these are the
+ * blocks that have somewhere to happen. A step outside it doesn't appear on
+ * the new starter's screen as work, doesn't appear on the admin's as a tick,
+ * and can never be completed by anybody — so drafting one would put a step in
+ * somebody's onboarding that is permanently stuck, which is worse than a
+ * shorter plan.
+ *
+ * When a block gets wired up it joins the set and becomes draftable the same
+ * day, with nothing here to change.
+ */
+const DRAFTABLE = ALL_PRESETS.filter((p) => SHOWCASE_PRESETS.has(p.id));
+
+export const PRESET_IDS = DRAFTABLE.map((p) => p.id) as [string, ...string[]];
 
 /* --- The catalogue -------------------------------------------------------- */
 
@@ -115,10 +135,15 @@ function presetEntry(p: BlockPreset): string {
  */
 export const BLOCK_CATALOGUE = [
   `A field marked (when) takes one of: ${WHEN_OPTIONS.map((o) => o.id).join(", ")}.`,
-  ...BLOCK_LIBRARY.map(
-    (c) =>
-      `${c.label} — ${c.description}\n${c.presets.map(presetEntry).join("\n")}`,
-  ),
+  ...BLOCK_LIBRARY.map((c) => {
+    /* Categories he can't draft from are left out entirely rather than listed
+       empty — a heading with nothing under it reads as a list that failed to
+       load, and spends his attention on a section that has no answers in it. */
+    const usable = c.presets.filter((p) => SHOWCASE_PRESETS.has(p.id));
+    return usable.length === 0
+      ? ""
+      : `${c.label} — ${c.description}\n${usable.map(presetEntry).join("\n")}`;
+  }).filter(Boolean),
 ].join("\n\n");
 
 /* --- Turning what he said into blocks -------------------------------------- */

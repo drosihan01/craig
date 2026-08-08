@@ -1,6 +1,6 @@
 /**
- * Limits on the chat route, because an agent loop can run away three
- * different ways and only one of them is a person clicking too fast.
+ * Limits on the routes that spend something, because an agent loop can run away
+ * three different ways and only one of them is a person clicking too fast.
  *
  * 1. **A stuck client.** A retry loop in the browser, or a page left open that
  *    resends on focus. Cheap to cause, expensive to leave running overnight.
@@ -63,13 +63,39 @@ function trim(w: Window, since: number) {
   if (i > 0) w.hits.splice(0, i);
 }
 
-export interface RateLimitResult {
-  ok: boolean;
-  /** Safe to show a user, and specific enough to act on. */
-  message?: string;
-  /** Seconds until it's worth trying again. */
-  retryAfter?: number;
-}
+/**
+ * Allowed, or refused with something a person can be shown.
+ *
+ * A union rather than one shape with optional fields, so a refusal always has
+ * its sentence and its `Retry-After` and no caller has to invent a fallback for
+ * a case that cannot happen. Every hand-written fallback is a second wording of
+ * the same refusal, and the second wording is the one nobody rereads.
+ */
+export type RateLimitResult =
+  | { ok: true }
+  | {
+      ok: false;
+      /**
+       * Safe to show a user, and specific enough to act on.
+       *
+       * Written to fit every caller rather than the one it was born on. These
+       * messages started on the chat and said "messages", which is the wrong
+       * noun in front of a new starter answering their own onboarding or an
+       * admin working down a checklist — and the routes that noticed dealt with
+       * it by throwing the message away and writing their own, which is how
+       * three routes end up saying three different things about one limit.
+       *
+       * There is deliberately no option to pass a noun in. A noun with a
+       * default is a default that is wrong somewhere, and the caller that gets
+       * it wrong is always the newest one — so the sentences avoid naming what
+       * was being done at all. Only the daily cap is specific, and it can
+       * afford to be: it is about the model budget, which is the same fact
+       * whoever ran into it.
+       */
+      message: string;
+      /** Seconds until it's worth trying again. */
+      retryAfter: number;
+    };
 
 export interface RateLimitOptions {
   /**
@@ -113,7 +139,7 @@ export function rateLimit(
   if (lastMinute >= PER_MINUTE) {
     return {
       ok: false,
-      message: "That's a lot of messages very quickly. Give it a minute.",
+      message: "That was a lot at once. Give it a minute.",
       retryAfter: 60,
     };
   }

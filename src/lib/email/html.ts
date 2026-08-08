@@ -3,27 +3,47 @@ import { render, SENDER, type EmailTemplate } from "./templates";
 /**
  * What actually goes on the wire.
  *
- * `EmailPreview` is a React component made of flexbox and Tailwind classes. It
- * is the right way to show somebody an email inside the app and the wrong way
- * to send one: Outlook renders through Word, which has never heard of flexbox,
- * ignores `max-width`, and drops any stylesheet that isn't inline. Sending that
- * markup would produce a message that looks correct in every client we happen
- * to check and collapses into a left-aligned column in the one most of these
- * recipients read their post in.
+ * Table-based, inline-styled, 600px, with a plain-text twin, because Outlook
+ * renders through Word — which has never heard of flexbox, ignores `max-width`,
+ * and drops any stylesheet that isn't inline. Anything more modern produces a
+ * message that looks correct in every client we happen to check and collapses
+ * into a left-aligned column in the one most of these recipients read their
+ * post in. All four choices are unfashionable and all four are still what
+ * works.
  *
- * So the two are deliberately separate, and the honest cost of that is drift —
- * the preview and the email are the same design maintained twice, and nothing
- * here enforces it. The alternative is one renderer that has to satisfy both a
- * browser and Word, which makes the app UI worse to keep the email possible.
- * When it matters enough, the fix is to render *this* into an iframe and delete
- * the preview's own markup, rather than to meet in the middle.
- *
- * Table-based, inline-styled, 600px, with a plain-text twin. All four are
- * unfashionable and all four are still what works.
+ * This is also what `EmailPreview` shows. It used to be a second rendering of
+ * the same design in flexbox and Tailwind — pleasanter to write, and it drifted
+ * exactly the way a second copy always does: the templates were white-labelled
+ * and the preview went on printing a footer that named Craig as the sender for
+ * weeks, with nothing to catch it. A preview is the screen people check
+ * *instead of* sending, so one that shows something other than what will arrive
+ * is worse than no preview at all. The component now puts the string this
+ * function returns into an iframe and has no email markup of its own, which
+ * makes that whole class of bug impossible rather than merely unlikely.
  */
 
 /** The one width every client agrees on. */
 const WIDTH = 600;
+
+/** The gutter either side of it, so a phone doesn't butt the card against the
+    glass. */
+const GUTTER = 12;
+
+/**
+ * The narrowest this message can be drawn: the card and both gutters.
+ *
+ * Exported for the preview, which needs to know when to offer a sideways scroll
+ * rather than cut the right-hand edge off. It is a real floor rather than a
+ * preference — a nested table carrying an explicit `width` cannot be squeezed
+ * below it, `max-width:100%` notwithstanding, so a client narrower than this
+ * pans instead of reflowing and the preview has to do the same to stay honest.
+ *
+ * A constant rather than a number the preview measures, because the two answers
+ * a measurement can give here are the content's floor and the frame's own
+ * width, and telling them apart costs more code than agreeing on the figure the
+ * layout below is built from.
+ */
+export const MESSAGE_MIN_WIDTH = WIDTH + GUTTER * 2;
 
 /**
  * The only place Craig is named in anything that lands in a stranger's inbox.
@@ -170,6 +190,16 @@ function watermark() {
 
 export interface RenderedEmail {
   subject: string;
+  /**
+   * The line the inbox shows after the subject, already merged.
+   *
+   * Returned rather than left inside `html` for the preview's benefit. It is
+   * buried in a hidden div in there, unreachable without parsing, and the
+   * preview's inbox row has to show it — so the alternative was that row
+   * calling `render` on the template again and quietly becoming a second place
+   * the preheader is computed. Same string, same call, one source.
+   */
+  preheader: string;
   html: string;
   /**
    * The plain-text twin. Not decoration: a message with no text part scores
@@ -180,10 +210,9 @@ export interface RenderedEmail {
 }
 
 /**
- * A template plus its merge values, as something sendable.
- *
- * Same `render` as the preview, so a token that resolves one way on screen
- * cannot resolve another way in the inbox.
+ * A template plus its merge values, as something sendable — and as the thing
+ * the preview shows, so a token cannot resolve one way on screen and another
+ * way in the inbox.
  */
 export function renderEmail(
   template: EmailTemplate,
@@ -223,7 +252,7 @@ export function renderEmail(
 ${preheaderBlock(preheader)}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${CANVAS};">
 <tr>
-<td align="center" style="padding:24px 12px;">
+<td align="center" style="padding:24px ${GUTTER}px;">
 <table role="presentation" width="${WIDTH}" cellpadding="0" cellspacing="0" border="0" style="width:${WIDTH}px;max-width:100%;background-color:${PAPER};border-radius:8px;">
 <tr>
 <td style="padding:32px 32px 16px 32px;">
@@ -265,5 +294,5 @@ ${watermark()}
     .filter(Boolean)
     .join("\n\n");
 
-  return { subject, html, text };
+  return { subject, preheader, html, text };
 }

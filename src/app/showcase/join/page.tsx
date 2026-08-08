@@ -123,7 +123,15 @@ export default async function JoinPage(props: PageProps<"/showcase/join">) {
      link from before somebody reset the showcase are three different facts and
      none of them are this person's to act on — the only useful sentence is the
      one that tells them who can. No codes, no "invalid", nothing that reads as
-     an accusation about the link they were sent. */
+     an accusation about the link they were sent.
+
+     It is also the only such screen in the product, and that is on purpose.
+     `requireJoiner()` redirects here rather than rendering its own version of
+     this apology, so somebody whose session has run out on `/showcase/me` reads
+     these exact words instead of a second, slightly different set that would
+     drift from them — and instead of the admin's password form, which is what
+     they used to be shown and which they can never satisfy. Anything changed
+     below changes for both. */
   if (!raw || !joiner) {
     return (
       <Screen>

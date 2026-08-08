@@ -21,34 +21,30 @@ import { blankTrigger } from "@/lib/showcase/draft";
  * procedures, Nils is already halfway through his onboarding. Fixtures are
  * correct there — the point is to show what the product looks like in motion.
  *
- * A showcase starts empty and only contains what actually happened. Until
- * somebody is invited, People shows only whoever signed up. If Craig has not
- * drafted a workflow, Workflows is empty. If nothing has run, the activity ledger is
- * blank. Seeding any of that would make the product a liar in the one place
- * it is supposed to be honest, and it would hide the empty states — which are
- * the screens a real first user actually sees and the hardest ones to get
- * right.
+ * A showcase starts empty and only contains what actually happened. If Craig
+ * has not drafted a workflow, Workflows is empty. If nothing has run, the
+ * activity ledger is blank. Seeding any of that would make the product a liar
+ * in the one place it is supposed to be honest, and it would hide the empty
+ * states — which are the screens a real first user actually sees and the
+ * hardest ones to get right.
  *
  * So there are no fixtures in this file. Everything below starts at zero and
  * is written to by something the user did.
+ *
+ * One thing is deliberately *not* here: who holds a seat. That lives on the
+ * server, in `joiners.ts`, because it is the only part of the showcase that two
+ * different people write to — the new starter answers their own steps on their
+ * own device, and the admin who invited them is somewhere else entirely. This
+ * module used to keep a parallel list of invitees beside that one, and it did
+ * exactly what a second answer to one question always does: a seat removed on
+ * the server carried on being counted in the browser, because nothing on the
+ * server can reach in here to say otherwise. Screens that need seats are handed
+ * them by the server component that renders them, the way People already is.
  *
  * In-memory, like the demo stores, because there is still no database. That
  * is a real limitation and it belongs on screen rather than hidden: a refresh
  * loses the account, and the UI should say so rather than pretending.
  */
-
-export interface ShowcasePerson {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  /** The founder holds the account; everyone else arrives by invitation. */
-  owner?: boolean;
-  invitedAt?: string;
-  /** `YYYY-MM-DD`, and the same date the invitation gave them — People showing
-      a day the email didn't is the sort of disagreement nobody catches. */
-  startDate?: string;
-}
 
 export interface ShowcaseWorkflow {
   id: string;
@@ -94,8 +90,6 @@ export interface CraigMessage extends ChatTurn {
 }
 
 interface ShowcaseState {
-  /** Whoever signed up, and nobody else until they invite somebody. */
-  people: ShowcasePerson[];
   workflows: ShowcaseWorkflow[];
   activity: ActivityEntry[];
   /** What Craig found that nobody had written down. */
@@ -118,10 +112,10 @@ interface ShowcaseState {
    *
    * Everything above belongs to one account and none of it is on the server, so
    * without this there is nothing tying the two together — sign up as somebody
-   * new and the browser keeps the last person's conversation, workflows and
-   * invitees, because signing up is a fetch and a client navigation rather than
-   * a page load and module state survives it. Craig then reads a transcript
-   * addressed to the previous account and carries on calling them by that name.
+   * new and the browser keeps the last person's conversation and workflows,
+   * because signing up is a fetch and a client navigation rather than a page
+   * load and module state survives it. Craig then reads a transcript addressed
+   * to the previous account and carries on calling them by that name.
    *
    * Null before anyone has claimed it, and on the signed-out screens.
    */
@@ -137,7 +131,6 @@ interface ShowcaseState {
  * there is nothing here to seed.
  */
 const initial = (): ShowcaseState => ({
-  people: [],
   workflows: [],
   activity: [],
   gaps: [],
@@ -177,7 +170,6 @@ function persist() {
     localStorage.setItem(
       keyFor(state.accountEmail),
       JSON.stringify({
-        people: state.people,
         workflows: state.workflows,
         activity: state.activity,
         gaps: state.gaps,
@@ -211,7 +203,6 @@ function restore(email: string): ShowcaseState {
        the empty value for that key instead of failing the load. */
     return {
       ...fresh,
-      people: Array.isArray(parsed.people) ? parsed.people : [],
       workflows: Array.isArray(parsed.workflows) ? parsed.workflows : [],
       activity: Array.isArray(parsed.activity) ? parsed.activity : [],
       gaps: Array.isArray(parsed.gaps) ? parsed.gaps : [],
@@ -373,14 +364,17 @@ export function publishWorkflow(id: string) {
 /**
  * Throwing one away.
  *
- * People who are given a seat are left alone. It reads like an oversight —
- * delete the workflow, delete the rows it made — but a person is not a detail
- * of the workflow that invited them: they were emailed, they have a start date,
- * and they exist at the company whether or not the plan that greeted them still
- * does. Removing them here would mean tidying up a draft quietly un-hires
- * somebody.
+ * Anybody given a seat is left alone. It reads like an oversight — delete the
+ * workflow, delete the people it invited — but a person is not a detail of the
+ * workflow that invited them: they were emailed, they have a start date, and
+ * they exist at the company whether or not the plan that greeted them still
+ * does. Tidying up a draft must not quietly un-hire somebody.
  *
- * The activity line stays too, for the same reason the rows do. It is a record
+ * Seats are the server's now, so this couldn't reach them if it wanted to —
+ * which turns a rule somebody had to remember into one the code can't break.
+ * `deleteJoiner` is the one deliberate way a seat goes away.
+ *
+ * The activity line stays too, for the same reason the seats do. It is a record
  * of what happened, and a history that edits itself to match the present is a
  * history you can't use to work out what went wrong.
  */
@@ -436,48 +430,14 @@ export function createBlankWorkflow(): ShowcaseWorkflow {
 }
 
 /**
- * Taking a seat back.
+ * What this account did, in the order it did it.
  *
- * The mirror of `deleteWorkflow`, and it draws the same line from the other
- * side: that one leaves the people alone because a person is not a detail of
- * the plan that greeted them, and this one leaves the workflow alone for the
- * same reason. Removing somebody is a change to who this account is paying
- * attention to, not a change to how the company onboards.
- *
- * The account holder can't be removed, and the guard is here rather than only
- * on the button. Nobody takes their own seat away in their own workspace —
- * there would be nothing left to sign in to — and a rule that lives only in the
- * component that renders the affordance is a rule the next screen gets to
- * forget about.
- *
- * The activity line stays, and so does the email. What went out went out: the
- * person on the other end has been welcomed to a company and told when they
- * start, and no button in here can un-send that. Removing the row means this
- * account stops tracking them, which is worth being precise about — the
- * confirmation says it in as many words rather than letting "remove" imply a
- * reach into somebody else's inbox.
+ * Written from wherever the thing happened rather than only from the writes
+ * above, because not everything an account does changes this store any more:
+ * inviting somebody writes a seat on the server, and a ledger that recorded
+ * only the acts that happened to be client-side would be a history with the
+ * most important line missing.
  */
-export function deletePerson(id: string) {
-  const person = state.people.find((p) => p.id === id);
-  if (!person || person.owner) return;
-
-  set({ people: state.people.filter((p) => p.id !== id) });
-  logActivity({
-    verb: "Removed",
-    what: `${person.name}'s seat — nothing more is sent to them`,
-  });
-}
-
-export function invitePerson(person: Omit<ShowcasePerson, "id">) {
-  set({
-    people: [...state.people, { ...person, id: crypto.randomUUID() }],
-  });
-  logActivity({
-    verb: "Invited",
-    what: `${person.name} and sent their first step`,
-  });
-}
-
 export function logActivity(entry: { verb: string; what: string }) {
   set({
     activity: [
@@ -498,8 +458,9 @@ export function logActivity(entry: { verb: string; what: string }) {
  *
  * Signing up is a fetch followed by a client navigation, not a page load, so
  * module state survives it. Without this, a second account inherits the first
- * one's workflows, invitees and conversation — and Craig, handed a transcript
- * addressed to the previous account, keeps using that person's name.
+ * one's workflows and conversation — and Craig, handed a transcript addressed
+ * to the previous account, keeps using that person's name. Seats need none of
+ * it: they are the server's, and it already knows whose they are.
  *
  * Same account, or a re-render: nothing happens, so a page that renders twice
  * doesn't wipe the conversation it's showing.
@@ -672,9 +633,3 @@ export function openWorkflow(id: string): OpenWorkflow | undefined {
     ),
   };
 }
-
-/** True until the account holder has done anything. Drives first-run screens. */
-export const isUntouched = (s: ShowcaseState) =>
-  s.workflows.length === 0 && s.people.length <= 1 && s.activity.length === 0;
-
-export const invited = (s: ShowcaseState) => s.people.filter((p) => !p.owner);

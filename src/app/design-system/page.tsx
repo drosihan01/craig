@@ -2062,6 +2062,12 @@ export default function DesignSystemPage() {
             gets to hardcode a colour.
           </p>
           <p className="mt-2">
+            The body underneath the inbox row isn&apos;t drawn by this component
+            at all — it&apos;s the exact HTML the provider is handed, in an
+            iframe. A preview is the screen people check instead of sending, so
+            it doesn&apos;t get its own opinion about what the email looks like.
+          </p>
+          <p className="mt-2">
             The footer says who sent it and why, and there is no unsubscribe.
             These are transactional — one person, one thing, triggered by a
             step. Offering a way off a list implies there&apos;s a list.

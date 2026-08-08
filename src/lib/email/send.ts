@@ -85,6 +85,83 @@ export interface Outgoing {
   bcc?: string;
 }
 
+/* --- Header hygiene -------------------------------------------------------- */
+
+/**
+ * The last place a value can be made safe before it is a header.
+ *
+ * The From display name is the customer's company, typed at sign-up by whoever
+ * signed up — and sign-up is open, so that is a stranger. It is concatenated
+ * into a `from` header a few lines below, which makes this file the exact point
+ * where an untrusted string stops being data and becomes protocol. There is a
+ * rule for the same value in `showcase/sign-up.ts` and the store applies it too;
+ * this is not that rule and does not trust it. Anything that ever calls
+ * `sendEmail` gets header safety whether or not it remembered to ask, because
+ * the caller that forgets is the one that sends the phishing mail.
+ *
+ * The stripped set and the reasoning behind it are documented once, on
+ * `HEADER_UNSAFE` in `showcase/sign-up.ts`. In short: CR and LF are header
+ * injection, the C1 range hides a line break JavaScript's `\s` does not match,
+ * and the invisible formatting characters let a display name render as
+ * something it isn't.
+ */
+const HEADER_UNSAFE =
+  /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff]/g;
+
+/**
+ * Longer than any subject worth writing, and far short of RFC 5322's 998-octet
+ * line limit. A subject nobody can read past the first eighty characters of is
+ * not made better by being four thousand characters long, and a header that
+ * long is a header some relay in the middle will fold, refuse, or truncate
+ * somewhere of its own choosing.
+ */
+const MAX_SUBJECT = 200;
+
+/** A display name is a company's name, not a sentence. */
+const MAX_DISPLAY_NAME = 64;
+
+/**
+ * One header value, flattened and capped.
+ *
+ * Sliced by code point rather than by `String.slice`, which counts UTF-16 units
+ * and cuts a surrogate pair in half at the boundary — producing a lone
+ * surrogate that JSON carries to Resend as an escape it is under no obligation
+ * to accept.
+ */
+function headerLine(value: string, max: number): string {
+  const flat = value.replace(HEADER_UNSAFE, " ").replace(/\s+/g, " ").trim();
+
+  return Array.from(flat).slice(0, max).join("").trim();
+}
+
+/**
+ * The From display name, and the quoting that makes it one.
+ *
+ * `"` and `\` go first, because the header is built as a quoted string and a
+ * value that can close its own quotes can write the rest of the header. `<`,
+ * `>` and `@` go with them: those are what let a display name of
+ * `Acme <security@yourbank.com>` read, in every client that shows the name and
+ * hides the address, as mail from that bank — and it would be leaving our
+ * verified domain with our DKIM signature on it, which is the whole reason this
+ * is worth a function rather than a `trim()`.
+ *
+ * Quoting rather than stripping punctuation is deliberate. An unquoted display
+ * name containing a comma splits the header into two addresses; quoting means
+ * "Acme, Inc." survives intact and correct, which is the difference between a
+ * sanitiser and a thing that mangles real customers' names.
+ */
+export function fromHeader(displayName: string, address: string): string {
+  const name = headerLine(
+    displayName.replace(/["<>@\\]/g, " "),
+    MAX_DISPLAY_NAME,
+  );
+
+  /* A bare address when nothing survives. A `from` of `"" <craig@…>` is a
+     header with an empty display name, which some clients render as a blank
+     sender — worse than no display name at all. */
+  return name ? `"${name}" <${address}>` : address;
+}
+
 /** Resend's error envelope. Every field optional, because a 502 from something
     in front of Resend won't have any of them. */
 interface ProviderError {
@@ -232,12 +309,17 @@ async function keepCopy(message: Outgoing, id: string | null) {
     await writeFile(
       `${base}.json`,
       JSON.stringify(
+        /* The headers as sent, not as asked for. This copy is how somebody
+           checks what actually left the building, so recording the caller's raw
+           `fromName` here would make the outbox agree with the request and
+           disagree with the inbox — and the sanitiser it exists to let you
+           verify would be the one thing it couldn't show you. */
         {
           id,
           to: message.to,
           bcc: message.bcc,
-          from: message.fromName,
-          subject: message.subject,
+          from: fromHeader(message.fromName, SENDER.address),
+          subject: headerLine(message.subject, MAX_SUBJECT),
           text: message.text,
           sentAt: new Date().toISOString(),
         },
@@ -272,14 +354,21 @@ export async function sendEmail(message: Outgoing): Promise<SendResult> {
       },
       body: JSON.stringify({
         /* Display name and address as one header. The name is the customer's
-           and the address is ours — see SENDER for why they differ. */
-        from: `${message.fromName} <${SENDER.address}>`,
+           and the address is ours — see SENDER for why they differ, and
+           `fromHeader` for why the customer's half is never interpolated raw. */
+        from: fromHeader(message.fromName, SENDER.address),
         to: [message.to],
         /* Left out entirely when there isn't one, rather than sent as an empty
            array — a field Resend has to interpret is a field it can refuse. */
         ...(message.bcc ? { bcc: [message.bcc] } : {}),
         reply_to: SENDER.replyTo,
-        subject: message.subject,
+        /* Flattened here as well as at the caller, because the subject is the
+           other header the company name reaches: the invitation's is literally
+           "Welcome to {{company}} — …", so a newline in a company name would be
+           a second header of the sender's choosing on a message signed by our
+           domain. Callers merge the value; this is the only place that knows it
+           is about to become protocol. */
+        subject: headerLine(message.subject, MAX_SUBJECT),
         html: message.html,
         text: message.text,
       }),

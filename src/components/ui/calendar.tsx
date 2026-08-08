@@ -38,6 +38,13 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
+/** Years shown at once. Three rows of four fits the 16rem calendar exactly. */
+const YEAR_BLOCK = 12;
+
+/** The start of the block a year falls in, so paging is stable either way. */
+const yearBlockStart = (year: number) =>
+  Math.floor(year / YEAR_BLOCK) * YEAR_BLOCK;
+
 function addMonths(d: Date, n: number) {
   return new Date(d.getFullYear(), d.getMonth() + n, 1);
 }
@@ -105,6 +112,24 @@ export function Calendar({
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
 
+  /**
+   * Days, or the years you'd have to walk through to reach them.
+   *
+   * A month grid with only month arrows is fine for a start date next
+   * fortnight and unusable for a date of birth: 1994 is roughly three hundred
+   * and eighty presses of the back chevron. The label is the way out — it was
+   * already the one thing on the header saying which year you were in, so
+   * making it the control that changes the year costs no new furniture.
+   */
+  const [view, setView] = React.useState<"days" | "years">("days");
+
+  /* The block of twelve the year view is showing, anchored on wherever the
+     calendar currently is rather than on today — paging back and forth must
+     not silently jump you home. */
+  const [yearPage, setYearPage] = React.useState(() =>
+    yearBlockStart(month.getFullYear()),
+  );
+
   const grid = React.useMemo(
     () => buildGrid(month, weekStartsOn),
     [month, weekStartsOn],
@@ -133,68 +158,134 @@ export function Calendar({
     <div className={cn("w-64 select-none p-2", className)}>
       <div className="flex items-center justify-between px-1 pb-2">
         <NavButton
-          label="Previous month"
-          onClick={() => setMonth((m) => addMonths(m, -1))}
+          label={view === "days" ? "Previous month" : "Earlier years"}
+          onClick={() =>
+            view === "days"
+              ? setMonth((m) => addMonths(m, -1))
+              : setYearPage((y) => y - YEAR_BLOCK)
+          }
         >
           <ChevronLeft className="size-4" />
         </NavButton>
-        <span aria-live="polite" className="text-sm font-semibold">
-          {monthLabel}
-        </span>
+
+        {/* A button, not a caption. It says which year you're in, so it is
+            already where somebody looks when the year is wrong. */}
+        <button
+          type="button"
+          aria-live="polite"
+          aria-label={
+            view === "days" ? `${monthLabel}. Choose a year` : "Back to days"
+          }
+          onClick={() => {
+            if (view === "days")
+              setYearPage(yearBlockStart(month.getFullYear()));
+            setView((v) => (v === "days" ? "years" : "days"));
+          }}
+          className="rounded-md px-2 py-0.5 text-sm font-semibold transition-colors hover:bg-surface-hover"
+        >
+          {view === "days"
+            ? monthLabel
+            : `${yearPage}–${yearPage + YEAR_BLOCK - 1}`}
+        </button>
+
         <NavButton
-          label="Next month"
-          onClick={() => setMonth((m) => addMonths(m, 1))}
+          label={view === "days" ? "Next month" : "Later years"}
+          onClick={() =>
+            view === "days"
+              ? setMonth((m) => addMonths(m, 1))
+              : setYearPage((y) => y + YEAR_BLOCK)
+          }
         >
           <ChevronRight className="size-4" />
         </NavButton>
       </div>
 
-      <div className="grid grid-cols-7 gap-0.5" role="grid">
-        {weekdays.map((w, i) => (
-          <div
-            key={`${w}-${i}`}
-            role="columnheader"
-            className="flex h-7 items-center justify-center text-2xs font-medium text-text-subtle"
-          >
-            {w}
-          </div>
-        ))}
+      {view === "years" && (
+        <div className="grid grid-cols-3 gap-1 pb-1">
+          {Array.from({ length: YEAR_BLOCK }, (_, i) => yearPage + i).map(
+            (year) => {
+              /* A whole year is out only when every day in it is. Comparing
+                 the year's edges rather than the currently shown month means
+                 January isn't offered as unreachable because December is. */
+              const out =
+                (min && year < startOfDay(min).getFullYear()) ||
+                (max && year > startOfDay(max).getFullYear());
+              const isCurrent = year === month.getFullYear();
 
-        {grid.map(({ date, outside }) => {
-          const selected = value ? isSameDay(date, value) : false;
-          const isToday = isSameDay(date, today);
-          const off = disabled(date);
+              return (
+                <button
+                  key={year}
+                  type="button"
+                  disabled={Boolean(out)}
+                  aria-current={isCurrent ? "date" : undefined}
+                  onClick={() => {
+                    setMonth((m) => new Date(year, m.getMonth(), 1));
+                    setView("days");
+                  }}
+                  className={cn(
+                    "h-8 rounded-md text-sm tabular-nums transition-colors",
+                    isCurrent
+                      ? "bg-accent text-accent-fg"
+                      : "hover:bg-surface-hover",
+                    out && "cursor-not-allowed opacity-40 hover:bg-transparent",
+                  )}
+                >
+                  {year}
+                </button>
+              );
+            },
+          )}
+        </div>
+      )}
 
-          return (
-            <button
-              key={date.getTime()}
-              type="button"
-              role="gridcell"
-              disabled={off}
-              aria-selected={selected}
-              aria-current={isToday ? "date" : undefined}
-              onClick={() => onChange?.(date)}
-              className={cn(
-                "relative flex h-8 items-center justify-center rounded-md text-sm tabular-nums transition-colors",
-                "hover:bg-surface-hover",
-                outside && "text-text-subtle/60",
-                !outside && !selected && "text-text",
-                selected &&
-                  "bg-accent font-semibold text-accent-fg hover:bg-accent-hover",
-                off && "pointer-events-none opacity-30 line-through",
-              )}
+      {view === "days" && (
+        <div className="grid grid-cols-7 gap-0.5" role="grid">
+          {weekdays.map((w, i) => (
+            <div
+              key={`${w}-${i}`}
+              role="columnheader"
+              className="flex h-7 items-center justify-center text-2xs font-medium text-text-subtle"
             >
-              {date.getDate()}
-              {isToday && !selected && (
-                <span
-                  aria-hidden
-                  className="absolute bottom-1 size-1 rounded-full bg-accent"
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
+              {w}
+            </div>
+          ))}
+
+          {grid.map(({ date, outside }) => {
+            const selected = value ? isSameDay(date, value) : false;
+            const isToday = isSameDay(date, today);
+            const off = disabled(date);
+
+            return (
+              <button
+                key={date.getTime()}
+                type="button"
+                role="gridcell"
+                disabled={off}
+                aria-selected={selected}
+                aria-current={isToday ? "date" : undefined}
+                onClick={() => onChange?.(date)}
+                className={cn(
+                  "relative flex h-8 items-center justify-center rounded-md text-sm tabular-nums transition-colors",
+                  "hover:bg-surface-hover",
+                  outside && "text-text-subtle/60",
+                  !outside && !selected && "text-text",
+                  selected &&
+                    "bg-accent font-semibold text-accent-fg hover:bg-accent-hover",
+                  off && "pointer-events-none opacity-30 line-through",
+                )}
+              >
+                {date.getDate()}
+                {isToday && !selected && (
+                  <span
+                    aria-hidden
+                    className="absolute bottom-1 size-1 rounded-full bg-accent"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

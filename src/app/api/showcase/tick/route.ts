@@ -81,16 +81,14 @@ export async function POST(request: Request) {
 
   const limit = rateLimit(`showcase-tick:${session.email}`, LIMIT_OPTIONS);
   if (!limit.ok) {
-    /* The limiter's own wording is written for the chat and talks about
-       messages, which is the wrong noun in front of somebody working down a
-       checklist. Only its `retryAfter` is carried through — with `spend: false`
-       the daily branch can't fire, so the two windows left are a minute and an
-       hour, and one sentence is honest about both. */
+    /* The limiter's own wording, passed through. It used to be replaced here:
+       the message talked about messages, which is the wrong noun in front of
+       somebody ticking off a checklist. It no longer names what was being done
+       at all, so the sentence that fits the chat fits this too — and the copy
+       for one limit now lives in one place instead of being rewritten by each
+       route that dislikes it. */
     return NextResponse.json(
-      {
-        ok: false,
-        error: "That's a lot of changes very quickly. Give it a moment.",
-      },
+      { ok: false, error: limit.message },
       {
         status: 429,
         headers: limit.retryAfter

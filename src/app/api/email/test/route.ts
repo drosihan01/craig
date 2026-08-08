@@ -3,7 +3,7 @@ import { currentUser } from "@/lib/showcase/current-user";
 import { rateLimit } from "@/lib/showcase/rate-limit";
 import { findTemplate, render, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
-import { sendEmail } from "@/lib/email/send";
+import { fromHeader, sendEmail } from "@/lib/email/send";
 
 /**
  * One template, to one inbox, on purpose.
@@ -129,7 +129,11 @@ export async function POST(request: Request) {
       ok: true,
       id: result.id,
       to,
-      from: `${fromName} <${SENDER.address}>`,
+      /* Built by the function the transport uses rather than assembled again
+         here. The display name is quoted so a comma in a company name can't
+         split the header, and a harness that reported a differently-shaped
+         `from` to the one that went out would be a harness you can't trust. */
+      from: fromHeader(fromName, SENDER.address),
       subject,
       template: template.name,
     },

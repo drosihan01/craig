@@ -119,8 +119,12 @@ export async function POST(request: Request) {
      something the first did. */
   const limit = rateLimit(`showcase-step:${joiner.id}`, LIMIT_OPTIONS);
   if (!limit.ok) {
+    /* The limiter's own wording, passed through. It is written for whoever
+       reads it rather than for the chat it started on, so there is nothing here
+       to translate — and a sentence written locally would be this route's own
+       opinion of a limit it doesn't own. */
     return NextResponse.json(
-      { ok: false, error: limit.message ?? "That was a lot at once." },
+      { ok: false, error: limit.message },
       {
         status: 429,
         headers: limit.retryAfter
