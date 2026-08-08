@@ -165,6 +165,7 @@ export function AppShell({
   nav,
   aside,
   asideTitle,
+  asideFlushTop,
   asidePanel,
   account,
   actions,
@@ -182,6 +183,19 @@ export function AppShell({
       shouting. The drawer still gets a name, since a sheet with no title is
       unlabelled to a screen reader. */
   asideTitle?: string;
+  /**
+   * Drop the aside's top padding, keeping the bottom.
+   *
+   * For a panel whose content is a transcript. The bottom padding is holding a
+   * composer off the edge of the window and is wanted; the top is holding the
+   * oldest visible line off a rule it is about to scroll under anyway, which
+   * just reads as the column starting late.
+   *
+   * Per-state rather than per-page, since the editor's aside is a conversation
+   * until you select a block and a panel of settings after that — and settings
+   * want their margin.
+   */
+  asideFlushTop?: boolean;
   /**
    * A starting width for the right panel, and its own place to remember one.
    *
@@ -370,7 +384,12 @@ export function AppShell({
                 only has to be decided once. A chat sizes to the column exactly
                 and never scrolls this box; a panel of settings taller than the
                 column scrolls it. */}
-            <div className="craig-panel-aside scrollbar-thin flex h-full flex-col overflow-y-auto px-4 py-6">
+            <div
+              className={cn(
+                "craig-panel-aside scrollbar-thin flex h-full flex-col overflow-y-auto px-4 pb-6",
+                asideFlushTop ? "pt-0" : "pt-6",
+              )}
+            >
               {asideTitle && (
                 <p className="shrink-0 pb-3 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
                   {asideTitle}

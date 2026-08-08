@@ -381,6 +381,9 @@ function Editor({
          Craig's side of the conversation that wrote the workflow, not a list
          of counts, and a transcript in 224px wraps every other line. */
       asidePanel={{ key: "builder", width: 320 }}
+      /* Only while Craig has the panel. His transcript starts at the top rule
+         and scrolls under it; a block's settings below still want the margin. */
+      asideFlushTop={!selected}
       nav={
         <ShowcaseNav>
           <EditorNav
