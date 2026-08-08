@@ -30,20 +30,21 @@ const WIDTH = 600;
 const GUTTER = 12;
 
 /**
- * The narrowest this message can be drawn: the card and both gutters.
+ * How wide the card gets, at most.
  *
- * Exported for the preview, which needs to know when to offer a sideways scroll
- * rather than cut the right-hand edge off. It is a real floor rather than a
- * preference — a nested table carrying an explicit `width` cannot be squeezed
- * below it, `max-width:100%` notwithstanding, so a client narrower than this
- * pans instead of reflowing and the preview has to do the same to stay honest.
+ * It used to be how wide the card *was*: a nested table carrying an explicit
+ * `width="600"` and `width:600px`, which no client will squeeze below —
+ * `max-width:100%` notwithstanding. So the message did not reflow on a phone,
+ * it panned, and the first thing a new starter saw was a letter they had to
+ * drag sideways to read. On an invitation that is most of the audience.
  *
- * A constant rather than a number the preview measures, because the two answers
- * a measurement can give here are the content's floor and the frame's own
- * width, and telling them apart costs more code than agreeing on the figure the
- * layout below is built from.
+ * Now the card is `width:100%` with this as a ceiling, which is the ordinary
+ * way a responsive email is built — and Outlook, which renders through Word
+ * and honours neither percentage widths nor `max-width`, gets a fixed table of
+ * exactly this width through the conditional comment above it. Two layouts,
+ * one figure, and the clients that can reflow do.
  */
-export const MESSAGE_MIN_WIDTH = WIDTH + GUTTER * 2;
+export const MESSAGE_MAX_WIDTH = WIDTH;
 
 /**
  * The only place Craig is named in anything that lands in a stranger's inbox.
@@ -253,7 +254,8 @@ ${preheaderBlock(preheader)}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${CANVAS};">
 <tr>
 <td align="center" style="padding:24px ${GUTTER}px;">
-<table role="presentation" width="${WIDTH}" cellpadding="0" cellspacing="0" border="0" style="width:${WIDTH}px;max-width:100%;background-color:${PAPER};border-radius:8px;">
+<!--[if mso]><table role="presentation" width="${WIDTH}" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:${WIDTH}px;background-color:${PAPER};border-radius:8px;">
 <tr>
 <td style="padding:32px 32px 16px 32px;">
 ${paragraphs(body)}
@@ -271,6 +273,7 @@ ${watermark()}
 </td>
 </tr>
 </table>
+<!--[if mso]></td></tr></table><![endif]-->
 </td>
 </tr>
 </table>

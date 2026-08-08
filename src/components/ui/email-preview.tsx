@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { render, SENDER, type EmailTemplate } from "@/lib/email";
-import { MESSAGE_MIN_WIDTH, renderEmail } from "@/lib/email/html";
+import { renderEmail } from "@/lib/email/html";
 import { cn } from "@/lib/cn";
 
 /**
@@ -210,14 +210,14 @@ function Body({ html, subject }: { html: string; subject: string }) {
     return () => observer.disconnect();
   }, [measure]);
 
-  /* Sideways, when there genuinely isn't room. The message is built out of
-     tables with an explicit width and does not reflow below `MESSAGE_MIN_WIDTH`
-     — that is true in a real client too, which is why a 600px email is
-     something you pan on a phone. Clipping it instead would hide the right-hand
-     edge of the very thing somebody opened this to check, and quietly: there is
-     no scrollbar to tell them anything is missing. */
+  /* No sideways scroll any more, and no floor under the frame. The message
+     used to be a table with an explicit 600px width, which no client will
+     squeeze — so the preview had to pan to stay honest about what a phone
+     would do. The card is `width:100%` with a max now, so it reflows here for
+     the same reason it reflows in a real inbox, and a preview that still
+     forced a horizontal scrollbar would be lying in the opposite direction. */
   return (
-    <div className="overflow-x-auto">
+    <div>
       <iframe
         ref={frameRef}
         /* Named for the reader of a screen reader, who otherwise gets "frame"
@@ -233,7 +233,7 @@ function Body({ html, subject }: { html: string; subject: string }) {
            second, inner scroll region — a thing no inbox has. */
         scrolling="no"
         className="block w-full border-0"
-        style={{ height, minWidth: MESSAGE_MIN_WIDTH }}
+        style={{ height }}
       />
     </div>
   );
