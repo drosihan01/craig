@@ -302,8 +302,12 @@ function EmptyChat({
  *
  * Line-based rather than a markdown parser, so a half-arrived bullet during
  * streaming renders as a half-arrived bullet instead of throwing.
+ *
+ * Exported because the showcase builds its own transcript — it interleaves
+ * things `ChatMessage` has no field for — but Craig's prose must look the same
+ * wherever it lands. A second copy of this would drift on the first bullet.
  */
-function MessageBody({
+export function MessageBody({
   content,
   streaming,
 }: {

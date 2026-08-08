@@ -80,6 +80,9 @@ export {
   AuthShell,
   GoogleButton,
   AuthDivider,
+  AuthMarketing,
+  AuthSplit,
+  MARKETING_LINES,
   PasswordInput,
   ContinueAs,
   type LastAccount,
@@ -97,6 +100,7 @@ export { PromptBar, type PromptBarProps } from "./prompt-bar";
 export {
   ChatModal,
   ChatTranscript,
+  MessageBody,
   type ChatMessage,
   type AgentStep,
 } from "./chat";

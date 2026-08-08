@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { CraigMark } from "./craig-mark";
+import { CraigLockup, CraigMark } from "./craig-mark";
+import { ThemeToggle } from "./theme-toggle";
 import { Visibility, VisibilityOff } from "./icons";
 import { cn } from "@/lib/cn";
 
@@ -35,9 +36,7 @@ export function AuthShell({
             Craig.
           </span>
           <h1 className="text-2xl font-semibold tracking-[-0.02em]">{title}</h1>
-          {subtitle && (
-            <p className="text-base text-text-muted">{subtitle}</p>
-          )}
+          {subtitle && <p className="text-base text-text-muted">{subtitle}</p>}
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-6 shadow-e2">
@@ -52,6 +51,157 @@ export function AuthShell({
   );
 }
 
+/**
+ * The two-panel auth layout.
+ *
+ * Was copy-pasted across sign-in, sign-up and the demo's own signup, and had
+ * already drifted three ways — one column sized at 46%, another at 32rem, and
+ * the form left-aligned on a phone where there is nothing to align to.
+ *
+ * Three decisions worth keeping:
+ *
+ * The form column is sized to the form, not to a fraction of the window. A
+ * four-field form stranded in the middle of a 700px column reads as an
+ * afterthought; sized to its content it reads as the thing you came for.
+ *
+ * The right panel carries the same dot grid as the workflow canvas. It is the
+ * product's own texture, and using it here means the first screen already
+ * looks like the thing you are signing in to rather than like a login page
+ * bolted on the front.
+ *
+ * Below `lg` the right panel goes entirely — it would be something to scroll
+ * past — and the form centres, because with the second column gone there is
+ * nothing left for it to align against.
+ */
+export function AuthSplit({
+  aside,
+  children,
+}: {
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <main className="grid min-h-screen lg:grid-cols-[32rem_1fr]">
+      <div className="flex flex-col justify-between px-6 py-8 sm:px-10 lg:px-14">
+        <div className="flex items-center justify-between gap-3">
+          <CraigLockup />
+          <ThemeToggle />
+        </div>
+
+        {/* mx-auto centres it once the panel is the whole window; lg:mx-0
+            hands it back to the column's own padding on a wide screen. */}
+        <div className="mx-auto w-full max-w-md py-12 lg:mx-0">{children}</div>
+
+        <span aria-hidden />
+      </div>
+
+      {aside !== null && (
+        <div
+          className="hidden items-center justify-center border-l border-border bg-canvas px-14 lg:flex"
+          style={{
+            /* Same values as WorkflowCanvas: border-strong rather than border,
+               because at 56px apart the lighter value reads as a smudge. */
+            backgroundImage:
+              "radial-gradient(circle, var(--color-border-strong) 1.25px, transparent 1.25px)",
+            backgroundSize: "56px 56px",
+          }}
+        >
+          {aside ?? <AuthMarketing />}
+        </div>
+      )}
+    </main>
+  );
+}
+
+/**
+ * Marketing lines for the auth panel.
+ *
+ * A bank rather than one line, because this is the only screen in the product
+ * that gets to make a claim rather than show a state, and one claim seen every
+ * time stops being read after the second visit.
+ *
+ * They rotate. Each says something Craig actually does — every line here maps
+ * to a real behaviour somewhere in the product, which is the only rule: a
+ * marketing line the product can't back is a promise the first screen makes
+ * and the second breaks.
+ */
+export const MARKETING_LINES: { headline: string; sub: string }[] = [
+  {
+    headline: "Onboard at the speed of Craig.",
+    sub: "He starts the moment somebody has a seat, not the moment you remember.",
+  },
+  {
+    headline: "The boring half of starting somewhere new, handled.",
+    sub: "Contracts, accounts, access, the checks with two-week lead times.",
+  },
+  {
+    headline: "Nobody's first day should depend on somebody's memory.",
+    sub: "Craig writes down the parts that only ever lived in your head.",
+  },
+  {
+    headline: "Your handbook is out of date.",
+    sub: "He'll read it anyway, and tell you which bits stopped being true.",
+  },
+  {
+    headline: "He chases people so you don't have to.",
+    sub: "Including the ones who owe you a decision.",
+  },
+  {
+    headline: "Ask once.",
+    sub: "He remembers it for every hire after this one.",
+  },
+  {
+    headline: "Day one, without the Slack thread.",
+    sub: "Everything they need, in the order they need it.",
+  },
+  {
+    headline: "The bit nobody owns, owned.",
+    sub: "Onboarding is somebody's job at a hundred people. Before that, it's Craig's.",
+  },
+];
+
+/**
+ * Which line this page load gets.
+ *
+ * No timer. Copy that changes while you're reading it is worse than copy you
+ * see twice, and the panel isn't a carousel — it's the one claim the product
+ * makes. A refresh picks a new one, which is the only moment anybody is
+ * looking at this screen fresh anyway.
+ *
+ * `useSyncExternalStore` rather than an effect, because the server has no way
+ * to know which line the client will land on: it renders the first one and the
+ * client swaps once on hydration. Calling `Math.random()` during render would
+ * be a mismatch on every single load.
+ */
+let clientPick: number | null = null;
+
+const subscribeToNothing = () => () => {};
+
+function pickOnce() {
+  if (clientPick === null) {
+    clientPick = Math.floor(Math.random() * MARKETING_LINES.length);
+  }
+  return clientPick;
+}
+
+export function AuthMarketing() {
+  const index = React.useSyncExternalStore(
+    subscribeToNothing,
+    pickOnce,
+    () => 0,
+  );
+  const line = MARKETING_LINES[index];
+
+  return (
+    <div className="flex max-w-xl flex-col gap-4">
+      <h2 className="text-4xl font-semibold leading-[1.1] tracking-[-0.03em]">
+        {line.headline}
+      </h2>
+      <p className="text-xl leading-relaxed text-text-muted">{line.sub}</p>
+    </div>
+  );
+}
+
 /* --- Google ---------------------------------------------------------------- */
 
 /**
@@ -62,7 +212,12 @@ export function AuthShell({
  */
 function GoogleMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 18 18" className={className} aria-hidden focusable="false">
+    <svg
+      viewBox="0 0 18 18"
+      className={className}
+      aria-hidden
+      focusable="false"
+    >
       <path
         fill="#4285F4"
         d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"
@@ -86,11 +241,15 @@ function GoogleMark({ className }: { className?: string }) {
 export function GoogleButton({
   onClick,
   loading,
+  disabled,
   label = "Continue with Google",
   className,
 }: {
   onClick?: () => void;
   loading?: boolean;
+  /** For "this route exists but isn't wired up here". Say why next to it — a
+      control that's off for no visible reason reads as a bug. */
+  disabled?: boolean;
   label?: string;
   className?: string;
 }) {
@@ -98,7 +257,7 @@ export function GoogleButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={loading}
+      disabled={disabled || loading}
       className={cn(
         "flex h-9 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-surface px-3 text-base font-medium text-text shadow-e1",
         "transition-[background-color,border-color] hover:border-border-strong hover:bg-surface-hover",

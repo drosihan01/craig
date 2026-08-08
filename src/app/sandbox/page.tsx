@@ -43,6 +43,7 @@ import {
 import { AUDIENCE, TEMPLATES as EMAIL_TEMPLATES } from "@/lib/email";
 import { SECTIONS } from "@/app/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
+import { ShowcaseReset } from "@/components/sandbox/showcase-reset";
 import { cn } from "@/lib/cn";
 
 /**
@@ -434,6 +435,7 @@ const SANDBOX_SECTIONS = [
   { value: "docs", label: "Docs" },
   { value: "backend", label: "Backend" },
   { value: "mail", label: "Mail" },
+  { value: "showcase", label: "Showcase" },
 ];
 
 /* Demo is a group rather than a section, because there are three of them now
@@ -504,6 +506,7 @@ export default function SandboxPage() {
           {tab === "docs" && <DocsTab />}
           {tab === "backend" && <BackendTab />}
           {tab.startsWith("demo") && <DemoTab run={tab} />}
+          {tab === "showcase" && <ShowcaseReset />}
           {tab === "mail" && <MailTab />}
         </div>
       </div>

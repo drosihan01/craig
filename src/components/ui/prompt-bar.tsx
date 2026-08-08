@@ -16,6 +16,12 @@ export interface PromptBarProps {
   onSubmit: (text: string) => void;
   model?: ChatModel;
   onModelChange?: (model: ChatModel) => void;
+  /**
+   * The model picker. Off where the route behind the bar is fixed to one model
+   * — the choice is a data boundary rather than a preference, so a picker the
+   * server ignores is the one control in this system that must never ship.
+   */
+  modelPicker?: boolean;
   placeholder?: string;
   busy?: boolean;
   onStop?: () => void;
@@ -46,6 +52,7 @@ export function PromptBar({
   onSubmit,
   model: controlledModel,
   onModelChange,
+  modelPicker = true,
   placeholder = "Type / for skills",
   busy,
   onStop,
@@ -229,7 +236,7 @@ export function PromptBar({
           </IconButton>
 
           <div className="ml-auto flex items-center gap-0.5">
-            <ModelPicker value={model} onChange={setModel} />
+            {modelPicker && <ModelPicker value={model} onChange={setModel} />}
 
             {/* Dictation, i.e. speech to text in this field. Deliberately not a
                 live-voice mode — that's a different interaction with different
