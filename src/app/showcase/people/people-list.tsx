@@ -14,6 +14,7 @@ import {
   ListItem,
   Separator,
 } from "@/components/ui";
+import { ShowcaseNav } from "@/components/showcase/showcase-nav";
 import { AltRoute, CheckCircle, PersonAdd } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import {
@@ -58,7 +59,11 @@ export function PeopleList({ user }: { user: Session }) {
     <AppShell
       title="People"
       account={{ name: user.name, email: user.email }}
-      nav={<PeopleNav seats={guests.length + 1} onboarding={guests.length} />}
+      nav={
+        <ShowcaseNav>
+          <PeopleNav seats={guests.length + 1} onboarding={guests.length} />
+        </ShowcaseNav>
+      }
     >
       <div className="mx-auto w-full max-w-3xl py-10">
         <header className="mb-6 flex flex-wrap items-start justify-between gap-3">

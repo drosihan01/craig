@@ -118,8 +118,15 @@ const TODOS: TodoGroup[] = [
       {
         id: "a4",
         title: "Adding a seat actually sends the first email",
-        note: "The dialog says what would happen and then nothing does. The transport exists now — src/lib/email/send.ts, proven by the Mail tab — so what's left is the seat calling it with that seat's merge values.",
+        note: "Done in the showcase — publishing opens the invite and it sends for real. The older demo's dialog still says what would happen and then nothing does.",
         where: "src/lib/onboarding.ts",
+      },
+      {
+        id: "a4b",
+        title: "Verify craig-ob.me so invites reach real people",
+        note: "Craig sends from onboarding@resend.dev, Resend's sandbox sender, which only delivers to the account owner — so an invite to an actual new starter is refused. Three DNS records fix it, and they have to go in at Squarespace: the domain came from Google Domains, which Squarespace bought in 2023, so the zone lives there even though the mailboxes are still Google Workspace. Edit the existing SPF rather than adding a second; two v=spf1 records invalidate each other and would break real email. Then NEXT_PUBLIC_CRAIG_MAIL_FROM=craig@craig-ob.me and nothing else changes.",
+        where: ".env.local · resend.com/domains · Squarespace DNS",
+        status: "blocked",
       },
       {
         id: "a5",
