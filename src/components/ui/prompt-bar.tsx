@@ -35,6 +35,9 @@ export interface PromptBarProps {
   size?: "sm" | "lg";
   /** Line under the bar — disclaimer, hint, character count. */
   footnote?: React.ReactNode;
+  /** Controlled text. Omit and the bar keeps its own. */
+  value?: string;
+  onValueChange?: (value: string) => void;
   autoFocus?: boolean;
   className?: string;
 }
@@ -53,10 +56,17 @@ export function PromptBar({
   accept = ".pdf,.doc,.docx,.md,.txt,.rtf",
   size = "lg",
   footnote,
+  value: controlledValue,
+  onValueChange,
   autoFocus,
   className,
 }: PromptBarProps) {
-  const [value, setValue] = React.useState("");
+  /* Controllable, so something outside can put words in it — a scripted demo
+     typing a reply, a retry re-filling the last prompt. Uncontrolled stays the
+     default because that's what every current caller wants. */
+  const [internalValue, setInternalValue] = React.useState("");
+  const value = controlledValue ?? internalValue;
+  const setValue = onValueChange ?? setInternalValue;
   const [files, setFiles] = React.useState<File[]>([]);
   const [internalModel, setInternalModel] = React.useState(DEFAULT_MODEL);
   const fileRef = React.useRef<HTMLInputElement>(null);

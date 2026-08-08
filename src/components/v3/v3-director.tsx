@@ -16,8 +16,10 @@ import {
   resetV3,
   setPlaying,
   setScene,
+  setDraft,
   setThinking,
   setTurn,
+  typeDraft,
   useV3,
 } from "@/lib/v3/store";
 import { cn } from "@/lib/cn";
@@ -44,6 +46,15 @@ import { cn } from "@/lib/cn";
 interface Act {
   /** Where this act has to happen. The director navigates first if it isn't there. */
   at?: string;
+  /**
+   * The control a person would have pressed, as a selector.
+   *
+   * Ringed and scrolled to just before the act runs. Without it you see the
+   * result of every interaction and never the interaction — which is the
+   * difference between watching someone use the product and watching a
+   * slideshow of its screens.
+   */
+  focus?: string;
   /** What the act does. Same calls a click would make. */
   run?: () => void;
   /** Milliseconds to hold *after* it, before the next act. */
@@ -56,6 +67,7 @@ function script(): Act[] {
   const acts: Act[] = [
     {
       at: "/v3",
+      focus: "[data-v3-signup]",
       hold: 1400,
       caption: "Signing up",
     },
@@ -71,11 +83,24 @@ function script(): Act[] {
      reply — the fractional turn is the half-state where he's spoken and Craig
      hasn't answered, which is where the reading actually happens. */
   V3_SESSION.forEach((t, i) => {
+    /* Typed into the composer, then sent — two acts, because the box is the
+       thing that sends messages and a demo that skips it is quietly saying
+       the box is decoration. */
     acts.push({
       at: "/v3/setup",
-      run: () => setTurn(i + 0.5),
-      hold: 900,
+      run: () => typeDraft(t.ada),
+      focus: "[data-v3-composer]",
+      hold: 2100,
       caption: i === 0 ? "Uploading three documents" : "Answering Craig",
+    });
+    acts.push({
+      at: "/v3/setup",
+      run: () => {
+        setDraft("");
+        setTurn(i + 0.5);
+      },
+      hold: 700,
+      caption: "Sent",
     });
     t.steps.forEach((label, j) => {
       acts.push({
@@ -102,6 +127,7 @@ function script(): Act[] {
     {
       at: "/v3/setup",
       run: () => setScene("building"),
+      focus: "[data-v3-build]",
       hold: 6200,
       caption: "Writing the workflow",
     },
@@ -118,6 +144,7 @@ function script(): Act[] {
     acts.push({
       at: "/v3/workflows/qsa",
       run: () => answerBlock(id, a.config),
+      focus: `[data-v3-answer="${id}"]`,
       hold: 2200,
       caption: "Theo answers",
     });
@@ -127,12 +154,14 @@ function script(): Act[] {
     {
       at: "/v3/workflows/qsa",
       run: publish,
+      focus: "[data-v3-publish]",
       hold: 2400,
       caption: "Published",
     },
     {
       at: "/v3/workflows/qsa",
       run: inviteStarter,
+      focus: "[data-v3-invite]",
       hold: 1800,
       caption: `Inviting ${V3_STARTER.name.split(" ")[0]}`,
     },
@@ -184,6 +213,22 @@ function script(): Act[] {
    render would be work to produce the same array. */
 const ACTS = script();
 
+/**
+ * Ring the control the act stands for, and bring it into view.
+ *
+ * Done straight to the DOM rather than through state. The target is on a page
+ * this component doesn't own and often doesn't render, and threading "which
+ * element is lit" through the store to reach it would mean every interactive
+ * element in the demo subscribing to the director.
+ */
+function tap(selector: string) {
+  const el = document.querySelector<HTMLElement>(selector);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("v3-tap");
+  window.setTimeout(() => el.classList.remove("v3-tap"), 900);
+}
+
 export function V3Director() {
   const router = useRouter();
   const pathname = usePathname();
@@ -231,6 +276,7 @@ export function V3Director() {
       setCaption(a.caption);
 
       const go = () => {
+        if (a.focus) tap(a.focus);
         a.run?.();
         timerRef.current = window.setTimeout(
           () => stepRef.current(i + 1),

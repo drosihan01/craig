@@ -38,10 +38,7 @@ import {
   PlayArrow,
   TaskAlt,
 } from "@/components/ui/icons";
-import {
-  AUDIENCE,
-  TEMPLATES as EMAIL_TEMPLATES,
-} from "@/lib/email";
+import { AUDIENCE, TEMPLATES as EMAIL_TEMPLATES } from "@/lib/email";
 import { SECTIONS } from "@/app/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
 import { cn } from "@/lib/cn";
@@ -303,6 +300,42 @@ interface Run {
 }
 
 /**
+ * Demo v3 — Calder Diagnostics, and the only one that plays itself.
+ *
+ * A different company on purpose. Ada's problem was that nothing was written
+ * down; Theo's is that everything is, twice, in documents that disagree — so
+ * Craig's job is reconciliation rather than excavation, and the demo can be
+ * about a harder thing than "we made you a checklist".
+ */
+const FLOW_V3: Run[] = [
+  {
+    href: "/v3",
+    label: "Sign up",
+    body: "Start here, then press play, bottom right. It runs all eight scenes on its own — or click through it yourself, the button drives the same paths you would.",
+  },
+  {
+    href: "/v3/setup",
+    label: "Discovery",
+    body: "Theo hands over three documents. Craig reads all three and opens by naming the places they contradict each other, by clause.",
+  },
+  {
+    href: "/v3/workflows/qsa",
+    label: "The workflow",
+    body: "Ordered by lead time rather than convention, and gated on two questions Craig wouldn't guess at. Publish is disabled until they're answered.",
+  },
+  {
+    href: "/v3/people/priya",
+    label: "Watching it run",
+    body: "The new starter's week, compressed. Each completed step says how Craig knows — checked it himself, or somebody told him.",
+  },
+  {
+    href: "/v3/home",
+    label: "The end of it",
+    body: "The record is signed inside the deadline, and the second hire hits the seat limit.",
+  },
+];
+
+/**
  * Demo v1 — Ada, already inside, drafting a workflow from her handbook.
  * The original run-through. Starts mid-story.
  */
@@ -422,9 +455,7 @@ export default function SandboxPage() {
   return (
     <AppShell
       title="Sandbox"
-      nav={
-        <SandboxNav section={tab} onSection={setTab} open={open} />
-      }
+      nav={<SandboxNav section={tab} onSection={setTab} open={open} />}
       asideTitle="Project"
       aside={<SandboxAside />}
       notifications={NOTIFICATIONS}
@@ -442,7 +473,8 @@ export default function SandboxPage() {
         <header className="mb-6 flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-[-0.02em]">
-              {SANDBOX_SECTIONS.find((t) => t.value === tab)?.label ?? "Sandbox"}
+              {SANDBOX_SECTIONS.find((t) => t.value === tab)?.label ??
+                "Sandbox"}
             </h1>
             <Badge tone="accent">Builder&apos;s hub</Badge>
           </div>
@@ -627,7 +659,8 @@ function DesignTab() {
         <CardHeader>
           <CardTitle>What&apos;s in it</CardTitle>
           <CardDescription>
-            Read from the same list that orders the page, so it can&apos;t drift.
+            Read from the same list that orders the page, so it can&apos;t
+            drift.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -688,8 +721,8 @@ function DocsTab() {
   return (
     <div className="flex flex-col gap-5">
       <Callout tone="accent" icon={<MenuBook />}>
-        The long version lives in the README — this is the set worth
-        remembering before touching anything.
+        The long version lives in the README — this is the set worth remembering
+        before touching anything.
       </Callout>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -726,10 +759,10 @@ function BackendTab() {
   return (
     <div className="flex flex-col gap-5">
       <Callout tone="warning" title="The model choice is a data boundary">
-        Craigopilot is in-house and the only model that sees company
-        data. Claude and GPT are hosted, so anything sent to them leaves the
-        tenancy. The composer says which regime you&apos;re in — that has to be
-        enforced in the API layer, because a label is not a control.
+        Craigopilot is in-house and the only model that sees company data.
+        Claude and GPT are hosted, so anything sent to them leaves the tenancy.
+        The composer says which regime you&apos;re in — that has to be enforced
+        in the API layer, because a label is not a control.
       </Callout>
 
       <Card>
@@ -823,8 +856,14 @@ function DemoTab() {
       </Card>
 
       <RunThrough
+        title="Demo v3 — Calder Diagnostics, plays itself"
+        note="The newest one, and a different company. Has a play button."
+        steps={FLOW_V3}
+      />
+
+      <RunThrough
         title="Demo v2 — the whole thing"
-        note="Start here. Begins with nobody having heard of Craig."
+        note="Katalis, from nobody having heard of Craig. Click-through."
         steps={FLOW_V2}
       />
 

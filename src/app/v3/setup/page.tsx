@@ -108,12 +108,12 @@ export default function V3SetupPage() {
         </div>
       }
     >
-      <div className="mx-auto w-full max-w-2xl py-10">
+      <div className="mx-auto flex h-[calc(100vh-3rem)] w-full max-w-2xl flex-col pt-10">
         {building ? (
           <Building step={buildStep} />
         ) : (
           <>
-            <header className="flex flex-col gap-2 pb-8">
+            <header className="flex shrink-0 flex-col gap-2 pb-8">
               <CraigMark className="size-8 text-accent" />
               <h1 className="text-3xl font-semibold tracking-[-0.02em]">
                 Hello {V3_FOUNDER.name.split(" ")[0]} — what does{" "}

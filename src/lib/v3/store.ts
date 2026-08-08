@@ -39,6 +39,8 @@ interface V3State {
   turn: number;
   /** What Craig is doing right now in the conversation, or null. */
   thinking: string | null;
+  /** What's in the composer. Typed into, by a person or by the director. */
+  draft: string;
   /** The workflow as it stands, including anything Theo has answered. */
   blocks: WorkflowBlock[];
   published: boolean;
@@ -55,6 +57,7 @@ const initial = (): V3State => ({
   scene: "signup",
   turn: 0,
   thinking: null,
+  draft: "",
   blocks: V3_BLOCKS.map((b) => ({ ...b, config: { ...b.config } })),
   published: false,
   seatTaken: false,
@@ -91,6 +94,45 @@ export const setScene = (scene: Scene) => set({ scene });
 export const setPlaying = (playing: boolean) => set({ playing });
 export const setTurn = (turn: number) => set({ turn });
 export const setThinking = (thinking: string | null) => set({ thinking });
+export const setDraft = (draft: string) => set({ draft });
+
+let typing: number | null = null;
+
+/**
+ * Put words in the composer the way a person would.
+ *
+ * The demo was skipping this: a reply appeared as a finished message and the
+ * composer sat there unused, which quietly says the box is decorative. Watching
+ * the text land in it is most of what makes the screen read as a conversation
+ * you're having rather than a transcript you're being shown.
+ *
+ * Fixed duration rather than fixed speed. Theo's opening message is seven
+ * hundred characters and his later ones are two hundred; at a constant
+ * per-character rate the first would take twelve seconds and the rest would
+ * feel like a different person typing.
+ */
+export function typeDraft(text: string, ms = 1600) {
+  if (typing) clearInterval(typing);
+  const frames = 34;
+  const step = Math.ceil(text.length / frames);
+  let i = 0;
+  set({ draft: "" });
+  typing = window.setInterval(() => {
+    i += step;
+    if (i >= text.length) {
+      set({ draft: text });
+      if (typing) clearInterval(typing);
+      typing = null;
+      return;
+    }
+    set({ draft: text.slice(0, i) });
+  }, ms / frames);
+}
+
+export function stopTyping() {
+  if (typing) clearInterval(typing);
+  typing = null;
+}
 
 export function answerBlock(
   id: string,
@@ -137,6 +179,7 @@ export function logBeat(note: string) {
 }
 
 export const resetV3 = () => {
+  stopTyping();
   state = initial();
   listeners.forEach((l) => l());
 };
