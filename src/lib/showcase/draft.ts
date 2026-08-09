@@ -170,12 +170,16 @@ const TRIGGER: WorkflowBlock = {
 };
 
 /**
- * The same trigger, for a workflow nobody drafted.
+ * The trigger every workflow opens with — drafted, blank or from a template.
  *
- * A copy rather than the constant itself. The editor writes blocks back by
- * replacing the list, but it patches fields in place on the way there, and one
- * shared object sitting at the top of two different workflows is a rename in
- * one of them showing up in the other.
+ * A copy rather than the constant itself, and the only way any caller should
+ * get one. The editor writes blocks back by replacing the list, but it patches
+ * fields in place on the way there, so one shared object sitting at the top of
+ * two different workflows is a rename in one of them showing up in the other.
+ *
+ * Craig's two draft paths used `TRIGGER` directly for a while, which is exactly
+ * the bug this exists to prevent: every workflow he drafted in a session shared
+ * one object, so renaming the trigger on any of them renamed it on all of them.
  */
 export const blankTrigger = (): WorkflowBlock => ({ ...TRIGGER });
 
@@ -494,7 +498,7 @@ export function parseDraft(raw: unknown, simple = false): Draft | undefined {
       return block ? [block] : [];
     });
     return blocks.length === SIMPLE_PRESETS.length
-      ? { name: trimmed(name) || "Onboarding", blocks: [TRIGGER, ...blocks] }
+      ? { name: trimmed(name) || "Onboarding", blocks: [blankTrigger(), ...blocks] }
       : undefined;
   }
 
@@ -526,7 +530,7 @@ export function parseDraft(raw: unknown, simple = false): Draft | undefined {
 
   return {
     name: trimmed(name) || "Onboarding",
-    blocks: [TRIGGER, ...blocks],
+    blocks: [blankTrigger(), ...blocks],
   };
 }
 

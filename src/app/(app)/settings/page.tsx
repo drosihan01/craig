@@ -46,15 +46,29 @@ export const metadata = {
  * in that URL which sends the next person anywhere but People or Workflows.
  *
  * The area rather than the exact page, deliberately. Somebody who opened
- * Settings from a workflow gets "Workflows" and lands on the list, which is a
- * predictable place; a link labelled "Workflows" that dropped them back inside
- * one particular builder would be a surprise every time it was right.
+ * Settings from a workflow lands on the list, which is a predictable place; a
+ * link that dropped them back inside one particular builder would be a surprise
+ * every time it was right.
+ *
+ * **The label is always "Back".** It used to name the destination — People,
+ * Workflows — which meant the one word on the control had to stay in step with
+ * a `?from=` that three screens now set, and it was already wrong for anybody
+ * arriving from Home. "Back" is the thing that is true of every origin,
+ * including the ones added after this was written, and it is what somebody
+ * pressing it is looking for anyway.
  */
 function parentArea(from: unknown): { href: string; label: string } {
   const raw = typeof from === "string" ? from : "";
-  return raw.startsWith("/people")
-    ? { href: "/people", label: "People" }
-    : { href: "/workflows", label: "Workflows" };
+  const href = raw.startsWith("/people")
+    ? "/people"
+    : raw.startsWith("/workflows")
+      ? "/workflows"
+      : /* Home, and the fallback. Settings opens from the account menu on every
+           screen, so an unrecognised origin is far likelier to be a new room
+           than a tampered URL — and Home is the one place everything is
+           reachable from. */
+        "/";
+  return { href, label: "Back" };
 }
 
 export default async function ShowcaseSettingsPage(

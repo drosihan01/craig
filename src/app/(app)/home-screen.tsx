@@ -2,18 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
-import {
-  AgentPhase,
-  AppShell,
-  buttonVariants,
-  CraigMark,
-  MessageBody,
-  PersonTurn,
-  PromptBar,
-} from "@/components/ui";
+import { AppShell, buttonVariants, CraigMark } from "@/components/ui";
 import { NavStat } from "@/components/app-nav";
-import { CraigFault } from "@/components/showcase/craig-fault";
-import { SourceChips } from "@/components/showcase/source-chips";
+import { CraigConversation } from "@/components/showcase/craig-conversation";
+import { ThreadHistory } from "@/components/showcase/thread-history";
 import {
   ShowcaseNav,
   ShowcaseNavRail,
@@ -21,6 +13,7 @@ import {
 import type { Session } from "@/lib/showcase/contract";
 import type { OutstandingItem } from "@/lib/showcase/outstanding";
 import { useCraigChat } from "@/lib/showcase/use-craig-chat";
+import { useCraigThread } from "@/lib/showcase/use-craig-thread";
 import { cn } from "@/lib/cn";
 
 /**
@@ -31,13 +24,20 @@ import { cn } from "@/lib/cn";
  * something" — on a product whose actual promise is that he is keeping track
  * while you are not looking.
  *
- * **The column is the editor's Craig panel, at page width.** Transcript in a
- * scroller that grows, composer pinned underneath it, and nothing between them.
- * The first version of this screen put the whole conversation *including its
- * composer* inside the scroll area, which meant the one control somebody came
- * to the page to use scrolled away with the page — you had to chase the input
- * down to type in it. `workflow-craig.tsx` had already solved this and the
- * shape is copied from it deliberately.
+ * **This is the same conversation component the first-run screen uses**, at the
+ * same width, with the same composer — `CraigConversation`. It had its own copy
+ * of a transcript for a while, and a copy is how one screen ends up feeling
+ * like a different product: Home's turns, composer and quick replies had all
+ * quietly drifted from the ones somebody had just used to build a workflow.
+ *
+ * Two things are turned off rather than reimplemented. The hand-off card, which
+ * offers to build a workflow, has no business on the screen you come back to;
+ * and the draft it would carry is always null here.
+ *
+ * The narrow panel beside the canvas is deliberately *not* this component — see
+ * `craig-thread.tsx`. A 300px column and a page-wide one want different
+ * composers, and the thing worth sharing between them is the transcript
+ * mechanics, which is what that file is.
  *
  * The greeting and the outstanding list live at the top of the transcript and
  * collapse the moment there is a conversation. They are an answer to "what
@@ -123,29 +123,13 @@ export function HomeScreen({
   const greeting = useTimeOfDay();
   const first = user.name.trim().split(/\s+/)[0] || user.name;
 
-  /**
-   * The same conversation the rest of the product holds.
-   *
-   * Worth being honest about rather than dressing up: `useCraigChat` writes
-   * into one transcript shared by every screen, so what is typed here is the
-   * same thread as the workflow builder's panel. That is not the design — Home
-   * should be its own standing conversation about the company — it is what
-   * exists until threads have a table to live in.
-   */
+  /* Arriving Home is a new conversation, not a continuation of the last one —
+     "what's outstanding" on Tuesday does not follow from Monday's version of
+     the same question. The thread itself is made on the first send, so glancing
+     at Home and leaving does not put an empty conversation in the history. */
+  useCraigThread("god");
   const chat = useCraigChat();
-  const { messages, phase, busy, error, send } = chat;
-  const started = messages.length > 0;
-
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const pinnedRef = React.useRef(true);
-
-  /* Only for a reader who was already at the bottom. Yanking somebody back
-     while they re-read an earlier turn is worse than text arriving off-screen.
-     Same rule as the editor's panel. */
-  React.useEffect(() => {
-    const el = scrollRef.current;
-    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages, phase]);
+  const started = chat.messages.length > 0;
 
   return (
     <AppShell
@@ -158,111 +142,82 @@ export function HomeScreen({
             <NavStat label="Workflows" value={workflowCount} />
             <NavStat label="People" value={peopleCount} />
           </div>
+          {/* Below the counts rather than above them: the counts say what the
+              account is, and this says what you have been doing. */}
+          <ThreadHistory />
         </ShowcaseNav>
       }
     >
-      {/* No gap on the column: the transcript runs straight into the composer,
-          because space between them reads as a gap in the conversation rather
-          than as breathing room. */}
-      <div className="mx-auto flex h-full w-full max-w-2xl flex-col">
-        <div
-          ref={scrollRef}
-          onScroll={() => {
-            const el = scrollRef.current;
-            if (!el) return;
-            pinnedRef.current =
-              el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-          }}
-          /* Padding on the scroller rather than the column around it: it
-             belongs to the scrollable content, so it holds the first line off
-             the header while you are at the top and then scrolls away, instead
-             of being a permanent band later messages pass behind. */
-          className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pb-4 pt-10"
-        >
-          {/* Collapsed rather than unmounted, so it goes away rather than
-              vanishing. `grid-rows` is the honest way to animate to and from
-              content height — a max-height guess is either a clipped list or a
-              slow start, depending on how many things need doing. */}
-          <div
-            aria-hidden={started}
-            className={cn(
-              "grid shrink-0 transition-all duration-300 ease-out motion-reduce:transition-none",
-              started
-                ? "pointer-events-none grid-rows-[0fr] opacity-0"
-                : "grid-rows-[1fr] opacity-100",
-            )}
-          >
-            <div className="overflow-hidden">
-              <div className="flex flex-col gap-8">
-                <div className="flex flex-col gap-3">
-                  <CraigMark className="size-8 text-accent" />
-                  <h1 className="text-3xl font-semibold tracking-[-0.02em]">
-                    {greeting ? `${greeting}, ${first}` : `Hello, ${first}`}
-                  </h1>
-                  <p className="text-md leading-relaxed text-text-muted">
-                    {outstanding.length === 0
-                      ? "Nothing needs you right now. Everything that's running is running."
-                      : "Here's what I couldn't finish on my own."}
-                  </p>
-                </div>
-
-                {outstanding.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-                      {outstanding.length === 1
-                        ? "One thing"
-                        : `${outstanding.length} things`}
+      {/* `flex-1 min-h-0` rather than `h-full`. A percentage height resolves
+          against whatever the parent turns out to be, and under the shell's old
+          `min-h` row that grew with the transcript — so the composer looked
+          pinned until there was enough conversation to scroll, then went with
+          it. `fill` makes the row a real height and this column takes its
+          share of it. */}
+      <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
+        <CraigConversation
+          messages={chat.messages}
+          phase={chat.phase}
+          busy={chat.busy}
+          error={chat.error}
+          onSend={chat.send}
+          /* Nothing to hand over and nothing to offer. Home is not where a
+             workflow gets built — that is the whole point of it being a
+             different room — so the draft card and the three-answer heuristic
+             behind it are both off. Left on, Craig would interrupt somebody
+             asking after a new starter with an offer to build something they
+             never mentioned. */
+          draft={null}
+          offerDraft={false}
+          /* What this screen is actually for. Craig on Home is the one keeping
+             track while you are not looking, so the prompt asks after people
+             and status rather than offering to make something. */
+          placeholder="Ask about anyone — has Irena got her visa yet?"
+          header={
+            /* Collapsed rather than unmounted, so it goes away rather than
+               vanishing. `grid-rows` is the honest way to animate to and from
+               content height — a max-height guess is either a clipped list or a
+               slow start, depending on how many things need doing. */
+            <div
+              aria-hidden={started}
+              className={cn(
+                "grid shrink-0 transition-all duration-300 ease-out motion-reduce:transition-none",
+                started
+                  ? "pointer-events-none grid-rows-[0fr] opacity-0"
+                  : "grid-rows-[1fr] opacity-100",
+              )}
+            >
+              <div className="overflow-hidden">
+                <div className="flex flex-col gap-8">
+                  <div className="flex flex-col gap-3">
+                    <CraigMark className="size-8 text-accent" />
+                    <h1 className="text-3xl font-semibold tracking-[-0.02em]">
+                      {greeting ? `${greeting}, ${first}` : `Hello, ${first}`}
+                    </h1>
+                    <p className="text-md leading-relaxed text-text-muted">
+                      {outstanding.length === 0
+                        ? "Nothing needs you right now. Everything that's running is running."
+                        : "Here's what I couldn't finish on my own."}
                     </p>
-                    {outstanding.map((item) => (
-                      <OutstandingRow key={item.id} item={item} />
-                    ))}
                   </div>
-                )}
+
+                  {outstanding.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+                        {outstanding.length === 1
+                          ? "One thing"
+                          : `${outstanding.length} things`}
+                      </p>
+                      {outstanding.map((item) => (
+                        <OutstandingRow key={item.id} item={item} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* The transcript. Same rendering as the editor's panel, because it
-              is the same conversation and two spellings of one thread is how
-              they start drifting apart. */}
-          {messages.map((m) =>
-            m.role === "user" ? (
-              <PersonTurn key={m.id}>{m.content}</PersonTurn>
-            ) : /* A turn that failed before a word arrived is dropped rather
-                   than drawn — a mark with nothing under it reads as Craig
-                   having said nothing, which is a worse claim than the failure
-                   notice above the composer. */
-            !m.streaming && m.content.trim() === "" ? null : (
-              <div key={m.id} className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <CraigMark className="size-5 shrink-0 text-accent" />
-                  <AgentPhase
-                    label={
-                      m.streaming
-                        ? (phase ?? (m.content ? null : "Thinking"))
-                        : null
-                    }
-                  />
-                </div>
-                {m.content.trim() !== "" && (
-                  <MessageBody content={m.content} streaming={m.streaming} />
-                )}
-                <SourceChips sources={m.sources} />
-              </div>
-            ),
-          )}
-        </div>
-
-        {/* Pinned. This is the control somebody arrived wanting, and the whole
-            reason the column is a flex column rather than a page that scrolls. */}
-        <div className="flex shrink-0 flex-col gap-3 pb-6">
-          <CraigFault error={error} />
-          <PromptBar
-            busy={busy}
-            placeholder="Ask Craig about your company, your people, or what's outstanding…"
-            onSubmit={send}
-          />
-        </div>
+          }
+        />
       </div>
     </AppShell>
   );

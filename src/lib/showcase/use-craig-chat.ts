@@ -5,6 +5,7 @@ import { CHAT_ENDPOINT, type ChatEvent } from "@/lib/showcase/contract";
 import {
   addSource,
   addWorkflow,
+  adoptThread,
   appendAnswer,
   applyEdit,
   beginTurn,
@@ -16,6 +17,7 @@ import {
   useShowcase,
   type CraigMessage,
 } from "@/lib/showcase/store";
+import { graduate, openThread } from "@/lib/showcase/thread-sync";
 
 /**
  * The conversation, from the screen's side.
@@ -85,6 +87,20 @@ export interface CraigChat {
   busy: boolean;
   /** The last failure, in words a person can act on. Cleared by the next send. */
   error: string | null;
+  /**
+   * The workflow *this conversation* produced, once Craig's draft tool fires.
+   *
+   * Reported from the stream rather than inferred, and that is the whole point
+   * of it existing. The welcome screen used to work this out by watching the
+   * account's workflow count grow past what it was at mount, which cannot tell
+   * "Craig just drafted one" from "the sync finished and told us about the
+   * three you already had" — so a returning admin who opened this screen to
+   * build a second workflow was thrown into the editor of their first the
+   * moment `hydrate` landed.
+   *
+   * Null until it happens, and it only ever happens once per conversation.
+   */
+  drafted: string | null;
 }
 
 /** Nothing here is persisted, so a counter is enough and stays stable in SSR. */
@@ -136,6 +152,7 @@ export function useCraigChat(
   const [tools, setTools] = React.useState<CraigToolRun[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [drafted, setDrafted] = React.useState<string | null>(null);
 
   const abortRef = React.useRef<AbortController | null>(null);
 
@@ -154,6 +171,23 @@ export function useCraigChat(
       /* The store decides both halves at once: what goes on screen, and what
          goes on the wire trimmed to the turns that still fit. */
       const { answerId, history } = beginTurn(content);
+
+      /* Home's conversation comes into existence here rather than when the
+         screen loaded, so glancing at Home and leaving does not leave an empty
+         thread in the history. Fired alongside the answer rather than before
+         it: the turn is already on screen and already in the store, and making
+         somebody wait on a round trip to *name* their conversation before Craig
+         starts writing it would be the one latency this product cannot afford.
+         `adoptThread` keeps the transcript and only attaches the id, so the
+         sentence that caused the thread to exist is the first thing in it. */
+      if (!showcaseState().threadId) {
+        void openThread("god").then((thread) => {
+          /* Guarded, because opening is a fetch and somebody can navigate or
+             pick a conversation out of history while it is in flight. Adopting
+             then would move this turn into a thread it does not belong to. */
+          if (thread && !showcaseState().threadId) adoptThread(thread.id);
+        });
+      }
 
       setError(null);
       setBusy(true);
@@ -264,13 +298,29 @@ export function useCraigChat(
                    and nothing needs to be: they were built from the library on
                    the server, so what lands in the store is what the canvas and
                    the publish gate already know how to read. */
+                const made = crypto.randomUUID();
                 addWorkflow({
-                  id: crypto.randomUUID(),
+                  id: made,
                   name: event.name,
                   draftedBy: "Craig",
                   createdAt: new Date().toISOString(),
                   blocks: event.blocks,
                 });
+
+                /* The conversation that produced it becomes the conversation
+                   *about* it. Every step in this draft exists because of
+                   something said in the turns above, so opening the workflow and
+                   finding an empty transcript beside it would throw away the
+                   only record of why it looks like that. The server flips the
+                   onboarding thread rather than copying it, and does nothing if
+                   this account is past its first run — see `graduateOnboarding`. */
+                void graduate(made);
+
+                /* Announced to the screen, which owns what happens next. The
+                   welcome screen navigates into the editor on it; the editor
+                   itself ignores it. A transcript should not be the thing that
+                   decides where somebody ends up. */
+                setDrafted(made);
               } else if (event.type === "source") {
                 /* On the message rather than in this hook's state: it's part of
                    what he said, and it has to survive the same navigation the
@@ -321,5 +371,5 @@ export function useCraigChat(
     [workflowId],
   );
 
-  return { messages, send, phase, notes, tools, busy, error };
+  return { messages, send, phase, notes, tools, busy, error, drafted };
 }
