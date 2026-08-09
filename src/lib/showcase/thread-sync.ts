@@ -55,7 +55,7 @@ const serialise = (m: CraigMessage) =>
  * the authority.
  */
 export async function openThread(
-  kind: "god" | "workflow" | "onboarding",
+  kind: "god" | "workflow" | "draft",
   options: {
     workflowId?: string;
     from?: { threadId: string; messageId?: string };
@@ -66,11 +66,16 @@ export async function openThread(
   notes: ThreadNote[];
 } | null> {
   const id = crypto.randomUUID();
+  const from =
+    options.from ??
+    (handedOverFrom ? { threadId: handedOverFrom } : undefined);
+  handedOverFrom = null;
+
   try {
     const response = await fetch("/api/showcase/threads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ open: { kind, id, ...options } }),
+      body: JSON.stringify({ open: { kind, id, ...options, from } }),
     });
     if (!response.ok) return null;
 
@@ -121,7 +126,7 @@ export async function readThread(
 }
 
 /** What this account has said, newest first. Home's history list. */
-export async function listThreads(kind?: "god" | "workflow" | "onboarding") {
+export async function listThreads(kind?: "god" | "workflow" | "draft") {
   try {
     const response = await fetch(
       `/api/showcase/threads${kind ? `?kind=${kind}` : ""}`,
@@ -143,23 +148,47 @@ export async function listThreads(kind?: "god" | "workflow" | "onboarding") {
 }
 
 /**
- * The onboarding conversation becoming the drafted workflow's own.
+ * The draft conversation becoming the workflow's own.
  *
- * Fired when Craig's draft tool produces a workflow. Silent about failing: a
- * conversation that does not follow its workflow is a worse product and not a
- * broken one, and surfacing it would put a network error in front of somebody
- * watching their first workflow get built.
+ * Fired when Craig's draft tool produces a workflow, and *awaited* before the
+ * screen navigates: the editor opens the workflow's thread the moment it
+ * mounts, and if graduation had not landed by then it would create an empty one
+ * and strand the conversation that built the workflow.
+ *
+ * Silent about failing. A conversation that does not follow its workflow is a
+ * worse product and not a broken one, and surfacing it would put a network
+ * error in front of somebody watching their workflow get built.
  */
-export async function graduate(workflowId: string): Promise<void> {
+export async function graduate(
+  threadId: string,
+  workflowId: string,
+): Promise<void> {
   try {
     await fetch("/api/showcase/threads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ graduate: { workflowId } }),
+      body: JSON.stringify({ graduate: { threadId, workflowId } }),
     });
   } catch {
     /* See above. */
   }
+}
+
+/**
+ * The conversation a handover came from, held until the thread it starts exists.
+ *
+ * Craig can offer a door out of Home into the builder, and the builder's thread
+ * is created lazily — on the first thing typed, not on arrival. So the parent
+ * cannot be recorded at open time, because at open time there is nothing to
+ * record it against. This holds it across that gap.
+ *
+ * Consumed once. A second conversation started later in the same session did
+ * not come from anywhere, and inheriting a stale parent would claim it did.
+ */
+let handedOverFrom: string | null = null;
+
+export function rememberHandover(threadId: string | null) {
+  handedOverFrom = threadId;
 }
 
 /** Seeded from what was just read, so the first push sends only what changed. */

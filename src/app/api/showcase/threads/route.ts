@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/showcase/current-user";
 import {
-  graduateOnboarding,
+  graduateThread,
   listThreads,
-  onboardingThread,
+  startDraftThread,
   readThread,
   saveMessages,
   saveNotes,
@@ -33,7 +33,7 @@ import {
 const MAX_TURNS = 400;
 const MAX_CONTENT = 40_000;
 
-const KINDS: ThreadKind[] = ["god", "workflow", "onboarding"];
+const KINDS: ThreadKind[] = ["god", "workflow", "draft"];
 const isKind = (v: unknown): v is ThreadKind =>
   typeof v === "string" && (KINDS as string[]).includes(v);
 
@@ -108,13 +108,19 @@ export async function POST(request: Request) {
   /* The onboarding conversation becoming the workflow's own. Its own verb
      rather than a flag on `open`, because it changes a thread that already
      exists and the caller is not asking to be given one — see
-     `graduateOnboarding` for why this is a flip rather than a copy. */
+     `graduateThread` for why this is a flip rather than a copy. The thread is
+     named by the caller: it is the conversation the draft came out of, and the
+     server guessing which one that was is exactly the bug that handed somebody
+     a months-old transcript. */
   if (graduate && typeof graduate === "object") {
-    const { workflowId } = graduate as { workflowId?: unknown };
-    if (!isUuid(workflowId)) {
+    const { threadId: from, workflowId } = graduate as {
+      threadId?: unknown;
+      workflowId?: unknown;
+    };
+    if (!isUuid(workflowId) || !isUuid(from)) {
       return NextResponse.json({ error: "Malformed request." }, { status: 400 });
     }
-    const thread = await graduateOnboarding(session.email, workflowId);
+    const thread = await graduateThread(session.email, from, workflowId);
     return NextResponse.json({ thread });
   }
 
@@ -149,8 +155,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ thread });
     }
 
-    if (kind === "onboarding") {
-      const thread = await onboardingThread(
+    if (kind === "draft") {
+      const thread = await startDraftThread(
         session.email,
         id,
         isUuid(from?.threadId) ? from.threadId : undefined,

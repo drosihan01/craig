@@ -106,8 +106,14 @@ export interface CraigChat {
    *
    * Only ever `"new-workflow"` today: Home has no drafting tool, so when what
    * somebody describes needs a workflow that does not exist, the answer is a
-   * control rather than a canvas. Cleared by the next send, because it belongs
-   * to the turn that offered it.
+   * control rather than a canvas.
+   *
+   * It stays up until the conversation changes. Clearing it on the next send
+   * was the obvious reading — the door belongs to the answer that offered it —
+   * and it was wrong in practice: somebody who keeps describing the role they
+   * want watches the way out vanish mid-sentence, and Craig has no reason to
+   * offer it twice because he already has. The offer is a standing fact about
+   * this conversation, not a decoration on one turn of it.
    */
   offer: "new-workflow" | null;
 }
@@ -148,17 +154,21 @@ export function useCraigChat(
   /* What the screen already knows is blocking publication, so his answer to
      "what's left?" is the same as the one on screen beside him. */
   outstanding?: string[],
-  /* Home. Both this and discovery send no workflow, and they want opposite
+  /* Home. Both this and the builder send no workflow, and they want opposite
      tools — see `HOME_NOTE` in `craig-agent.ts`. */
   home = false,
 ): CraigChat {
+  /* Which kind of conversation a first send should create. The editor never
+     reaches this — its thread is opened on arrival, because a workflow's
+     conversation is a thing that already exists. */
+  const threadKind = home ? ("god" as const) : ("draft" as const);
   /* Through a ref so `send` keeps one identity. It changes whenever a field is
      answered, and rebuilding the callback on every keystroke would remount the
      composer under whoever is typing into it. */
   const outstandingRef = React.useRef(outstanding);
   outstandingRef.current = outstanding;
 
-  const { messages } = useShowcase();
+  const { messages, threadId } = useShowcase();
   const [phase, setPhase] = React.useState<string | null>(null);
   const [notes, setNotes] = React.useState<CraigNote[]>([]);
   const [tools, setTools] = React.useState<CraigToolRun[]>([]);
@@ -166,6 +176,25 @@ export function useCraigChat(
   const [error, setError] = React.useState<string | null>(null);
   const [drafted, setDrafted] = React.useState<string | null>(null);
   const [offer, setOffer] = React.useState<"new-workflow" | null>(null);
+
+  /**
+   * The door belongs to the conversation it was offered in.
+   *
+   * It survives every turn *within* a thread — see `offer` on `CraigChat` — but
+   * picking an older conversation out of the history, or starting a new one,
+   * must not leave the previous one's offer standing over it.
+   *
+   * Adjusted during render rather than in an effect. React documents this as
+   * the way to reset state when something it derives from changes, and it is
+   * also the only way here: this codebase fails the build on `setState` in an
+   * effect, and an effect would in any case paint the stale door for one frame
+   * before removing it.
+   */
+  const [offerThread, setOfferThread] = React.useState(threadId);
+  if (offerThread !== threadId) {
+    setOfferThread(threadId);
+    setOffer(null);
+  }
 
   const abortRef = React.useRef<AbortController | null>(null);
 
@@ -185,16 +214,18 @@ export function useCraigChat(
          goes on the wire trimmed to the turns that still fit. */
       const { answerId, history } = beginTurn(content);
 
-      /* Home's conversation comes into existence here rather than when the
-         screen loaded, so glancing at Home and leaving does not leave an empty
-         thread in the history. Fired alongside the answer rather than before
-         it: the turn is already on screen and already in the store, and making
-         somebody wait on a round trip to *name* their conversation before Craig
-         starts writing it would be the one latency this product cannot afford.
-         `adoptThread` keeps the transcript and only attaches the id, so the
-         sentence that caused the thread to exist is the first thing in it. */
+      /* The conversation comes into existence here rather than when the screen
+         loaded, so glancing at a screen and leaving does not leave an empty
+         thread in the history — and, on the builder, so that arriving starts a
+         new conversation rather than resuming whichever old one the server
+         found. Fired alongside the answer rather than before it: the turn is
+         already on screen and already in the store, and making somebody wait on
+         a round trip to *name* their conversation before Craig starts writing
+         it would be the one latency this product cannot afford. `adoptThread`
+         keeps the transcript and only attaches the id, so the sentence that
+         caused the thread to exist is the first thing in it. */
       if (!showcaseState().threadId) {
-        void openThread("god").then((thread) => {
+        void openThread(threadKind).then((thread) => {
           /* Guarded, because opening is a fetch and somebody can navigate or
              pick a conversation out of history while it is in flight. Adopting
              then would move this turn into a thread it does not belong to. */
@@ -203,9 +234,6 @@ export function useCraigChat(
       }
 
       setError(null);
-      /* Cleared per turn. The door belongs to the answer that offered it — left
-         standing, it would sit under a later reply about something else. */
-      setOffer(null);
       setBusy(true);
       setPhase(null);
       setTools([]);
@@ -328,15 +356,22 @@ export function useCraigChat(
                    *about* it. Every step in this draft exists because of
                    something said in the turns above, so opening the workflow and
                    finding an empty transcript beside it would throw away the
-                   only record of why it looks like that. The server flips the
-                   onboarding thread rather than copying it, and does nothing if
-                   this account is past its first run — see `graduateOnboarding`. */
-                void graduate(made);
+                   only record of why it looks like that. The server flips this
+                   very thread rather than copying it — named explicitly,
+                   because a server left to find "the" draft conversation is what
+                   used to hand somebody a months-old one.
+
+                   Awaited before the screen is told, so the editor cannot mount
+                   and open the workflow's thread while graduation is still in
+                   flight — which would create an empty one and strand this
+                   conversation behind it. */
+                const from = showcaseState().threadId;
+                if (from) await graduate(from, made);
 
                 /* Announced to the screen, which owns what happens next. The
-                   welcome screen navigates into the editor on it; the editor
-                   itself ignores it. A transcript should not be the thing that
-                   decides where somebody ends up. */
+                   builder navigates into the editor on it; the editor itself
+                   ignores it. A transcript should not be the thing that decides
+                   where somebody ends up. */
                 setDrafted(made);
               } else if (event.type === "source") {
                 /* On the message rather than in this hook's state: it's part of
@@ -387,7 +422,7 @@ export function useCraigChat(
         finish();
       })();
     },
-    [workflowId, home],
+    [workflowId, home, threadKind],
   );
 
   return { messages, send, phase, notes, tools, busy, error, drafted, offer };
