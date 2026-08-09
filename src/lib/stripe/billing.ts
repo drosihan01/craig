@@ -116,9 +116,16 @@ function toStatus(value: unknown): SubscriptionStatus | null {
  * who paid for ten seats a dialog refusing their sixth colleague, and nothing
  * in the logs would look wrong.
  *
- * Putting `seats` on the *price* metadata as well as the product avoids the
- * extra call entirely, and is worth doing when somebody next touches the
- * Dashboard.
+ * **`seats` is now set on the price as well as the product** (9 August 2026,
+ * `price_1U2F4OAJzn3u1xQ6NLChkxzD` → `metadata.seats = "5"`), so in practice
+ * the first branch answers and the GET below no longer runs. Price metadata is
+ * mutable even though the amount is not, so this did not need a new price id.
+ *
+ * The fallback stays anyway, and deleting it would be the wrong tidy-up. It is
+ * what makes a price somebody forgot to annotate degrade into a correct answer
+ * rather than a wrong one, and the day this repo sells a second plan is the day
+ * that matters — the seat count would be missing on exactly the new price
+ * nobody had thought about yet.
  */
 const DEFAULT_SEATS = 5;
 

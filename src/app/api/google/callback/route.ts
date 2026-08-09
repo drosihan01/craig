@@ -1,7 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { exchangeCode } from "@/lib/google/auth";
 import { saveGoogleConnection } from "@/lib/showcase/accounts";
 import { currentUser } from "@/lib/showcase/current-user";
+import { ensureWatch } from "@/lib/showcase/google-watch";
 import {
   GOOGLE_STATE_COOKIE,
   GOOGLE_STATE_COOKIE_OPTIONS,
@@ -177,6 +178,34 @@ export async function GET(request: NextRequest) {
     console.error("[google/callback] connection not stored");
     return done(request, "not-stored", state.returnTo);
   }
+
+  /* Subscribe to their directory, after the response rather than before it.
+     This is the earliest moment a channel *can* be created — it needs the
+     refresh token that was written one line above — and it is the right moment
+     to do it: from here on, somebody accepting their Workspace seat settles
+     their step by itself instead of waiting for a page view.
+
+     In `after` because it is not part of connecting. It is one more Google
+     round trip on a redirect somebody is watching, and every way it can fail is
+     a way this deployment is not set up rather than a way their consent went
+     wrong — no public address, no signing secret, an address Google will not
+     deliver to. Making the connect flow report those would be telling a
+     customer that a deployment they do not run is misconfigured, on the screen
+     that has just successfully connected their company's Google Workspace.
+
+     Nothing is lost if it fails, and nothing has to be retried here: the
+     renewal sweep creates what is missing as well as replacing what is old, so
+     a tenant that lands with no channel gets one on the next pass.
+     `ensureWatch` never throws, which on the `after` path is the difference
+     between a log line and an unhandled rejection nobody sees. */
+  after(async () => {
+    const watching = await ensureWatch(session.email);
+    if (!watching.ok && watching.reason !== "not-configured") {
+      console.error(
+        `[google/callback] no notification channel (${watching.reason}): ${watching.message}`,
+      );
+    }
+  });
 
   return done(request, "connected", state.returnTo);
 }

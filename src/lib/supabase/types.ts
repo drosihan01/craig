@@ -91,6 +91,65 @@ export type Database = {
           },
         ]
       }
+      google_watch_channels: {
+        Row: {
+          channel_id: string
+          connection_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          renewed_at: string
+          resource_id: string
+          resource_uri: string | null
+        }
+        Insert: {
+          channel_id: string
+          connection_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          renewed_at?: string
+          resource_id: string
+          resource_uri?: string | null
+        }
+        Update: {
+          channel_id?: string
+          connection_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          renewed_at?: string
+          resource_id?: string
+          resource_uri?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_watch_channels_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_watch_notifications: {
+        Row: {
+          channel_id: string
+          message_number: number
+          received_at: string
+        }
+        Insert: {
+          channel_id: string
+          message_number: number
+          received_at?: string
+        }
+        Update: {
+          channel_id?: string
+          message_number?: number
+          received_at?: string
+        }
+        Relationships: []
+      }
       joiners: {
         Row: {
           account_email: string

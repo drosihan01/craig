@@ -84,19 +84,16 @@ const ITEMS = [
     label: "Home",
     href: "/",
     icon: <Home />,
-    shut: "There's nothing here until Craig has something to tell you about",
   },
   {
     label: "People",
     href: "/people",
     icon: <Groups />,
-    shut: "You can give somebody a seat once there's a workflow to start them on",
   },
   {
     label: "Workflows",
     href: "/workflows",
     icon: <AltRoute />,
-    shut: "Craig drafts your first workflow from this conversation",
   },
 ];
 
@@ -111,46 +108,28 @@ const ITEMS = [
 const isCurrent = (pathname: string, href: string) =>
   href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-export function ShowcaseNav({
-  disabled,
-  hidden,
-  children,
-}: {
-  /** Shuts both rows. See the note above `ITEMS`. */
-  disabled?: boolean;
-  /** Removes both rows outright. First run only — see the note above `ITEMS`. */
-  hidden?: boolean;
-  children?: React.ReactNode;
-}) {
+export function ShowcaseNav({ children }: { children?: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
     <div className="flex flex-col gap-5">
-      {!hidden && (
-        <NavTree>
-          {ITEMS.map((item) => (
-            <NavTreeItem
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              current={isCurrent(pathname, item.href)}
-              disabled={disabled}
-              reason={item.shut}
-            />
-          ))}
-        </NavTree>
-      )}
+      <NavTree>
+        {ITEMS.map((item) => (
+          <NavTreeItem
+            key={item.href}
+            href={item.href}
+            label={item.label}
+            icon={item.icon}
+            current={isCurrent(pathname, item.href)}
+          />
+        ))}
+      </NavTree>
 
       {/* Page-specific detail sits under the nav, not instead of it — which
-          is exactly the mistake that stranded the setup screen.
-
-          The separator goes with the rows it separates: with the nav hidden
-          there is nothing above this to divide it from, and a rule floating at
-          the top of an otherwise empty column reads as a missing section. */}
+          is exactly the mistake that stranded the setup screen. */}
       {children && (
         <>
-          {!hidden && <Separator />}
+          <Separator />
           {children}
         </>
       )}
@@ -170,25 +149,15 @@ export function ShowcaseNav({
  * showing the parts of the column that survive squeezing rather than the parts
  * that matter.
  *
- * `disabled` for the same reason it's shared: a rail that still walked you
- * into the empty page while the expanded panel refused would make collapsing
+ * Whatever the panel does about a room, the rail must do too. A rail that
+ * still walked you into a page the expanded panel refused would make collapsing
  * the panel the way round the rule, and the two widths would be telling the
- * person two different things about the same account.
- *
- * `hidden` travels with it for exactly that reason. A first run that hid the
- * rooms in the panel and kept them in the rail would put the whole point of
- * hiding them one click away.
+ * person two different things about the same account. There is nothing to
+ * suppress today — see the note above `ITEMS` — but that is the constraint any
+ * future suppression has to satisfy.
  */
-export function ShowcaseNavRail({
-  disabled,
-  hidden,
-}: {
-  disabled?: boolean;
-  hidden?: boolean;
-}) {
+export function ShowcaseNavRail() {
   const pathname = usePathname();
-
-  if (hidden) return null;
 
   return (
     <NavRail>
@@ -199,8 +168,6 @@ export function ShowcaseNavRail({
           label={item.label}
           icon={item.icon}
           current={isCurrent(pathname, item.href)}
-          disabled={disabled}
-          reason={item.shut}
         />
       ))}
     </NavRail>

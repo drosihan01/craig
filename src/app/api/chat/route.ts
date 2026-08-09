@@ -29,6 +29,7 @@ import {
   type ChatTurn,
   type OpenStep,
   type OpenWorkflow,
+  DRAFT_REQUEST,
 } from "@/lib/showcase/contract";
 
 /**
@@ -124,12 +125,13 @@ function parse(body: unknown):
       known: { gaps: string[]; facts: string[] };
       workflow?: OpenWorkflow;
       simpleDraft: boolean;
+      home: boolean;
     }
   | { ok: false; reason: string } {
   if (typeof body !== "object" || body === null)
     return { ok: false, reason: "Expected an object." };
 
-  const { messages, attachments, known, workflow, simpleDraft } =
+  const { messages, attachments, known, workflow, simpleDraft, home } =
     body as ChatRequest;
 
   if (!Array.isArray(messages) || messages.length === 0)
@@ -175,6 +177,7 @@ function parse(body: unknown):
     },
     workflow: openWorkflow(workflow),
     simpleDraft: simpleDraft === true,
+    home: home === true,
   };
 }
 
@@ -329,6 +332,38 @@ function failureMessage(error: unknown): string {
 
 /* --- The route ------------------------------------------------------------ */
 
+
+/**
+ * Whether their latest turn actually asked for the workflow to be built.
+ *
+ * Craig decides plenty; this is not his to decide. The Generate button sends a
+ * fixed sentence, so the common case is an exact match — but somebody who
+ * simply types "go on then, build it" has asked just as clearly, and a gate
+ * that only honoured the button would make the conversation the slower way to
+ * do the thing the conversation is for.
+ *
+ * Read off *their* last turn only. His own replies are full of sentences like
+ * "shall I draft it?", and a check that scanned the whole transcript would find
+ * his suggestion and treat it as their answer.
+ *
+ * Deliberately narrow. A false negative costs one button press; a false
+ * positive is a workflow appearing in somebody's account unasked, which is the
+ * whole thing this exists to stop — so "that's everything" and "what else do
+ * you need" are not matches, however finished they sound.
+ */
+const ASKED_TO_DRAFT =
+  /\b(draft|build|make|create|generate|put together|write)\b[^.?!]{0,40}\b(it|this|that|one|workflow|onboarding)\b/i;
+
+function askedToDraft(messages: ChatTurn[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const turn = messages[i];
+    if (turn.role !== "user") continue;
+    const text = turn.content.trim();
+    return text === DRAFT_REQUEST || ASKED_TO_DRAFT.test(text);
+  }
+  return false;
+}
+
 export async function POST(request: Request) {
   /* Before anything else, and before anything is spent. `currentUser` reads the
      cookie and checks the signature; the proxy guards the app but not this,
@@ -406,6 +441,8 @@ export async function POST(request: Request) {
     /* Their turns only. His own replies are full of plausible values he wrote
        himself, and a check that reads them back would agree with anything. */
     parsed.messages.flatMap((t) => (t.role === "user" ? [t.content] : [])),
+    parsed.home,
+    askedToDraft(parsed.messages),
   );
 
   /* Cancelling stops the meter when somebody closes the tab or sends again.
@@ -575,6 +612,9 @@ export async function POST(request: Request) {
                 kind: note.kind,
                 text: note.text,
               });
+            if (activity.offer)
+              send({ type: "offer", offer: activity.offer });
+
             if (activity.workflow)
               send({
                 type: "workflow",

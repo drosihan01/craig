@@ -13,6 +13,7 @@ import {
   buttonVariants,
 } from "@/components/ui";
 import { ArrowForward, AutoAwesome, Description } from "@/components/ui/icons";
+import { DRAFT_REQUEST } from "@/lib/showcase/contract";
 import type { CraigMessage, ShowcaseWorkflow } from "@/lib/showcase/store";
 import { CraigFault } from "./craig-fault";
 import { SourceChips, type Source } from "./source-chips";
@@ -44,13 +45,13 @@ import { SourceChips, type Source } from "./source-chips";
 const ENOUGH_ANSWERS = 3;
 
 /**
- * The message the hand-off button sends. He owns whether it's premature.
+ * The message the hand-off button sends.
  *
- * Exported so the screen that owns the navigation can send it itself, rather
- * than the transcript firing it and the screen guessing when it happened.
+ * Re-exported rather than defined here now that the chat route reads it too —
+ * it decides from that sentence whether Craig may draft at all. Kept exported
+ * from this file so the screens that already import it are unchanged.
  */
-export const DRAFT_REQUEST =
-  "Draft the workflow from what I've told you so far.";
+export { DRAFT_REQUEST };
 
 export function readyToDraft(messages: CraigMessage[]): boolean {
   return (
@@ -87,6 +88,8 @@ export function CraigConversation({
   offerDraft = true,
   placeholder,
   header,
+  offer = null,
+  newWorkflowHref = "/welcome",
 }: {
   messages: CraigMessage[];
   phase: string | null;
@@ -122,6 +125,16 @@ export function CraigConversation({
    * every later message passes behind.
    */
   header?: React.ReactNode;
+  /**
+   * A door Craig offered to somewhere he cannot go himself.
+   *
+   * Home has no drafting tool on purpose, so when what somebody describes needs
+   * a workflow that does not exist, what he can produce is a control rather
+   * than a canvas. See `offer_new_workflow` in `craig-agent.ts`.
+   */
+  offer?: "new-workflow" | null;
+  /** Where that door leads, carrying whatever handover the screen wants. */
+  newWorkflowHref?: string;
 }) {
   const [text, setText] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
@@ -279,6 +292,8 @@ export function CraigConversation({
       <div className="flex shrink-0 flex-col gap-3 pb-6">
         <CraigFault error={error} />
 
+        {offer === "new-workflow" && <NewWorkflowDoor href={newWorkflowHref} />}
+
         {offerHandoff && (
           <Handoff
             draft={draft}
@@ -314,6 +329,45 @@ export function CraigConversation({
           footnote={footnote(files.length > 0, started)}
         />
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * The door out of a conversation that cannot build a workflow.
+ *
+ * Shaped like `Handoff` below and placed in the same slot, because it is the
+ * same move at a different moment: a conversation has reached the point where
+ * the next thing is a different screen, and the person should arrive there by
+ * pressing one thing rather than by being told where to navigate.
+ *
+ * A link rather than a button, so it behaves like the navigation it is —
+ * middle-click, open in a new tab, and the status bar all work, none of which
+ * is true of an `onClick` that calls `router.push`.
+ *
+ * It carries no description of the workflow. Craig has already said one line
+ * about why in the reply above it, and repeating that here would be the screen
+ * arguing the case a second time — worse, it would be the product claiming to
+ * know what the workflow is before the conversation that decides has happened.
+ */
+function NewWorkflowDoor({ href }: { href: string }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-accent bg-accent-subtle/30 p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-base font-medium">Start a workflow for this</p>
+        <p className="text-sm leading-relaxed text-text-muted">
+          We&apos;ll pick up where this left off, on the screen where Craig can
+          actually build it. Nothing is created until he drafts something.
+        </p>
+      </div>
+      <Link
+        href={href}
+        className={buttonVariants({ size: "sm", className: "w-fit" })}
+      >
+        Build it
+        <ArrowForward />
+      </Link>
     </div>
   );
 }

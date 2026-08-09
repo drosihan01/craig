@@ -71,7 +71,9 @@ export async function hydrate(
     localStorage.getItem(SYNCED_KEY(email)) === null;
 
   const remoteIds = new Set(remote.map((w) => w.id));
-  const strays = firstTime ? local.filter((w) => !remoteIds.has(w.id)) : [];
+  const strays = firstTime
+    ? local.filter((w) => !remoteIds.has(w.id) && !w.pending)
+    : [];
 
   const merged = [...remote, ...strays].sort((a, b) =>
     a.createdAt.localeCompare(b.createdAt),
@@ -119,8 +121,14 @@ function flush() {
   const { email, workflows } = pending;
   pending = null;
 
-  const save = workflows.filter((w) => pushed.get(w.id) !== serialise(w));
-  const live = new Set(workflows.map((w) => w.id));
+  /* Pending workflows are never sent. One started from the blank button and
+     then abandoned — tab closed, browser back, wandered off — must not survive
+     as a row called "New workflow" holding nothing; see `pending` in `store.ts`.
+     The first edit clears the flag and it syncs from then on like any other. */
+  const durable = workflows.filter((w) => !w.pending);
+
+  const save = durable.filter((w) => pushed.get(w.id) !== serialise(w));
+  const live = new Set(durable.map((w) => w.id));
   const remove = [...pushed.keys()].filter((id) => !live.has(id));
 
   if (save.length === 0 && remove.length === 0) return;

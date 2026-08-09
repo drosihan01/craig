@@ -31,6 +31,16 @@ import { openThread, readThread } from "./thread-sync";
 export function useCraigThread(
   kind: "god" | "workflow" | "onboarding",
   workflowId?: string,
+  /**
+   * The conversation this one was handed over from, if any.
+   *
+   * Recorded on the thread and nothing more — no turns are copied. Craig on
+   * Home can offer a door into the builder, and what travels through it is that
+   * they want a workflow, which the builder's opening question already assumes.
+   * The pointer is what lets the two be joined up later without either becoming
+   * the other's copy.
+   */
+  parentThreadId?: string,
 ) {
   React.useEffect(() => {
     let live = true;
@@ -50,7 +60,10 @@ export function useCraigThread(
     const open = showcaseState().threadId;
 
     void (async () => {
-      const result = await openThread(kind, { workflowId });
+      const result = await openThread(kind, {
+        workflowId,
+        from: parentThreadId ? { threadId: parentThreadId } : undefined,
+      });
       if (!live || !result) return;
 
       /* `openThread` returns the *server's* answer, which for these two kinds
@@ -62,7 +75,7 @@ export function useCraigThread(
     return () => {
       live = false;
     };
-  }, [kind, workflowId]);
+  }, [kind, workflowId, parentThreadId]);
 }
 
 /**

@@ -293,20 +293,107 @@ function EmptyChat({
 }
 
 /**
- * Craig's prose, with lists rendered as lists.
+ * Craig's prose, rendered as the markdown he actually writes.
  *
- * He answers in a lead sentence and then bullets, because that's how the
- * person reading it actually reads. Lines beginning "- " become a real <ul>
- * rather than hyphens in a paragraph — the markup should say what the shape
- * says, and a screen reader shouldn't have to guess from punctuation.
+ * He answers in a lead sentence and then bullets, because that's how the person
+ * reading it actually reads. Lines beginning "- " become a real <ul> rather
+ * than hyphens in a paragraph — the markup should say what the shape says, and
+ * a screen reader shouldn't have to guess from punctuation.
  *
- * Line-based rather than a markdown parser, so a half-arrived bullet during
- * streaming renders as a half-arrived bullet instead of throwing.
+ * **Bullets used to be all it understood**, which meant everything else arrived
+ * as punctuation: `**Regulatory compliance**:` rendered with the asterisks
+ * showing, and `### Best practices` as a line beginning with three hashes. The
+ * model was writing markdown because it is a model; the transcript was printing
+ * it because it only knew one shape. That is worse than plain text would have
+ * been — plain text is merely unformatted, whereas visible syntax reads as the
+ * product having broken.
+ *
+ * Still line-based, and still not a markdown library. The reason is streaming:
+ * this renders text that is *half arrived*, so it has to have an opinion about
+ * `**Regu` — a parser either throws on that or waits for the delimiter to
+ * close, and both of those are worse than showing the characters that exist.
+ * Every rule below degrades to literal text when its closing marker hasn't
+ * turned up yet, which is exactly the behaviour a half-written word wants.
+ *
+ * Underscores are deliberately not italics. `_` shows up in identifiers Craig
+ * quotes back — `account_id`, `current_period_end` — and eating a pair of them
+ * to italicise the middle of a column name is a worse failure than never
+ * italicising at all. Asterisks are unambiguous in prose, so they are what it
+ * reads.
  *
  * Exported because the showcase builds its own transcript — it interleaves
  * things `ChatMessage` has no field for — but Craig's prose must look the same
  * wherever it lands. A second copy of this would drift on the first bullet.
  */
+
+/**
+ * Inline runs: bold, italic, code, links.
+ *
+ * One pass, one alternation, and every branch requires its *closing* marker to
+ * match. That is the whole streaming story: an unterminated `**` simply does
+ * not match, so the asterisks fall through to the literal text and get replaced
+ * by real bold the moment the rest arrives.
+ *
+ * Links are restricted to http(s). A transcript renders text a model produced,
+ * and `[click here](javascript:…)` is a thing a model can be talked into
+ * writing — so the scheme is checked here rather than trusted.
+ */
+const INLINE =
+  /\*\*([^*]+)\*\*|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+
+function inline(text: string): React.ReactNode {
+  const out: React.ReactNode[] = [];
+  let at = 0;
+  let key = 0;
+
+  /* `lastIndex` is stateful on a module-level regex, so it is reset per call —
+     otherwise the second message rendered would start scanning from wherever
+     the first one happened to stop. */
+  INLINE.lastIndex = 0;
+
+  for (let m = INLINE.exec(text); m !== null; m = INLINE.exec(text)) {
+    if (m.index > at) out.push(text.slice(at, m.index));
+
+    const [, bold, italic, code, linkText, href] = m;
+    if (bold !== undefined) {
+      out.push(<strong key={key++}>{bold}</strong>);
+    } else if (italic !== undefined) {
+      out.push(<em key={key++}>{italic}</em>);
+    } else if (code !== undefined) {
+      out.push(
+        <code
+          key={key++}
+          className="rounded bg-surface-sunken px-1 py-0.5 font-mono text-[0.9em]"
+        >
+          {code}
+        </code>,
+      );
+    } else if (href !== undefined) {
+      out.push(
+        <a
+          key={key++}
+          href={href}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-accent underline underline-offset-2"
+        >
+          {linkText}
+        </a>,
+      );
+    }
+    at = m.index + m[0].length;
+  }
+
+  if (at < text.length) out.push(text.slice(at));
+  /* A string when nothing matched, so the common case adds no array or keys. */
+  return out.length === 0 ? text : out.length === 1 ? out[0] : out;
+}
+
+/** `##`-style headings, and how big each one is allowed to be. */
+const HEADING = /^(#{1,6})\s+(.*)$/;
+
+/** `1. ` — a list whose numbering is part of what it says. */
+const ORDERED = /^(\d+)\.\s+(.*)$/;
 export function MessageBody({
   content,
   streaming,
@@ -317,27 +404,44 @@ export function MessageBody({
   /* Runs, not blocks. Craig writes a lead line and then bullets under it in
      the same paragraph, so splitting on blank lines alone would leave the
      hyphens sitting in prose. This walks the lines and starts a new run
-     whenever the shape changes. */
-  const runs: { bullet: boolean; lines: string[] }[] = [];
+     whenever the shape changes.
+
+     A heading is always its own run of one, because two consecutive headings
+     are two headings rather than a two-line one. */
+  type Kind = "bullet" | "ordered" | "heading" | "para";
+  const runs: { kind: Kind; lines: string[] }[] = [];
 
   for (const line of content.split("\n")) {
-    const bullet = line.startsWith("- ");
-    const blank = line.trim() === "";
-    const current = runs[runs.length - 1];
-
-    if (blank) {
-      if (current) runs.push({ bullet: false, lines: [] });
-      continue;
-    }
-    if (!current || current.bullet !== bullet || current.lines.length === 0) {
-      if (current && current.lines.length === 0 && current.bullet === bullet) {
-        current.lines.push(line);
-        continue;
+    if (line.trim() === "") {
+      /* A blank line ends whatever was open. The next line starts a run even if
+         it is the same shape, which is what keeps two bulleted lists separated
+         by a blank line from merging into one. */
+      if (runs.length > 0 && runs[runs.length - 1].lines.length > 0) {
+        runs.push({ kind: "para", lines: [] });
       }
-      runs.push({ bullet, lines: [line] });
       continue;
     }
-    current.lines.push(line);
+
+    const kind: Kind = HEADING.test(line)
+      ? "heading"
+      : line.startsWith("- ") || line.startsWith("* ")
+        ? "bullet"
+        : ORDERED.test(line)
+          ? "ordered"
+          : "para";
+
+    const current = runs[runs.length - 1];
+    const canExtend =
+      current &&
+      current.lines.length > 0 &&
+      current.kind === kind &&
+      kind !== "heading";
+
+    if (canExtend) current.lines.push(line);
+    else if (current && current.lines.length === 0) {
+      current.kind = kind;
+      current.lines.push(line);
+    } else runs.push({ kind, lines: [line] });
   }
 
   const filled = runs.filter((r) => r.lines.length > 0);
@@ -347,25 +451,62 @@ export function MessageBody({
       {filled.map((run, i) => {
         const last = i === filled.length - 1;
 
-        if (run.bullet) {
+        if (run.kind === "heading") {
+          const [, hashes, text] = run.lines[0].match(HEADING) ?? [];
+          /* One step down per level, floored quickly. This sits inside a
+             transcript where the turn itself is not a document — an `<h1>` from
+             Craig is a heading within his answer, not a heading of the page, so
+             the visual range is deliberately narrow. */
+          const level = Math.min(hashes?.length ?? 3, 3);
           return (
-            <ul key={i} className="flex flex-col gap-1.5">
-              {run.lines.map((line, j) => (
-                <li key={j} className="flex gap-2.5">
-                  <span
-                    aria-hidden
-                    className="mt-[0.6em] size-1 shrink-0 rounded-full bg-text-subtle"
-                  />
-                  <span className="min-w-0 flex-1">{line.slice(2)}</span>
-                </li>
-              ))}
-            </ul>
+            <p
+              key={i}
+              className={cn(
+                "font-semibold text-text",
+                level === 1 ? "text-lg" : level === 2 ? "text-md" : "text-base",
+              )}
+            >
+              {inline(text ?? "")}
+            </p>
+          );
+        }
+
+        if (run.kind === "bullet" || run.kind === "ordered") {
+          const ordered = run.kind === "ordered";
+          const List = ordered ? "ol" : "ul";
+          return (
+            <List key={i} className="flex flex-col gap-1.5">
+              {run.lines.map((line, j) => {
+                const body = ordered
+                  ? (line.match(ORDERED)?.[2] ?? line)
+                  : line.slice(2);
+                return (
+                  <li key={j} className="flex gap-2.5">
+                    {ordered ? (
+                      /* The number he wrote, not one this list counted for
+                         itself. A step "3." that arrives before "2." is a
+                         streaming artefact, and renumbering it to 1 would make
+                         the text disagree with itself mid-sentence. */
+                      <span className="mt-0 shrink-0 tabular-nums text-text-subtle">
+                        {line.match(ORDERED)?.[1]}.
+                      </span>
+                    ) : (
+                      <span
+                        aria-hidden
+                        className="mt-[0.6em] size-1 shrink-0 rounded-full bg-text-subtle"
+                      />
+                    )}
+                    <span className="min-w-0 flex-1">{inline(body)}</span>
+                  </li>
+                );
+              })}
+            </List>
           );
         }
 
         return (
           <p key={i} className="whitespace-pre-wrap">
-            {run.lines.join("\n")}
+            {inline(run.lines.join("\n"))}
             {last && streaming && (
               <span
                 aria-hidden

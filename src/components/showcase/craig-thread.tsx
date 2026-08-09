@@ -167,7 +167,18 @@ export function CraigThread({
             )}
       </div>
 
-      <div className="flex shrink-0 flex-col gap-3 pb-6">
+      {/* The narrow column carries no bottom padding of its own. It sits inside
+          a panel that already has its own inset, so `pb-6` was that inset twice
+          — a band of empty panel under the composer, in the one layout where
+          vertical space is scarcest and every pixel of it is a line of
+          conversation. The page-wide column does need it: there is nothing
+          below it but the window. */}
+      <div
+        className={cn(
+          "flex shrink-0 flex-col gap-3",
+          size === "sm" ? "pb-0" : "pb-6",
+        )}
+      >
         <CraigFault error={error} />
         {above}
         <PromptBar

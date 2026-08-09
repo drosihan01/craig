@@ -2,7 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AppShell, buttonVariants, CraigMark } from "@/components/ui";
+import {
+  AppShell,
+  buttonVariants,
+  CraigMark,
+  Separator,
+} from "@/components/ui";
 import { NavStat } from "@/components/app-nav";
 import { CraigConversation } from "@/components/showcase/craig-conversation";
 import { ThreadHistory } from "@/components/showcase/thread-history";
@@ -12,6 +17,7 @@ import {
 } from "@/components/showcase/showcase-nav";
 import type { Session } from "@/lib/showcase/contract";
 import type { OutstandingItem } from "@/lib/showcase/outstanding";
+import { useShowcase } from "@/lib/showcase/store";
 import { useCraigChat } from "@/lib/showcase/use-craig-chat";
 import { useCraigThread } from "@/lib/showcase/use-craig-thread";
 import { cn } from "@/lib/cn";
@@ -128,7 +134,11 @@ export function HomeScreen({
      the same question. The thread itself is made on the first send, so glancing
      at Home and leaving does not put an empty conversation in the history. */
   useCraigThread("god");
-  const chat = useCraigChat();
+  const { threadId } = useShowcase();
+  /* `home` is the third argument, and the flag that stops Craig treating this
+     like discovery — see `HOME_NOTE`. Without it he reads an empty workflow and
+     starts interviewing somebody who came to ask about one person. */
+  const chat = useCraigChat(undefined, undefined, true);
   const started = chat.messages.length > 0;
 
   return (
@@ -145,8 +155,13 @@ export function HomeScreen({
             <NavStat label="People" value={peopleCount} />
             <NavStat label="Workflows" value={workflowCount} />
           </div>
-          {/* Below the counts rather than above them: the counts say what the
-              account is, and this says what you have been doing. */}
+
+          {/* Ruled off from the counts above it, because the two are different
+              kinds of fact and were reading as one list. The counts say what
+              the account *is*; the conversations below say what you have been
+              doing in it. Without the rule, "Recents" looked like a third
+              statistic with no number next to it. */}
+          <Separator />
           <ThreadHistory />
         </ShowcaseNav>
       }
@@ -172,6 +187,16 @@ export function HomeScreen({
              never mentioned. */
           draft={null}
           offerDraft={false}
+          /* The door Craig can offer from here, since he has no way to build a
+             workflow on this screen. It carries the conversation it came from,
+             so the builder's thread records what it continues — nothing else
+             travels; see `parent_thread_id` in the threads migration. */
+          offer={chat.offer}
+          newWorkflowHref={
+            threadId
+              ? `/welcome?from=${encodeURIComponent(threadId)}`
+              : "/welcome"
+          }
           /* What this screen is actually for. Craig on Home is the one keeping
              track while you are not looking, so the prompt asks after people
              and status rather than offering to make something. */

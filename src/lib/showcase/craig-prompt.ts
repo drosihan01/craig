@@ -324,6 +324,18 @@ These are its steps, and the id is how you name one:
 
 ${workflow.steps.map(line).join("\n") || "- Nothing but the trigger yet."}
 ${
+  /* **This section is unconditional, and that is the fix.**
+   *
+   * The rules below — an owner is optional, a step with nobody named is
+   * finished, never say somebody needs assigning — used to be printed only when
+   * there *was* something outstanding. Which meant the one situation they exist
+   * to govern was the one situation he was never told about: asked "what's
+   * left?" on a workflow with nothing left, he had no sentence saying "nothing",
+   * and filled the silence by inventing a task. Usually assigning an owner,
+   * because that is the most plausible-looking blank on the screen.
+   *
+   * So the invariants are stated every turn, and the empty case says plainly
+   * that it is empty rather than saying nothing at all. */
   workflow.outstanding?.length
     ? `
 ## What is stopping them publishing
@@ -332,13 +344,23 @@ ${workflow.outstanding.map((o) => `- ${o}`).join("\n")}
 
 This list is worked out by the screen and it is complete. Some of it is about their account rather than their workflow, so you cannot derive it from the steps above — and you must not add to it. If they ask what needs their attention, what is left, or why they cannot publish, this is the whole answer.
 
-If they ask what needs their attention, what is left, or why they cannot publish, **answer with exactly the items above and nothing else**. Not a longer version of them, not one more you thought of, not something you said earlier in this conversation.
-
-There is nothing else outstanding. A step with nobody named is finished — an owner is optional on every step, and the ones the new starter fills in themselves cannot have one, so never say somebody needs assigning. A step with nothing empty is finished. If the list above has one item, your answer has one item.
+If they ask what needs their attention, what is left, or why they cannot publish, **answer with exactly the items above and nothing else**. Not a longer version of them, not one more you thought of, not something you said earlier in this conversation. If the list above has one item, your answer has one item.
 
 Connecting Google Workspace is something only they can do, on this screen. You cannot do it for them and there is no tool for it.`
-    : ""
+    : `
+## What is stopping them publishing
+
+**Nothing.** This workflow is ready to publish right now.
+
+That is worked out by the same screen that produces the list when there is one, so it is not a gap in what you were told — it is the answer. If they ask what needs their attention, what is left, or why they cannot publish, say that nothing is outstanding and that they can publish whenever they want.
+
+Do not go looking for something to offer instead. Nothing above is a task in disguise.`
 }
+
+Two things are true of every step, whether or not anything is outstanding, and they are where invented work comes from:
+
+- **An owner is optional on every step.** A step with nobody named is finished, not waiting. The steps the new starter fills in themselves cannot have an owner at all. Never say somebody needs assigning, and never list "assign an owner" as something left to do.
+- **A step with nothing empty is finished.** There is no further state for it to reach.
 
 A step counts as Ready the moment nothing is empty on it, so a field you fill with a plausible guess reads as decided when nobody has decided. Fill one only with something they said in a sentence you could point at. Otherwise leave it empty and ask.
 

@@ -147,7 +147,11 @@ export async function POST(request: Request) {
     }
 
     if (kind === "onboarding") {
-      const thread = await onboardingThread(session.email, id);
+      const thread = await onboardingThread(
+        session.email,
+        id,
+        isUuid(from?.threadId) ? from.threadId : undefined,
+      );
       return NextResponse.json({ thread });
     }
 

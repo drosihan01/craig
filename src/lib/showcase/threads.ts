@@ -238,6 +238,10 @@ export async function threadForWorkflow(
 export async function onboardingThread(
   accountEmail: string,
   id: string,
+  /* The Home conversation this was handed over from, when Craig offered the
+     door rather than the person navigating there themselves. Only ever set on
+     creation — a second visit does not rewrite where the first one came from. */
+  parentThreadId?: string,
 ): Promise<StoredThread | null> {
   const accountId = await accountIdFor(accountEmail);
   if (!accountId) return null;
@@ -252,7 +256,12 @@ export async function onboardingThread(
 
   const { data, error } = await db()
     .from("threads")
-    .insert({ id, account_id: accountId, kind: "onboarding" })
+    .insert({
+      id,
+      account_id: accountId,
+      kind: "onboarding",
+      parent_thread_id: parentThreadId ?? null,
+    })
     .select()
     .maybeSingle();
 

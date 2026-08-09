@@ -20,11 +20,19 @@ import { WelcomeScreen } from "./welcome-screen";
  * Next's own docs say so, and a Server Function on an excluded path skips it
  * entirely.
  */
-export default async function WelcomePage() {
+export default async function WelcomePage(props: PageProps<"/welcome">) {
   /* Handed down rather than fetched again on the client. The session is server
      data and a prop is how server data reaches a client component — the
      alternative is an endpoint that exists only so the greeting can learn a
      name the server already had in its hand. */
   const user = await requireUser();
-  return <WelcomeScreen user={user} />;
+
+  /* Which conversation sent them here, when Craig offered the door from Home.
+     Passed through untouched and never rendered: the only thing that ever
+     reads it is a thread insert, which checks it is a UUID belonging to this
+     account before it writes anything. */
+  const params = await props.searchParams;
+  const from = typeof params.from === "string" ? params.from : undefined;
+
+  return <WelcomeScreen user={user} from={from} />;
 }

@@ -179,6 +179,14 @@ export interface ChatRequest {
    * what he drafted matches what landed.
    */
   simpleDraft?: boolean;
+  /**
+   * The turn came from Home rather than the builder.
+   *
+   * Both send no workflow, so without this the route cannot tell a status
+   * conversation from a discovery one — and they want opposite tools. See
+   * `home` on the notebook in `craig-agent.ts`.
+   */
+  home?: boolean;
 }
 
 /**
@@ -281,6 +289,24 @@ export type ChatEvent =
    * sentence, and where it came from is still one click away.
    */
   | { type: "source"; url: string; title: string }
+  /**
+   * Craig offering to start a workflow, from a conversation that cannot build
+   * one.
+   *
+   * Home is a different room from the builder on purpose, and the price of that
+   * is a dead end: somebody describes a new starter to Craig on Home and the
+   * answer he wants to give — "let's build that" — is a thing he has no tool
+   * for there. `draft_workflow` deliberately is not offered on Home, because a
+   * workflow drafted out of a status conversation arrives in the account with
+   * nobody having watched it being made.
+   *
+   * So this is not the workflow. It is a door: the screen draws a control, and
+   * pressing it carries the person into the room where workflows are built,
+   * with the new conversation recording which one it came from. Nothing else
+   * travels — the handover is only that they want to make one, which the
+   * builder's own opening question already assumes.
+   */
+  | { type: "offer"; offer: "new-workflow" }
   /** A chunk of the answer. Append. */
   | { type: "delta"; text: string }
   /** The turn is finished. */
@@ -289,6 +315,19 @@ export type ChatEvent =
   | { type: "error"; message: string };
 
 export const CHAT_ENDPOINT = "/api/chat";
+
+/**
+ * The sentence the Generate button sends.
+ *
+ * Here rather than beside the button, because both ends need it: the transcript
+ * sends it, and the chat route reads it to decide whether Craig is allowed to
+ * draft at all. It lived in `craig-conversation.tsx` while only the client
+ * cared — but that file is `"use client"`, and importing a client module into a
+ * route handler to borrow a string is how a `localStorage` reference eventually
+ * ends up on the server.
+ */
+export const DRAFT_REQUEST =
+  "Draft the workflow from what I've told you so far.";
 
 /* --- The new starter ------------------------------------------------------ */
 

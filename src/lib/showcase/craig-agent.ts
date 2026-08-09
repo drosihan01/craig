@@ -106,6 +106,34 @@ export interface Notebook {
    */
   company?: string;
   /**
+   * This is Home, rather than the screen where workflows get built.
+   *
+   * The two look identical from here — neither has a workflow open — and they
+   * want opposite tools. On Home Craig must not draft: a workflow that appears
+   * in the account out of a status conversation is one nobody watched being
+   * made. What he can do instead is offer the door, which is
+   * `offer_new_workflow`.
+   */
+  home?: boolean;
+  /** Set by `offer_new_workflow`, drained by the route into an `offer` event. */
+  offeredNewWorkflow?: boolean;
+  /**
+   * They have actually asked for the workflow to be built, this turn.
+   *
+   * Craig used to decide this himself, and the argument for that was real: he
+   * owns the tool, he can tell when he has enough, and making somebody press a
+   * button to confirm what he already knew is ceremony. What it missed is whose
+   * workflow it is. Three answers in he would draft unprompted, and the first a
+   * person knew about it was a canvas assembling itself out of a conversation
+   * they thought they were still having — a thing appearing in their account
+   * that they never asked for and now have to judge or delete.
+   *
+   * So the Generate card is the trigger. Typing "build it" works too — that is
+   * the same instruction in the person's own words — but a turn that merely
+   * *sounds* finished is not consent, and the tool now refuses it.
+   */
+  mayDraft?: boolean;
+  /**
    * The workflow open in the editor, or null during discovery.
    *
    * Mutated by the editing tools as they run, so a second call in the same turn
@@ -158,6 +186,8 @@ export function seedNotebook(
   editing?: OpenWorkflow,
   simpleDraft = false,
   theirWords: string[] = [],
+  home = false,
+  mayDraft = false,
 ): Notebook {
   return {
     gaps: (known?.gaps ?? []).map((what) => ({ what, whyItMatters: "" })),
@@ -165,6 +195,8 @@ export function seedNotebook(
     workflow: null,
     firstName,
     company,
+    home,
+    mayDraft,
     /* Their turns and his notes of them together: a conversation gets trimmed
        on the way here, and a fact recorded on turn one is still something they
        said. */
@@ -414,10 +446,42 @@ const recall = tool<typeof recallParams, Notebook>({
   },
 });
 
+const offerNewWorkflowParams = z.object({});
+
+/**
+ * The door out of Home and into the builder.
+ *
+ * Craig on Home is asked about people and status, and every so often the honest
+ * answer is "that needs a workflow and you haven't got one". He cannot build it
+ * where he is standing — see `home` on the notebook — so this draws a control
+ * instead, and pressing it moves the person into the room that can.
+ *
+ * It takes no arguments on purpose. The temptation is to let him pass a name or
+ * a set of steps through, and that would be him drafting by the back door: the
+ * builder's whole value is that the workflow is assembled in front of you out
+ * of a conversation you are having. What travels is that they want one.
+ */
+const offerNewWorkflow = tool<typeof offerNewWorkflowParams, Notebook>({
+  name: "offer_new_workflow",
+  description:
+    "Offer to start a new workflow. Call this when what they are describing needs a workflow that does not exist yet — a kind of hire they have no onboarding for. It draws a button they can press; it does not create anything. Only on Home. Say one line about why in your reply and let the button do the rest.",
+  parameters: offerNewWorkflowParams,
+  execute: (_args, context) => {
+    const notebook = notebookOf(context);
+    if (!notebook.home) {
+      return notebook.editing
+        ? "They already have a workflow open. Change that one with add_step, set_step_config or remove_step."
+        : "They are already on the screen where workflows are built. Just carry on — draft_workflow is the tool here.";
+    }
+    notebook.offeredNewWorkflow = true;
+    return "Offered. The button is on their screen now — don't describe it, and don't ask them to confirm.";
+  },
+});
+
 const draftWorkflow = tool<typeof draftWorkflowParams, Notebook>({
   name: "draft_workflow",
   description:
-    "Produce the onboarding draft once you know the tools, who can create them, and roughly what week one involves. Every step is a preset id from the block library in your instructions. Call this whenever the user signals they have finished telling you things — 'that's everything', 'that's all I can think of', 'what else do you need'. Do not call it in the first two exchanges: a workflow built on two facts is a generic one and they will be able to tell.",
+    "Produce the onboarding draft. Every step is a preset id from the block library in your instructions. **Only call this when they have asked you to build it** — they pressed Generate, or said so in as many words. Do not call it because you think you have enough, because they said 'that's everything', or because the conversation feels finished: deciding it is time is their move, not yours, and it will be refused. When you think it is ready, say so in one line and leave the button to them.",
   parameters: draftWorkflowParams,
   execute: (args, context) => {
     const notebook = notebookOf(context);
@@ -427,6 +491,14 @@ const draftWorkflow = tool<typeof draftWorkflowParams, Notebook>({
        creates a duplicate is a worse failure than a tool that says no. */
     if (notebook.editing)
       return "They already have a workflow open. Change that one with add_step, set_step_config or remove_step.";
+
+    /* The person decides when it gets built, not him. Refused rather than
+       discouraged in the prompt alone, because "do not do X unless asked" is
+       exactly the kind of instruction a model follows four times out of five —
+       and the fifth is a workflow in somebody's account that they did not ask
+       for and now have to deal with. See `mayDraft`. */
+    if (!notebook.mayDraft)
+      return "Not yet — they haven't asked you to build it. Say what you would put in it and stop there; there is a Generate button on their screen and pressing it is how they ask. Do not call this again until they do.";
 
     const draft = parseDraft(args, notebook.simpleDraft);
     if (!draft) return "None of those steps matched a block. Try again.";
@@ -640,6 +712,8 @@ export interface ToolActivity {
   notes?: { kind: "gap" | "fact"; text: string }[];
   /** The draft, when this was `draft_workflow` and it parsed. */
   workflow?: Draft;
+  /** `offer_new_workflow` fired, so the screen should draw the door. */
+  offer?: "new-workflow";
 }
 
 /**
@@ -677,6 +751,12 @@ export function describeToolCall(
     typeof args[key] === "string" ? (args[key] as string).trim() : "";
 
   switch (name) {
+    case "offer_new_workflow":
+      return {
+        phase: "Working out what that needs",
+        label: "Offering a new workflow",
+        offer: "new-workflow",
+      };
     case "note_gap": {
       const what = text("what");
       const why = text("why_it_matters");
@@ -892,8 +972,27 @@ export function splitCitations(buffered: string): {
  * Appended to the tuned prompt rather than woven into it, so the voice rules
  * stay exactly as written and this is plainly a briefing note on top.
  */
+/**
+ * What Craig is for on Home, which is not what he is for anywhere else.
+ *
+ * Without this he reads an empty `workflow` and concludes he is in discovery —
+ * the screen whose entire job is producing a draft — so he starts interviewing
+ * somebody who came to ask whether Irena's account had been made. The absence
+ * of a workflow means two different things now, and this is the sentence that
+ * tells them apart.
+ */
+const HOME_NOTE = `## Where you are
+
+This is Home. They are not building anything right now; they came to find out what is going on, or to get something moving.
+
+Answer about their people and their account: who is waiting on what, what has run, what failed. Short, and about the specific person or thing they asked about.
+
+**Do not interview them.** Discovery — what you sell, who does what — belongs on the screen where a workflow gets built, and running it here means asking a returning admin to re-explain a company you already have notes on.
+
+**You cannot draft a workflow here, and must not try.** If what they are describing needs one that does not exist yet — a kind of hire they have no onboarding for — call \`offer_new_workflow\`. It puts a button on their screen that takes them to the builder. Say one line about why it would help; the button says the rest, so do not describe it, spell out what pressing it does, or ask them to confirm.`;
+
 function instructionsFor(context: RunContext<Notebook>): string {
-  const { facts, gaps, firstName, company, editing, simpleDraft } =
+  const { facts, gaps, firstName, company, editing, simpleDraft, home } =
     context.context;
 
   /* Each block appears once and only once. His notes are here and in `recall`,
@@ -924,9 +1023,11 @@ function instructionsFor(context: RunContext<Notebook>): string {
        what may be drafted would be answering a question nobody is asking. */
     editing
       ? openWorkflowNote(editing, simpleDraft)
-      : simpleDraft
-        ? SIMPLE_DRAFT_NOTE
-        : "",
+      : home
+        ? HOME_NOTE
+        : simpleDraft
+          ? SIMPLE_DRAFT_NOTE
+          : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -941,6 +1042,7 @@ export const craig = new Agent<Notebook>({
     noteGap,
     recordFact,
     recall,
+    offerNewWorkflow,
     draftWorkflow,
     addStep,
     setStepConfig,
