@@ -140,19 +140,24 @@ export function WelcomeScreen({ user }: { user: Session }) {
          about somebody who has told us their name and nothing else. */
       account={{ name: user.name, email: user.email }}
       fill
-      navRail={<ShowcaseNavRail disabled={!drafted} />}
+      navRail={<ShowcaseNavRail hidden={!drafted} />}
       nav={
-        /* The nav is always here; on a brand-new account both rows are shut.
-           It used to be hidden outright, on the argument that Workflows and
-           People are empty until Craig drafts something and offering two dead
-           ends is worse than offering nothing. The dead ends are still real —
-           a shut row is how they're answered now. Hiding them meant the first
-           thing this product showed a new person was a screen with no product
-           around it, and then two items arriving from nowhere the moment they
-           looked away. Shut, the column says what's here and what earns it,
-           and the only thing that changes later is that the rows start
-           working. */
-        <ShowcaseNav disabled={!drafted}>
+        /* Hidden on a brand-new account, not shut.
+
+           This has been both ways. Shutting them was an answer to a real
+           problem — hide two rooms and they arrive from nowhere the moment
+           somebody looks away, which is a product that changes shape while
+           you're using it. But shut rows solve that by putting two locked
+           doors next to the one thing a new person is meant to do, and the
+           first screen of a product is the worst place to spend somebody's
+           attention on things they cannot have yet.
+
+           So the first run is the stepper and nothing else. The arrival
+           problem is real and is answered differently: the rooms appear at the
+           moment Craig drafts something, which is a thing the person just
+           watched happen and is already looking at, rather than while their
+           back is turned. */
+        <ShowcaseNav hidden={!drafted}>
           <Stepper steps={steps} compact />
           {/* Retired once there's a workflow. It's an answer to "what is
               about to happen to me", which stops being the question the
