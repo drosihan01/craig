@@ -670,6 +670,41 @@ async function ensureWatchForTenant(
  *
  * Returns whether there was anything to stop. Never throws.
  */
+/**
+ * Whether acceptance is actually being pushed to us for this account.
+ *
+ * Exists because the failure it reports is otherwise invisible. Creating the
+ * channel runs *after* the connection is stored and does not block it, so
+ * connecting Google Workspace says "connected" whether or not the push was
+ * accepted — and it was refused twice in a row on this account without a word
+ * reaching the screen. The only evidence was an empty table and a line in the
+ * runtime log, which is not somewhere a customer can look.
+ *
+ * `active` is deliberately about the channel being *usable now*, not about a
+ * row existing. An expired channel is a row that delivers nothing, and calling
+ * that connected would be the same lie in a smaller font.
+ *
+ * Null when there is no Google connection at all — that is not a push problem
+ * and the panel has its own, better, thing to say about it.
+ */
+export async function watchStatusFor(
+  accountEmail: string,
+): Promise<{ active: boolean; expiresAt: number | null } | null> {
+  const tenant = await tenantByEmail(accountEmail);
+  if (!tenant) return null;
+
+  const row = await channelFor(tenant.connectionId);
+  if (!row) return { active: false, expiresAt: null };
+
+  const expires = Date.parse(row.expires_at);
+  /* An unreadable expiry counts as inactive, matching `isDue`'s conservative
+     direction: the cost of being wrong here is a warning somebody can dismiss
+     by pressing a button, and the cost of the opposite is silence. */
+  if (Number.isNaN(expires)) return { active: false, expiresAt: null };
+
+  return { active: expires > Date.now(), expiresAt: expires };
+}
+
 export async function stopWatch(accountEmail: string): Promise<boolean> {
   const tenant = await tenantByEmail(accountEmail);
   if (!tenant) return false;

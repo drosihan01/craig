@@ -82,6 +82,9 @@ type Reply =
         connectedAt: number;
         needsReconnect: boolean;
       } | null;
+      /** Whether the notification channel is registered and unexpired. Absent
+          on a deployment that predates push. */
+      push?: { active: boolean; expiresAt: number | null } | null;
     }
   | { ok: false; error?: string };
 
@@ -110,6 +113,20 @@ export type WorkspaceState =
       connectedAt: number;
       /** Consent was granted and has since stopped working. */
       needsReconnect: boolean;
+      /**
+       * Whether acceptance is actually being pushed to us.
+       *
+       * Separate from `needsReconnect`, and the distinction is the point:
+       * consent can be perfectly healthy while the notification channel was
+       * refused or has quietly lapsed. Connecting reports success either way —
+       * the channel is registered *after* the connection is stored and does not
+       * block it — so without this the panel says "Connected" over a feature
+       * that is not running.
+       *
+       * Null when the answer is unknown rather than false, so a payload from a
+       * deployment that predates this never draws a warning it cannot justify.
+       */
+      push: { active: boolean; expiresAt: number | null } | null;
     }
   /** The session went away underneath us. Nothing is claimed either way. */
   | { status: "signed-out" }
@@ -177,6 +194,7 @@ export function useGoogleWorkspace(): {
         adminEmail: payload.connection.adminEmail,
         connectedAt: payload.connection.connectedAt,
         needsReconnect: payload.connection.needsReconnect,
+        push: payload.push ?? null,
       };
     } catch {
       /* The route answers every refusal as JSON, so reaching here means the
@@ -377,6 +395,34 @@ export function GoogleWorkspaceConnect({
    * describes what has happened since.
    */
   const [acted, setActed] = React.useState<string | null>(null);
+  const [enabling, setEnabling] = React.useState(false);
+
+  /**
+   * Register the notification channel again, by hand.
+   *
+   * `POST /api/google/watch` has existed since push was built and nothing has
+   * ever called it, which is most of why a refused channel could sit unnoticed:
+   * the only way to retry was a scheduled sweep nobody can see. This is the
+   * button that makes it somebody's to fix.
+   *
+   * `reload()` afterwards rather than assuming success — the whole point of
+   * this panel is that it reports what is true rather than what was attempted,
+   * and a retry that failed again must leave the warning standing.
+   */
+  async function enablePush() {
+    setEnabling(true);
+    setFailed(null);
+    try {
+      await fetch("/api/google/watch", { method: "POST" });
+      await reload();
+    } catch {
+      setFailed(
+        "We couldn't reach the server to turn it back on. Nothing changed — try again in a moment.",
+      );
+    } finally {
+      setEnabling(false);
+    }
+  }
 
   async function disconnect() {
     setBusy(true);
@@ -446,7 +492,13 @@ export function GoogleWorkspaceConnect({
       {state.status === "disconnected" && <NotConnected account={account} />}
 
       {state.status === "connected" && (
-        <Connected state={state} busy={busy} onDisconnect={disconnect} />
+        <Connected
+          state={state}
+          busy={busy}
+          enabling={enabling}
+          onDisconnect={disconnect}
+          onEnablePush={enablePush}
+        />
       )}
 
       {/* Neither of these claims anything about the company's account, because
@@ -548,14 +600,65 @@ function NotConnected({ account }: { account: WorkspaceAccount }) {
  * precisely because they suspect the wrong pair got joined together, and that
  * question is unanswerable from a badge.
  */
+/**
+ * Whether acceptance is reaching us, said out loud.
+ *
+ * This exists because the failure it describes was completely invisible from
+ * the product. Registering the notification channel happens *after* the
+ * connection is stored and deliberately does not block it — a customer should
+ * not lose a working Workspace connection because a secondary call failed — so
+ * "Connected" was shown twice on this very account while no channel had ever
+ * been created. The only trace was an empty table and one line in a server log.
+ *
+ * Not shown at all when push is healthy. A permanent green row reading
+ * "notifications are working" is furniture: it is scanned every time to
+ * discover it says nothing, and it trains people to ignore the place a real
+ * warning will appear. Silence means fine; the box means act.
+ *
+ * `null` — an older deployment that does not report push — also stays silent.
+ * It is not evidence of a problem, and inventing a warning out of a missing
+ * field is how a panel starts lying in the other direction.
+ */
+function PushHealth({
+  push,
+  onEnable,
+  busy,
+}: {
+  push: { active: boolean; expiresAt: number | null } | null;
+  onEnable: () => void;
+  busy: boolean;
+}) {
+  if (!push || push.active) return null;
+
+  return (
+    <Callout tone="warning" title="Craig isn't being told when people accept">
+      <div className="flex flex-col items-start gap-2.5">
+        <span>
+          The connection itself is fine. What is missing is the subscription
+          that tells Craig the moment somebody signs in for the first time — so
+          their step will sit there looking unfinished until it is checked by
+          hand.
+        </span>
+        <Button size="sm" variant="secondary" onClick={onEnable} loading={busy}>
+          Turn it back on
+        </Button>
+      </div>
+    </Callout>
+  );
+}
+
 function Connected({
   state,
   busy,
+  enabling,
   onDisconnect,
+  onEnablePush,
 }: {
   state: Extract<WorkspaceState, { status: "connected" }>;
   busy: boolean;
+  enabling: boolean;
   onDisconnect: () => void;
+  onEnablePush: () => void;
 }) {
   /* Google only omits the domain for a personal account, which the callback
      refuses to store — so this fallback should be unreachable. It is here
@@ -589,6 +692,17 @@ function Connected({
       {/* Kept, and short. A reconnect is the one state where somebody would
           otherwise press the button again and again — the grant is gone at
           Google's end and only granting it afresh fixes it. */}
+      {/* Only when consent itself is healthy. A dead grant is why nothing is
+          arriving, and stacking two warnings would offer a button that cannot
+          work until the one above it is dealt with. */}
+      {!state.needsReconnect && (
+        <PushHealth
+          push={state.push}
+          onEnable={onEnablePush}
+          busy={enabling}
+        />
+      )}
+
       {state.needsReconnect && (
         <Callout tone="warning" title="This has stopped working">
           The permission was removed or expired. A Workspace admin has to grant
