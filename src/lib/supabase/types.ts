@@ -91,6 +91,47 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          account_id: string
+          content_type: string
+          id: string
+          name: string
+          size_bytes: number
+          storage_path: string
+          uploaded_at: string
+          visibility: string
+        }
+        Insert: {
+          account_id: string
+          content_type: string
+          id?: string
+          name: string
+          size_bytes: number
+          storage_path: string
+          uploaded_at?: string
+          visibility?: string
+        }
+        Update: {
+          account_id?: string
+          content_type?: string
+          id?: string
+          name?: string
+          size_bytes?: number
+          storage_path?: string
+          uploaded_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_watch_channels: {
         Row: {
           channel_id: string
