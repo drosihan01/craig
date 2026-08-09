@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { PEOPLE_PATH } from "@/lib/showcase/contract";
 import { currentUser } from "@/lib/showcase/current-user";
 import { rateLimit } from "@/lib/showcase/rate-limit";
 import { subscriptionFor } from "@/lib/showcase/accounts";
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
     /* Back where they pressed the button, with nothing changed and nothing
        said. Abandoning a checkout is not an error and must not be greeted
        like one. */
-    cancelUrl: `${origin}/showcase/people`,
+    cancelUrl: `${origin}${PEOPLE_PATH}`,
     customerId: existing?.customerId,
   });
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { PEOPLE_PATH } from "@/lib/showcase/contract";
 import { currentUser } from "@/lib/showcase/current-user";
 import { rateLimit } from "@/lib/showcase/rate-limit";
 import { subscriptionFor } from "@/lib/showcase/accounts";
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     /* Straight back to the seats. Whatever they went in to do — new card,
        cancel, read an invoice — the thing it changes is how many people they
        can add, so that is the screen worth returning them to. */
-    returnUrl: `${new URL(request.url).origin}/showcase/people`,
+    returnUrl: `${new URL(request.url).origin}${PEOPLE_PATH}`,
   });
 
   if (!created.ok) {
