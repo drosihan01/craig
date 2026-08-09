@@ -1,4 +1,5 @@
 import { getAccount } from "@/lib/craig/accounts";
+import type { ConnectionProvider } from "@/lib/craig/blocks";
 import { requireUser } from "@/lib/craig/current-user";
 import { listJoiners } from "@/lib/craig/joiners";
 import { seatEntitlement } from "@/lib/craig/seats";
@@ -42,22 +43,30 @@ export default async function ShowcaseWorkflowPage(
   const seats = (await listJoiners(user.email)).map((joiner) => joiner.name);
 
   /**
-   * Whether a Google Workspace step could actually run for this account.
+   * Which providers this account has working connections to.
    *
-   * A boolean, and deliberately only a boolean. `account.google` is already the
-   * public view — it cannot carry the refresh token, by construction — but the
-   * editor needs one bit and props on a client component are shipped to a
-   * browser, so it gets the bit. The panel inside the editor reads the rest for
-   * itself from `/api/google/connection` when somebody opens the block.
+   * A list of provider ids and deliberately nothing more. `account.google` is
+   * already the public view — it cannot carry the refresh token, by
+   * construction — but the editor needs to know only *which* connections exist,
+   * and props on a client component are shipped to a browser, so that is all it
+   * gets. The panel inside the editor reads the rest for itself from
+   * `/api/google/connection` when somebody opens the block.
    *
-   * `needsReconnect` counts as not connected here rather than as a separate
-   * state, because the question this answers is "would the step work", and a
-   * grant Google has revoked would not. The block's own panel draws the
-   * distinction, where there is room to say what happened and what fixes it.
+   * A list rather than the boolean this used to be, because the question the
+   * editor asks is now per block rather than about Google: `blocks.ts` knows
+   * which provider each block needs, so what it wants back is which providers
+   * are available, not one bit about the only one that existed when this was
+   * written. The second entry here is a push, not a refactor.
+   *
+   * `needsReconnect` counts as absent rather than as a separate state, because
+   * the question this answers is "would the step work", and a grant Google has
+   * revoked would not. The block's own panel draws the distinction, where there
+   * is room to say what happened and what fixes it.
    */
   const account = await getAccount(user.email);
   const google = account?.google ?? null;
-  const googleConnected = Boolean(google) && !google?.needsReconnect;
+  const connectedProviders: ConnectionProvider[] =
+    google && !google.needsReconnect ? ["google-workspace"] : [];
 
   /**
    * How many seats there are to give, from the same account record.
@@ -81,7 +90,7 @@ export default async function ShowcaseWorkflowPage(
       user={user}
       seats={seats}
       entitlement={entitlement}
-      googleConnected={googleConnected}
+      connectedProviders={connectedProviders}
     />
   );
 }

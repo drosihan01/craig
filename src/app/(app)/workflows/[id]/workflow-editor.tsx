@@ -41,10 +41,7 @@ import { NavStat } from "@/components/app-nav";
 import { SeatPaywall } from "@/components/craig/seat-paywall";
 import { useUpgrade } from "@/components/craig/use-upgrade";
 import { WorkflowCraig } from "@/components/craig/workflow-craig";
-import {
-  GoogleWorkspaceConnect,
-  type WorkspaceAccount,
-} from "@/components/craig/google-workspace";
+import { blockSettingsFor } from "@/components/craig/block-settings";
 import type { Session } from "@/lib/craig/contract";
 import {
   blockFor,
@@ -66,7 +63,6 @@ import { useCraigChat } from "@/lib/craig/use-craig-chat";
 import { useCraigThread } from "@/lib/craig/use-craig-thread";
 import {
   DUE_OPTIONS,
-  GOOGLE_WORKSPACE_PRESET,
   blockFromPreset,
   findPreset,
 } from "@/lib/workflow/library";
@@ -118,19 +114,23 @@ export function WorkflowEditor({
   user,
   seats,
   entitlement,
-  googleConnected,
+  connectedProviders,
 }: {
   id: string;
   user: Session;
   /**
-   * Whether this account has a Google Workspace connection that would work.
+   * Which providers this account has working connections to.
    *
    * From the server, because a connection belongs to the account rather than to
    * the workflow and this component cannot read it. It gates Publish — see
-   * `Editor` — which is the first time that gate has depended on anything
-   * outside the blocks on the canvas.
+   * `Editor` — which is the first time that gate depended on anything outside
+   * the blocks on the canvas.
+   *
+   * A list rather than the single boolean it was: the gate now asks `blocks.ts`
+   * which providers *these particular steps* need, so what it wants handed down
+   * is which are available.
    */
-  googleConnected: boolean;
+  connectedProviders: ConnectionProvider[];
   /**
    * Everyone holding a seat on this account, by name, read on the server.
    *
@@ -209,7 +209,7 @@ export function WorkflowEditor({
         user={user}
         seats={seats}
         entitlement={entitlement}
-        googleConnected={googleConnected}
+        connectedProviders={connectedProviders}
         onDelete={() => setConfirming(true)}
         onDiscard={() => setDiscarding(true)}
       />
@@ -363,7 +363,7 @@ function Editor({
   user,
   seats,
   entitlement,
-  googleConnected,
+  connectedProviders,
   onDelete,
   onDiscard,
 }: {
@@ -374,7 +374,7 @@ function Editor({
   /** How many seats there are to give, from the server. */
   entitlement: SeatEntitlement;
   /** Whether a Google Workspace step could run for this account. */
-  googleConnected: boolean;
+  connectedProviders: ConnectionProvider[];
   onDelete: () => void;
   /** Back was pressed on a workflow with nothing in it. See `ConfirmDiscard`. */
   onDiscard: () => void;
@@ -393,17 +393,14 @@ function Editor({
      that nothing kept in agreement. `blocked` is now a list of sentences, so a
      workflow needing two different connections says both instead of the first
      one that happened to be checked. */
-  const connectedProviders = React.useMemo(
-    () =>
-      new Set<ConnectionProvider>(
-        googleConnected ? ["google-workspace"] : [],
-      ),
-    [googleConnected],
+  const connected = React.useMemo(
+    () => new Set<ConnectionProvider>(connectedProviders),
+    [connectedProviders],
   );
 
   const blocked = React.useMemo(
-    () => unmetPrerequisites(blocks, connectedProviders),
-    [blocks, connectedProviders],
+    () => unmetPrerequisites(blocks, connected),
+    [blocks, connected],
   );
   const isBlocked = blocked.length > 0;
 
@@ -819,16 +816,23 @@ function Editor({
                       Workspace step into a workflow is, at that instant, a
                       person who needs a Workspace connected; a step that will
                       silently sit and wait with the fix two screens away is how
-                      a new starter's first morning quietly stalls. */}
-                  {selected.preset === GOOGLE_WORKSPACE_PRESET && (
-                    <GoogleStep
-                      account={{
-                        name: user.name,
-                        email: user.email,
-                        company: user.company,
-                      }}
-                    />
-                  )}
+                      a new starter's first morning quietly stalls.
+
+                      Looked up rather than mounted by name: the editor no
+                      longer knows which blocks exist, only that a block may
+                      bring its own panel. `block-settings.tsx` is the list. */}
+                  {(() => {
+                    const Panel = blockSettingsFor(selected.preset);
+                    return Panel ? (
+                      <Panel
+                        account={{
+                          name: user.name,
+                          email: user.email,
+                          company: user.company,
+                        }}
+                      />
+                    ) : null;
+                  })()}
 
                   <Separator />
                   <Field label="Title">
@@ -984,7 +988,7 @@ function Editor({
                      does, so a block can never be publishable-looking on the
                      canvas and refused by the button. */
                   const provider = blockFor(block.preset)?.provider;
-                  return provider && !connectedProviders.has(provider)
+                  return provider && !connected.has(provider)
                     ? "Needs Google Workspace connected"
                     : null;
                 }}
@@ -1029,44 +1033,6 @@ function Editor({
         subscribed={entitlement.subscribed}
       />
     </AppShell>
-  );
-}
-
-/**
- * The Google Workspace step's settings, which are its connection and nothing
- * else.
- *
- * This block used to ask for an email domain, who provisions it and when — all
- * three of which describe decisions that are no longer anybody's to make here.
- * The domain is whatever Google says the connected Workspace is, because a
- * domain somebody types is a domain somebody can typo and the failure is
- * silent; who provisions it is Craig, which is the entire point of the block;
- * and when is where the step sits in the workflow. Three inputs with no effect
- * is worse than none, because an admin who fills them in reasonably expects
- * them to matter.
- *
- * So the space they took is now the one thing about this step that genuinely is
- * a decision. The sentence above the card is about the *step* rather than the
- * account, because that is what somebody is looking at: a step that cannot run
- * is a different worry to an account that hasn't connected something, even
- * though they are the same fact.
- */
-function GoogleStep({ account }: { account: WorkspaceAccount }) {
-  return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex flex-col gap-1">
-        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Connection
-        </p>
-        <p className="text-xs leading-relaxed text-text-muted">
-          I create the account in your company&apos;s Google Workspace, on
-          whatever domain it belongs to. Nothing else on this step needs
-          answering — but it can&apos;t run until that Workspace is connected.
-        </p>
-      </div>
-
-      <GoogleWorkspaceConnect account={account} />
-    </div>
   );
 }
 
