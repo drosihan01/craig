@@ -10,7 +10,7 @@ import {
 import { findTemplate, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
 import { sendEmail } from "@/lib/email/send";
-import { markGoogleNeedsReconnect } from "@/lib/showcase/accounts";
+import { markGoogleNeedsReconnect } from "@/lib/craig/accounts";
 import type {
   Joiner,
   JoinerStep,
@@ -621,7 +621,7 @@ export type ReconcileOutcome =
  * endpoint, a channel registered per tenant, and that channel renewed before it
  * expires — three pieces of standing infrastructure for an event that happens
  * once per new starter. Those three pieces exist now, in
- * `api/google/notifications/route.ts` and `lib/showcase/google-watch.ts`, and
+ * `api/google/notifications/route.ts` and `lib/craig/google-watch.ts`, and
  * what they do when a notification arrives is call this function. That is the
  * whole design: push decides *when* the question is worth asking, and every rule
  * about what the answer means stays here, in one place, where a second

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { PEOPLE_PATH } from "@/lib/showcase/contract";
-import { currentUser } from "@/lib/showcase/current-user";
-import { rateLimit } from "@/lib/showcase/rate-limit";
-import { subscriptionFor } from "@/lib/showcase/accounts";
+import { PEOPLE_PATH } from "@/lib/craig/contract";
+import { currentUser } from "@/lib/craig/current-user";
+import { rateLimit } from "@/lib/craig/rate-limit";
+import { subscriptionFor } from "@/lib/craig/accounts";
 import { stripeConfig } from "@/lib/stripe/config";
 import { createCheckoutSession } from "@/lib/stripe/billing";
 

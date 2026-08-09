@@ -7,7 +7,7 @@ import {
   run,
   type AgentInputItem,
 } from "@openai/agents";
-import { currentUser } from "@/lib/showcase/current-user";
+import { currentUser } from "@/lib/craig/current-user";
 import {
   craig,
   describeCitation,
@@ -15,13 +15,13 @@ import {
   describeWebSearch,
   seedNotebook,
   splitCitations,
-} from "@/lib/showcase/craig-agent";
+} from "@/lib/craig/craig-agent";
 import {
   MAX_TURNS,
   REQUEST_TIMEOUT_MS,
   rateLimit,
-} from "@/lib/showcase/rate-limit";
-import { attachmentNote } from "@/lib/showcase/craig-prompt";
+} from "@/lib/craig/rate-limit";
+import { attachmentNote } from "@/lib/craig/craig-prompt";
 import {
   MAX_MESSAGES,
   type ChatEvent,
@@ -30,7 +30,7 @@ import {
   type OpenStep,
   type OpenWorkflow,
   DRAFT_REQUEST,
-} from "@/lib/showcase/contract";
+} from "@/lib/craig/contract";
 
 /**
  * Craig, actually answering.

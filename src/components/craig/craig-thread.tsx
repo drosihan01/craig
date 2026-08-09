@@ -8,7 +8,7 @@ import {
   PersonTurn,
   PromptBar,
 } from "@/components/ui";
-import type { CraigChat } from "@/lib/showcase/use-craig-chat";
+import type { CraigChat } from "@/lib/craig/use-craig-chat";
 import { cn } from "@/lib/cn";
 import { CraigFault } from "./craig-fault";
 import { SourceChips } from "./source-chips";

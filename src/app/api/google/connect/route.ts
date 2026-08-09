@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { consentUrl } from "@/lib/google/auth";
-import { googleStorageStatus } from "@/lib/showcase/accounts";
-import { currentUser } from "@/lib/showcase/current-user";
+import { googleStorageStatus } from "@/lib/craig/accounts";
+import { currentUser } from "@/lib/craig/current-user";
 import {
   GOOGLE_STATE_COOKIE,
   GOOGLE_STATE_COOKIE_OPTIONS,
   STATE_MAX_AGE,
   mintGoogleState,
-} from "@/lib/showcase/google-state";
+} from "@/lib/craig/google-state";
 import {
   connectLandingPath,
   type ConnectOutcome,
-} from "@/lib/showcase/google-outcome";
+} from "@/lib/craig/google-outcome";
 
 /**
  * The start of the connect flow: send a Workspace admin to Google, and

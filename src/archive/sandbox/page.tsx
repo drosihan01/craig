@@ -45,7 +45,7 @@ import {
 } from "@/components/ui/icons";
 import { AUDIENCE, SENDER, TEMPLATES as EMAIL_TEMPLATES } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
-import { SECTIONS } from "@/app/archive/design-system/sections";
+import { SECTIONS } from "@/archive/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
 import { ShowcaseReset } from "@/components/sandbox/showcase-reset";
 import { GoogleConnect } from "@/components/sandbox/google-connect";

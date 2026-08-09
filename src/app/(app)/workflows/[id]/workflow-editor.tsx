@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { InviteStarter } from "@/components/showcase/invite-starter";
+import { InviteStarter } from "@/components/craig/invite-starter";
 import {
   AppShell,
   BackLink,
@@ -38,15 +38,15 @@ import {
   PersonAdd,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
-import { SeatPaywall } from "@/components/showcase/seat-paywall";
-import { useUpgrade } from "@/components/showcase/use-upgrade";
-import { WorkflowCraig } from "@/components/showcase/workflow-craig";
+import { SeatPaywall } from "@/components/craig/seat-paywall";
+import { useUpgrade } from "@/components/craig/use-upgrade";
+import { WorkflowCraig } from "@/components/craig/workflow-craig";
 import {
   GoogleWorkspaceConnect,
   type WorkspaceAccount,
-} from "@/components/showcase/google-workspace";
-import type { Session } from "@/lib/showcase/contract";
-import { outOfSeats, type SeatEntitlement } from "@/lib/showcase/seats";
+} from "@/components/craig/google-workspace";
+import type { Session } from "@/lib/craig/contract";
+import { outOfSeats, type SeatEntitlement } from "@/lib/craig/seats";
 import {
   deleteWorkflow,
   markRevealed,
@@ -56,9 +56,9 @@ import {
   unconfiguredCount,
   useShowcase,
   type ShowcaseWorkflow,
-} from "@/lib/showcase/store";
-import { useCraigChat } from "@/lib/showcase/use-craig-chat";
-import { useCraigThread } from "@/lib/showcase/use-craig-thread";
+} from "@/lib/craig/store";
+import { useCraigChat } from "@/lib/craig/use-craig-chat";
+import { useCraigThread } from "@/lib/craig/use-craig-thread";
 import {
   DUE_OPTIONS,
   GOOGLE_WORKSPACE_PRESET,

@@ -10,12 +10,12 @@ import {
   Switch,
 } from "@/components/ui";
 import { ArrowForward, Refresh } from "@/components/ui/icons";
-import { AFTER_SIGN_IN } from "@/lib/showcase/contract";
+import { AFTER_SIGN_IN } from "@/lib/craig/contract";
 import {
   resetShowcase,
   setSimpleDraft,
   useShowcase,
-} from "@/lib/showcase/store";
+} from "@/lib/craig/store";
 
 /**
  * Wipe the showcase back to nothing.

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { sweepWatches } from "@/lib/showcase/google-watch";
-import { constantTimeEqual } from "@/lib/showcase/session";
+import { sweepWatches } from "@/lib/craig/google-watch";
+import { constantTimeEqual } from "@/lib/craig/session";
 
 /**
  * The thing that has to run on a timer, or the whole feature stops within a

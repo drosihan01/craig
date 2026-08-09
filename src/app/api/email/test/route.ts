@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/showcase/current-user";
-import { rateLimit } from "@/lib/showcase/rate-limit";
+import { currentUser } from "@/lib/craig/current-user";
+import { rateLimit } from "@/lib/craig/rate-limit";
 import { findTemplate, render, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
 import { fromHeader, sendEmail } from "@/lib/email/send";

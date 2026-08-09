@@ -4,7 +4,7 @@ import {
   SUBSCRIPTION_STATUSES,
   type Subscription,
   type SubscriptionStatus,
-} from "@/lib/showcase/contract";
+} from "@/lib/craig/contract";
 
 import { idempotencyKey, stripeRequest, type FormValue } from "./client";
 import { fail, type StripeFailed } from "./result";

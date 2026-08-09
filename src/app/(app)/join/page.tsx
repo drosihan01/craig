@@ -2,13 +2,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui";
 import { CraigMark } from "@/components/ui/craig-mark";
-import { JOIN_PATH, JOINER_HOME } from "@/lib/showcase/contract";
-import { getJoiner, progressOf } from "@/lib/showcase/joiners";
+import { JOIN_PATH, JOINER_HOME } from "@/lib/craig/contract";
+import { getJoiner, progressOf } from "@/lib/craig/joiners";
 import {
   JOINER_COOKIE_OPTIONS,
   JOINER_MAX_AGE,
   readJoinerToken,
-} from "@/lib/showcase/joiner-session";
+} from "@/lib/craig/joiner-session";
 
 /**
  * Where the link in the invitation lands.

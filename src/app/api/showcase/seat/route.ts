@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/showcase/current-user";
-import { reconcileRun, runClaimedStep } from "@/lib/showcase/automation";
+import { currentUser } from "@/lib/craig/current-user";
+import { reconcileRun, runClaimedStep } from "@/lib/craig/automation";
 import {
   claimAutomatedStep,
   getJoiner,
   runStateOf,
-} from "@/lib/showcase/joiners";
-import { rateLimit } from "@/lib/showcase/rate-limit";
+} from "@/lib/craig/joiners";
+import { rateLimit } from "@/lib/craig/rate-limit";
 
 /**
  * Where an automated step actually stands, asked of Google rather than assumed.

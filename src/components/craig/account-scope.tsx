@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { claimAccount } from "@/lib/showcase/store";
+import { claimAccount } from "@/lib/craig/store";
 
 /**
  * Keeps the browser's copy of the showcase pointed at whoever is signed in.

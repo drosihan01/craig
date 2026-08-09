@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAccount } from "@/lib/showcase/accounts";
-import { clientKey, rateLimit } from "@/lib/showcase/rate-limit";
+import { getAccount } from "@/lib/craig/accounts";
+import { clientKey, rateLimit } from "@/lib/craig/rate-limit";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /**

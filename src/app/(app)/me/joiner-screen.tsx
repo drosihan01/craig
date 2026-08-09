@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { Check, DoneAll, Schedule } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
-import type { JoinerField, StepActor } from "@/lib/showcase/contract";
+import type { JoinerField, StepActor } from "@/lib/craig/contract";
 
 /**
  * The new starter's own screen, and the only one they will ever see.

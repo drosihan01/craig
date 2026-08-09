@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { reconcileRun } from "@/lib/showcase/automation";
+import { reconcileRun } from "@/lib/craig/automation";
 import {
   recordDelivery,
   tenantByConnection,
   tenantOfChannel,
   verifyChannelToken,
-} from "@/lib/showcase/google-watch";
-import { listJoiners, runStateOf } from "@/lib/showcase/joiners";
+} from "@/lib/craig/google-watch";
+import { listJoiners, runStateOf } from "@/lib/craig/joiners";
 
 /**
  * What Google tells us when somebody finally signs in.

@@ -23,7 +23,7 @@ import {
 import {
   ShowcaseNav,
   ShowcaseNavRail,
-} from "@/components/showcase/showcase-nav";
+} from "@/components/craig/nav";
 import {
   ArrowBack,
   Bolt,
@@ -41,8 +41,8 @@ import type {
   JoinerStep,
   Session,
   StepActor,
-} from "@/lib/showcase/contract";
-import { SETTINGS_PATH } from "@/lib/showcase/google-outcome";
+} from "@/lib/craig/contract";
+import { SETTINGS_PATH } from "@/lib/craig/google-outcome";
 import { readable } from "../people-list";
 import { dueDateFrom } from "@/lib/workflow/library";
 

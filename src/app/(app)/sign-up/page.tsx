@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthSplit } from "@/components/ui";
-import { AFTER_SIGN_IN, SIGN_IN_PATH } from "@/lib/showcase/contract";
-import { currentUser } from "@/lib/showcase/current-user";
-import { safeNext } from "@/lib/showcase/redirect";
+import { AFTER_SIGN_IN, SIGN_IN_PATH } from "@/lib/craig/contract";
+import { currentUser } from "@/lib/craig/current-user";
+import { safeNext } from "@/lib/craig/redirect";
 import { SignUpForm } from "./sign-up-form";
 
 export const metadata = {

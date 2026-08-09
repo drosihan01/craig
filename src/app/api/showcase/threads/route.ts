@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/showcase/current-user";
+import { currentUser } from "@/lib/craig/current-user";
 import {
   graduateThread,
   listThreads,
@@ -12,7 +12,7 @@ import {
   titleThread,
   type StoredNote,
   type ThreadKind,
-} from "@/lib/showcase/threads";
+} from "@/lib/craig/threads";
 
 /**
  * The conversation sync.

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { currentUser } from "@/lib/showcase/current-user";
-import { saveSubscription } from "@/lib/showcase/accounts";
+import { currentUser } from "@/lib/craig/current-user";
+import { saveSubscription } from "@/lib/craig/accounts";
 import { stripeConfig } from "@/lib/stripe/config";
 import { retrieveCheckoutSession } from "@/lib/stripe/billing";
 

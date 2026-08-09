@@ -9,11 +9,11 @@ import {
   disconnectGoogle,
   getAccount,
   googleStorageStatus,
-} from "@/lib/showcase/accounts";
-import { currentUser } from "@/lib/showcase/current-user";
-import { watchStatusFor } from "@/lib/showcase/google-watch";
-import { GOOGLE_CALLBACK_PATH } from "@/lib/showcase/google-outcome";
-import { stopWatch } from "@/lib/showcase/google-watch";
+} from "@/lib/craig/accounts";
+import { currentUser } from "@/lib/craig/current-user";
+import { watchStatusFor } from "@/lib/craig/google-watch";
+import { GOOGLE_CALLBACK_PATH } from "@/lib/craig/google-outcome";
+import { stopWatch } from "@/lib/craig/google-watch";
 
 /**
  * What the connect screen reads, and the button that undoes a connection.

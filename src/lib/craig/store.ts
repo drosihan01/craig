@@ -8,14 +8,14 @@ import {
   type ChatTurn,
   type OpenWorkflow,
   type WorkflowEdit,
-} from "@/lib/showcase/contract";
+} from "@/lib/craig/contract";
 import { missingRequired } from "@/lib/workflow/library";
-import { blankTrigger } from "@/lib/showcase/draft";
-import { forgetSync, hydrate, scheduleSync } from "@/lib/showcase/workflow-sync";
+import { blankTrigger } from "@/lib/craig/draft";
+import { forgetSync, hydrate, scheduleSync } from "@/lib/craig/workflow-sync";
 import {
   forgetThreadSync,
   scheduleThreadSync,
-} from "@/lib/showcase/thread-sync";
+} from "@/lib/craig/thread-sync";
 
 /**
  * Everything the showcase knows, which to begin with is nothing.

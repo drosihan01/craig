@@ -1,8 +1,8 @@
-import { subscriptionFor } from "@/lib/showcase/accounts";
-import { requireUser } from "@/lib/showcase/current-user";
-import { CONNECT_OUTCOME_PARAM } from "@/lib/showcase/google-outcome";
-import { listJoiners } from "@/lib/showcase/joiners";
-import { seatEntitlement } from "@/lib/showcase/seats";
+import { subscriptionFor } from "@/lib/craig/accounts";
+import { requireUser } from "@/lib/craig/current-user";
+import { CONNECT_OUTCOME_PARAM } from "@/lib/craig/google-outcome";
+import { listJoiners } from "@/lib/craig/joiners";
+import { seatEntitlement } from "@/lib/craig/seats";
 import { SettingsScreen } from "./settings-screen";
 
 export const metadata = {
@@ -21,7 +21,7 @@ export const metadata = {
  * find to *undo*.
  *
  * Not a third item in the nav. That column is deliberately two rooms, and the
- * argument in `showcase-nav.tsx` — that listing rooms the product doesn't
+ * argument in `nav.tsx` — that listing rooms the product doesn't
  * really have is a worse first impression than a short list — applies to a
  * settings page holding a single toggle just as much as to anything else.
  * Settings is reached from the account menu, which is where every product of

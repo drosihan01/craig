@@ -9,17 +9,17 @@ import {
   Separator,
 } from "@/components/ui";
 import { NavStat } from "@/components/app-nav";
-import { CraigConversation } from "@/components/showcase/craig-conversation";
-import { ThreadHistory } from "@/components/showcase/thread-history";
+import { CraigConversation } from "@/components/craig/craig-conversation";
+import { ThreadHistory } from "@/components/craig/thread-history";
 import {
   ShowcaseNav,
   ShowcaseNavRail,
-} from "@/components/showcase/showcase-nav";
-import type { Session } from "@/lib/showcase/contract";
-import type { OutstandingItem } from "@/lib/showcase/outstanding";
-import { useShowcase } from "@/lib/showcase/store";
-import { useCraigChat } from "@/lib/showcase/use-craig-chat";
-import { useCraigThread } from "@/lib/showcase/use-craig-thread";
+} from "@/components/craig/nav";
+import type { Session } from "@/lib/craig/contract";
+import type { OutstandingItem } from "@/lib/craig/outstanding";
+import { useShowcase } from "@/lib/craig/store";
+import { useCraigChat } from "@/lib/craig/use-craig-chat";
+import { useCraigThread } from "@/lib/craig/use-craig-thread";
 import { cn } from "@/lib/cn";
 
 /**

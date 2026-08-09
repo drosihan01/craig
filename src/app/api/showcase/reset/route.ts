@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { clearAccounts } from "@/lib/showcase/accounts";
-import { clearJoiners } from "@/lib/showcase/joiners";
+import { clearAccounts } from "@/lib/craig/accounts";
+import { clearJoiners } from "@/lib/craig/joiners";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /**

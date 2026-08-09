@@ -30,7 +30,7 @@ import { Button, Callout, Dialog, Separator } from "@/components/ui";
  * It stopped being true when the limit stopped being a constant. What somebody
  * may have is now a property of their subscription, which lives on the server
  * and which a client component has no way to read — so the fact moved to
- * `lib/showcase/seats`, where the entitlement rule is argued in full, and this
+ * `lib/craig/seats`, where the entitlement rule is argued in full, and this
  * dialog is *told* what to say. The old argument survives in a stronger form:
  * the page that enforces the limit and the dialog that explains it are now
  * given the same numbers by the same function, so they cannot disagree even in

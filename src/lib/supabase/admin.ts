@@ -5,7 +5,7 @@ import type { Database } from "./types";
 /**
  * The server's own connection to Supabase — the secret key, never a user's.
  *
- * Every store in `lib/showcase` goes through this client, which is a deliberate
+ * Every store in `lib/craig` goes through this client, which is a deliberate
  * architectural decision rather than a shortcut: the tables have RLS enabled
  * with **no policies**, so the publishable key can read nothing at all. The
  * only way to the data is through this server, exactly as it was when the

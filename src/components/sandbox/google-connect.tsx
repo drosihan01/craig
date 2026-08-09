@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Badge, Callout, Skeleton } from "@/components/ui";
 import { Google } from "@/components/ui/brand-icons";
 import { CheckCircle, Key, Warning } from "@/components/ui/icons";
-import { SETTINGS_PATH } from "@/lib/showcase/google-outcome";
+import { SETTINGS_PATH } from "@/lib/craig/google-outcome";
 
 /**
  * Whether this deployment *could* connect a Google Workspace — and nothing else.

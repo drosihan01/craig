@@ -13,11 +13,11 @@ import {
 } from "@/components/ui";
 import { ArrowBack } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
-import { GoogleWorkspaceConnect } from "@/components/showcase/google-workspace";
-import { useUpgrade } from "@/components/showcase/use-upgrade";
+import { GoogleWorkspaceConnect } from "@/components/craig/google-workspace";
+import { useUpgrade } from "@/components/craig/use-upgrade";
 import { Google } from "@/components/ui/brand-icons";
-import type { Session, Subscription } from "@/lib/showcase/contract";
-import type { SeatEntitlement } from "@/lib/showcase/seats";
+import type { Session, Subscription } from "@/lib/craig/contract";
+import type { SeatEntitlement } from "@/lib/craig/seats";
 
 /**
  * The drawer underneath the product: what this account is, what it pays, and

@@ -3,12 +3,12 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button, Callout, Field, Input, PasswordInput } from "@/components/ui";
-import { SIGN_IN_PATH } from "@/lib/showcase/contract";
+import { SIGN_IN_PATH } from "@/lib/craig/contract";
 import {
   companyFromEmail,
   validateSignUp,
   type SignUpErrors,
-} from "@/lib/showcase/sign-up";
+} from "@/lib/craig/sign-up";
 
 /**
  * Four fields, and one of them is a suggestion.

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { googleConnectionFor } from "@/lib/showcase/accounts";
+import { googleConnectionFor } from "@/lib/craig/accounts";
 import type { GoogleConnection } from "@/lib/google/auth";
 
 /**
@@ -10,7 +10,7 @@ import type { GoogleConnection } from "@/lib/google/auth";
  * This was a stub while the two halves were built beside each other, and it is
  * now the join. Everything on this side calls exactly one function so that
  * wiring them together was replacing one body rather than editing every call
- * site — nothing else in `src/lib/showcase` or `src/app/showcase` mentions a
+ * site — nothing else in `src/lib/craig` or `src/app/showcase` mentions a
  * refresh token, a consent screen, or a Google account at all.
  *
  * It still answers "nothing connected" on every deployment today, and that is

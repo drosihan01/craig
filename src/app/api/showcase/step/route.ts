@@ -1,8 +1,8 @@
 import { after, NextResponse } from "next/server";
-import { currentJoiner } from "@/lib/showcase/current-joiner";
-import { fireNextAutomatedStep } from "@/lib/showcase/automation";
-import { completeStep } from "@/lib/showcase/joiners";
-import { rateLimit } from "@/lib/showcase/rate-limit";
+import { currentJoiner } from "@/lib/craig/current-joiner";
+import { fireNextAutomatedStep } from "@/lib/craig/automation";
+import { completeStep } from "@/lib/craig/joiners";
+import { rateLimit } from "@/lib/craig/rate-limit";
 
 /**
  * A new starter answering one of their own steps.

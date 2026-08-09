@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/showcase/current-user";
+import { currentUser } from "@/lib/craig/current-user";
 import {
   listWorkflows,
   removeWorkflows,
   saveWorkflows,
   type StoredWorkflow,
-} from "@/lib/showcase/workflows";
+} from "@/lib/craig/workflows";
 
 /**
  * The workflow sync: read on arrival, write as you go.
@@ -14,7 +14,7 @@ import {
  * without knowing what this account has built; `POST` is the browser saying
  * what changed since it last spoke. There is no per-block endpoint, because the
  * browser is the author of a workflow and sends the whole document — see
- * `lib/showcase/workflows.ts` for why a partial write would need a merge nobody
+ * `lib/craig/workflows.ts` for why a partial write would need a merge nobody
  * can perform.
  *
  * Both verbs answer for the signed-in account and only that account. The id in

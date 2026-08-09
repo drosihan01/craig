@@ -99,8 +99,8 @@
  * something she never told him.
  */
 
-import { BLOCK_CATALOGUE, SIMPLE_PRESETS } from "@/lib/showcase/draft";
-import type { OpenWorkflow } from "@/lib/showcase/contract";
+import { BLOCK_CATALOGUE, SIMPLE_PRESETS } from "@/lib/craig/draft";
+import type { OpenWorkflow } from "@/lib/craig/contract";
 
 /**
  * The model.

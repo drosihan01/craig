@@ -1,17 +1,17 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { exchangeCode } from "@/lib/google/auth";
-import { saveGoogleConnection } from "@/lib/showcase/accounts";
-import { currentUser } from "@/lib/showcase/current-user";
-import { ensureWatch } from "@/lib/showcase/google-watch";
+import { saveGoogleConnection } from "@/lib/craig/accounts";
+import { currentUser } from "@/lib/craig/current-user";
+import { ensureWatch } from "@/lib/craig/google-watch";
 import {
   GOOGLE_STATE_COOKIE,
   GOOGLE_STATE_COOKIE_OPTIONS,
   checkGoogleState,
-} from "@/lib/showcase/google-state";
+} from "@/lib/craig/google-state";
 import {
   connectLandingPath,
   type ConnectOutcome,
-} from "@/lib/showcase/google-outcome";
+} from "@/lib/craig/google-outcome";
 
 /**
  * Where Google sends the customer back, and the only place a refresh token is

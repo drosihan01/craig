@@ -16,16 +16,16 @@ import {
 import {
   ShowcaseNav,
   ShowcaseNavRail,
-} from "@/components/showcase/showcase-nav";
+} from "@/components/craig/nav";
 import { CheckCircle, PersonAdd } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
-import { InviteStarter } from "@/components/showcase/invite-starter";
-import { NewWorkflowDialog } from "@/components/showcase/new-workflow";
-import { SeatPaywall } from "@/components/showcase/seat-paywall";
-import { useUpgrade } from "@/components/showcase/use-upgrade";
-import type { Session } from "@/lib/showcase/contract";
-import { outOfSeats, type SeatEntitlement } from "@/lib/showcase/seats";
-import { useShowcase } from "@/lib/showcase/store";
+import { InviteStarter } from "@/components/craig/invite-starter";
+import { NewWorkflowDialog } from "@/components/craig/new-workflow";
+import { SeatPaywall } from "@/components/craig/seat-paywall";
+import { useUpgrade } from "@/components/craig/use-upgrade";
+import type { Session } from "@/lib/craig/contract";
+import { outOfSeats, type SeatEntitlement } from "@/lib/craig/seats";
+import { useShowcase } from "@/lib/craig/store";
 
 /**
  * Everyone with a seat, which on a new account is one person.
