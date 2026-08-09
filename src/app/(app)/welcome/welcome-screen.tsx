@@ -19,12 +19,12 @@ import {
   CraigConversation,
   DRAFT_REQUEST,
   readyToDraft,
-} from "@/components/showcase/craig-conversation";
-import { DraftStrength } from "@/components/showcase/draft-strength";
-import type { Session } from "@/lib/showcase/contract";
-import { useShowcase } from "@/lib/showcase/store";
-import { useCraigChat } from "@/lib/showcase/use-craig-chat";
-import { useCraigThread } from "@/lib/showcase/use-craig-thread";
+} from "@/components/craig/craig-conversation";
+import { DraftStrength } from "@/components/craig/draft-strength";
+import type { Session } from "@/lib/craig/contract";
+import { useShowcase } from "@/lib/craig/store";
+import { useCraigChat } from "@/lib/craig/use-craig-chat";
+import { useCraigThread } from "@/lib/craig/use-craig-thread";
 
 /**
  * Discovery, with a model behind it.

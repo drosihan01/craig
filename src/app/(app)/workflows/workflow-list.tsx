@@ -16,8 +16,8 @@ import {
 import {
   ShowcaseNav,
   ShowcaseNavRail,
-} from "@/components/showcase/showcase-nav";
-import { NewWorkflowDialog } from "@/components/showcase/new-workflow";
+} from "@/components/craig/nav";
+import { NewWorkflowDialog } from "@/components/craig/new-workflow";
 import {
   Add,
   AltRoute,
@@ -26,14 +26,14 @@ import {
   Warning,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
-import type { Session } from "@/lib/showcase/contract";
+import type { Session } from "@/lib/craig/contract";
 import {
   deleteWorkflow,
   stepCount,
   unconfiguredCount,
   useShowcase,
   type ShowcaseWorkflow,
-} from "@/lib/showcase/store";
+} from "@/lib/craig/store";
 
 /**
  * Everything the account has, which for a long while is one thing or nothing.

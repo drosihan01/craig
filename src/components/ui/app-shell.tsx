@@ -913,10 +913,10 @@ function accountItems(
        to keep in step, and the screen that forgot it would be the screen where
        Settings quietly stops working again.
 
-       The sandbox used to get a row here too. It has gone: it is a builder's
-       tool that moved to `/archive/sandbox` when the product took over the
-       root, so the row was pointing at a path that no longer exists — and a
-       dead link in the account menu of a product somebody is being asked to
+       The sandbox used to get a row here too. It has gone, and has since gone
+       further: it was a builder's tool that moved under the archive when the
+       product took over the root, and the archive is no longer served at all.
+       A dead link in the account menu of a product somebody is being asked to
        trust with their Google Workspace is worse than no link. */
     {
       id: "settings",

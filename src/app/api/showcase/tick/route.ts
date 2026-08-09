@@ -1,8 +1,8 @@
 import { after, NextResponse } from "next/server";
-import { currentUser } from "@/lib/showcase/current-user";
-import { fireNextAutomatedStep } from "@/lib/showcase/automation";
-import { getJoiner, tickStep } from "@/lib/showcase/joiners";
-import { rateLimit } from "@/lib/showcase/rate-limit";
+import { currentUser } from "@/lib/craig/current-user";
+import { fireNextAutomatedStep } from "@/lib/craig/automation";
+import { getJoiner, tickStep } from "@/lib/craig/joiners";
+import { rateLimit } from "@/lib/craig/rate-limit";
 
 /**
  * The admin saying a step of theirs is done.

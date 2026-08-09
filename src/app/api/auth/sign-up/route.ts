@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { SIGN_IN_PATH } from "@/lib/showcase/contract";
-import { createAccount } from "@/lib/showcase/accounts";
-import { clientKey, rateLimit } from "@/lib/showcase/rate-limit";
-import { SIGN_UP_TAKEN, validateSignUp } from "@/lib/showcase/sign-up";
+import { SIGN_IN_PATH } from "@/lib/craig/contract";
+import { createAccount } from "@/lib/craig/accounts";
+import { clientKey, rateLimit } from "@/lib/craig/rate-limit";
+import { SIGN_UP_TAKEN, validateSignUp } from "@/lib/craig/sign-up";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /**

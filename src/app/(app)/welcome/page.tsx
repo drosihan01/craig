@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/showcase/current-user";
+import { requireUser } from "@/lib/craig/current-user";
 import { WelcomeScreen } from "./welcome-screen";
 
 /**

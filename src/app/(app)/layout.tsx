@@ -1,5 +1,5 @@
-import { currentUser } from "@/lib/showcase/current-user";
-import { AccountScope } from "@/components/showcase/account-scope";
+import { currentUser } from "@/lib/craig/current-user";
+import { AccountScope } from "@/components/craig/account-scope";
 
 /**
  * Wraps every showcase route, signed in or not.

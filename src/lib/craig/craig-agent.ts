@@ -18,19 +18,19 @@ import {
   spoken,
   stillOpen,
   type Draft,
-} from "@/lib/showcase/draft";
+} from "@/lib/craig/draft";
 import {
   CHAT_MODEL,
   CHAT_TEMPERATURE,
   craigSystemPrompt,
   openWorkflowNote,
   SIMPLE_DRAFT_NOTE,
-} from "@/lib/showcase/craig-prompt";
+} from "@/lib/craig/craig-prompt";
 import type {
   OpenStep,
   OpenWorkflow,
   WorkflowEdit,
-} from "@/lib/showcase/contract";
+} from "@/lib/craig/contract";
 
 /**
  * Craig, with hands.

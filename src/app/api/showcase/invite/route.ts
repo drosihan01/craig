@@ -4,16 +4,16 @@ import {
   AUTOMATION_BY_PRESET,
   JOIN_PATH,
   JOINER_FIELD_BY_PRESET,
-} from "@/lib/showcase/contract";
-import { currentUser } from "@/lib/showcase/current-user";
-import { getAccount } from "@/lib/showcase/accounts";
+} from "@/lib/craig/contract";
+import { currentUser } from "@/lib/craig/current-user";
+import { getAccount } from "@/lib/craig/accounts";
 import {
   createJoiner,
   deleteJoiner,
   stepsFromBlocks,
-} from "@/lib/showcase/joiners";
-import { createJoinerToken } from "@/lib/showcase/joiner-session";
-import { rateLimit } from "@/lib/showcase/rate-limit";
+} from "@/lib/craig/joiners";
+import { createJoinerToken } from "@/lib/craig/joiner-session";
+import { rateLimit } from "@/lib/craig/rate-limit";
 import { findTemplate, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
 import { fromHeader, sendEmail } from "@/lib/email/send";

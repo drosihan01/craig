@@ -1,7 +1,7 @@
-import { subscriptionFor } from "@/lib/showcase/accounts";
-import { requireUser } from "@/lib/showcase/current-user";
-import { listJoiners, progressOf } from "@/lib/showcase/joiners";
-import { seatEntitlement } from "@/lib/showcase/seats";
+import { subscriptionFor } from "@/lib/craig/accounts";
+import { requireUser } from "@/lib/craig/current-user";
+import { listJoiners, progressOf } from "@/lib/craig/joiners";
+import { seatEntitlement } from "@/lib/craig/seats";
 import { PeopleList } from "./people-list";
 
 export const metadata = {

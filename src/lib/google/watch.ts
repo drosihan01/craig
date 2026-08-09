@@ -341,7 +341,7 @@ export interface NewWatch {
    *
    * The only thing that makes the receiving endpoint anything other than a
    * public "settle this step" button. It is derived rather than stored — see
-   * `channelTokenFor` in `lib/showcase/google-watch.ts` — so this parameter is
+   * `channelTokenFor` in `lib/craig/google-watch.ts` — so this parameter is
    * always supplied and there is no spelling of this call that omits it.
    */
   token: string;

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthSplit } from "@/components/ui";
-import { AFTER_SIGN_IN } from "@/lib/showcase/contract";
-import { hasAnyAccount } from "@/lib/showcase/accounts";
-import { currentUser } from "@/lib/showcase/current-user";
-import { safeNext } from "@/lib/showcase/redirect";
-import { SIGN_UP_PATH } from "@/lib/showcase/sign-up";
+import { AFTER_SIGN_IN } from "@/lib/craig/contract";
+import { hasAnyAccount } from "@/lib/craig/accounts";
+import { currentUser } from "@/lib/craig/current-user";
+import { safeNext } from "@/lib/craig/redirect";
+import { SIGN_UP_PATH } from "@/lib/craig/sign-up";
 import { SignInForm } from "./sign-in-form";
 
 export const metadata = {

@@ -1,10 +1,10 @@
-import { currentUser, requireUser } from "@/lib/showcase/current-user";
+import { currentUser, requireUser } from "@/lib/craig/current-user";
 import {
   getJoiner,
   isRunInterrupted,
   progressOf,
-} from "@/lib/showcase/joiners";
-import type { Joiner } from "@/lib/showcase/contract";
+} from "@/lib/craig/joiners";
+import type { Joiner } from "@/lib/craig/contract";
 import { NoPerson, PersonProgress } from "./person-progress";
 
 /**

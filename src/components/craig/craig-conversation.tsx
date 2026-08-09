@@ -13,8 +13,8 @@ import {
   buttonVariants,
 } from "@/components/ui";
 import { ArrowForward, AutoAwesome, Description } from "@/components/ui/icons";
-import { DRAFT_REQUEST } from "@/lib/showcase/contract";
-import type { CraigMessage, ShowcaseWorkflow } from "@/lib/showcase/store";
+import { DRAFT_REQUEST } from "@/lib/craig/contract";
+import type { CraigMessage, ShowcaseWorkflow } from "@/lib/craig/store";
 import { CraigFault } from "./craig-fault";
 import { SourceChips, type Source } from "./source-chips";
 

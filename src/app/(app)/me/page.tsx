@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { currentJoiner, requireJoiner } from "@/lib/showcase/current-joiner";
-import { progressOf } from "@/lib/showcase/joiners";
-import type { Joiner } from "@/lib/showcase/contract";
+import { currentJoiner, requireJoiner } from "@/lib/craig/current-joiner";
+import { progressOf } from "@/lib/craig/joiners";
+import type { Joiner } from "@/lib/craig/contract";
 import { dueDateFrom } from "@/lib/workflow/library";
 import { JoinerScreen, type JoinerView, type PlanStep } from "./joiner-screen";
 

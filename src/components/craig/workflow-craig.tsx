@@ -7,8 +7,8 @@ import {
   CraigMark,
   type WorkflowBlock,
 } from "@/components/ui";
-import { stepCount, unconfiguredCount } from "@/lib/showcase/store";
-import type { CraigChat } from "@/lib/showcase/use-craig-chat";
+import { stepCount, unconfiguredCount } from "@/lib/craig/store";
+import type { CraigChat } from "@/lib/craig/use-craig-chat";
 import { CraigThread } from "./craig-thread";
 
 /**

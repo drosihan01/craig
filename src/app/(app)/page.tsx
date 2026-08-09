@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { WELCOME_PATH } from "@/lib/showcase/contract";
-import { requireUser } from "@/lib/showcase/current-user";
-import { subscriptionFor } from "@/lib/showcase/accounts";
-import { listJoiners } from "@/lib/showcase/joiners";
-import { listWorkflows } from "@/lib/showcase/workflows";
-import { seatEntitlement } from "@/lib/showcase/seats";
-import { outstandingFor } from "@/lib/showcase/outstanding";
+import { WELCOME_PATH } from "@/lib/craig/contract";
+import { requireUser } from "@/lib/craig/current-user";
+import { subscriptionFor } from "@/lib/craig/accounts";
+import { listJoiners } from "@/lib/craig/joiners";
+import { listWorkflows } from "@/lib/craig/workflows";
+import { seatEntitlement } from "@/lib/craig/seats";
+import { outstandingFor } from "@/lib/craig/outstanding";
 import { HomeScreen } from "./home-screen";
 
 /**

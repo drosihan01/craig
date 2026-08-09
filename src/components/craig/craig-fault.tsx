@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui";
 import { Cloud, Key, Lock, Schedule, Warning } from "@/components/ui/icons";
-import { SIGN_IN_PATH } from "@/lib/showcase/contract";
+import { SIGN_IN_PATH } from "@/lib/craig/contract";
 
 /**
  * What the screen says when the model doesn't answer.

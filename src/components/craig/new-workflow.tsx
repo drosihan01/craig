@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Badge, Dialog, List, ListIcon, ListItem } from "@/components/ui";
 import { AutoAwesome, Draw } from "@/components/ui/icons";
-import { createBlankWorkflow } from "@/lib/showcase/store";
+import { createBlankWorkflow } from "@/lib/craig/store";
 
 /**
  * The two ways a workflow can start.

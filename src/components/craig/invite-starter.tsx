@@ -13,7 +13,7 @@ import {
   toISODate,
 } from "@/components/ui";
 import { CheckCircle, Mail, Warning } from "@/components/ui/icons";
-import { logActivity, useShowcase } from "@/lib/showcase/store";
+import { logActivity, useShowcase } from "@/lib/craig/store";
 
 /**
  * The first thing in this product that reaches somebody else.

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CHAT_ENDPOINT, type ChatEvent } from "@/lib/showcase/contract";
+import { CHAT_ENDPOINT, type ChatEvent } from "@/lib/craig/contract";
 import {
   addSource,
   addWorkflow,
@@ -16,8 +16,8 @@ import {
   showcaseState,
   useShowcase,
   type CraigMessage,
-} from "@/lib/showcase/store";
-import { graduate, openThread } from "@/lib/showcase/thread-sync";
+} from "@/lib/craig/store";
+import { graduate, openThread } from "@/lib/craig/thread-sync";
 
 /**
  * The conversation, from the screen's side.

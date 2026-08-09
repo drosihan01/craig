@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { Add } from "@/components/ui/icons";
-import { clearThread, useShowcase } from "@/lib/showcase/store";
-import { listThreads } from "@/lib/showcase/thread-sync";
-import { showThread } from "@/lib/showcase/use-craig-thread";
+import { clearThread, useShowcase } from "@/lib/craig/store";
+import { listThreads } from "@/lib/craig/thread-sync";
+import { showThread } from "@/lib/craig/use-craig-thread";
 import { cn } from "@/lib/cn";
 
 /**

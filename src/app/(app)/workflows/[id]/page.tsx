@@ -1,7 +1,7 @@
-import { getAccount } from "@/lib/showcase/accounts";
-import { requireUser } from "@/lib/showcase/current-user";
-import { listJoiners } from "@/lib/showcase/joiners";
-import { seatEntitlement } from "@/lib/showcase/seats";
+import { getAccount } from "@/lib/craig/accounts";
+import { requireUser } from "@/lib/craig/current-user";
+import { listJoiners } from "@/lib/craig/joiners";
+import { seatEntitlement } from "@/lib/craig/seats";
 import { WorkflowEditor } from "./workflow-editor";
 
 export const metadata = {

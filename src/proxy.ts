@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { JOIN_PATH, JOINER_HOME, SIGN_IN_PATH } from "@/lib/showcase/contract";
-import { SIGN_UP_PATH } from "@/lib/showcase/sign-up";
+import { JOIN_PATH, JOINER_HOME, SIGN_IN_PATH } from "@/lib/craig/contract";
+import { SIGN_UP_PATH } from "@/lib/craig/sign-up";
 
 /**
  * The guard on the signed-in app.
@@ -95,17 +95,19 @@ export async function proxy(request: NextRequest) {
  * are called by machines that have no session to offer and would be redirected
  * into a sign-in page they cannot read.
  *
- * `/archive` is the demo this was built from. It has no accounts in it, reads
- * from fixtures, and asking somebody to sign in to look at Ada Yildiz would be
- * asking for a credential that unlocks nothing.
- *
  * The rest is Next's own static output.
+ *
+ * `/archive` used to be excluded here too — the Ada-era demo, fixtures and all,
+ * which nobody should have had to sign in to look at. It is not a route any
+ * more: the demos moved to `src/archive/`, outside the router, so they are kept
+ * in the repository and served to nobody. An exclusion for a path that cannot
+ * be requested is a rule that only misleads whoever reads it next.
  *
  * Must be a literal — matchers are read statically at build time, so
  * `SIGN_IN_PATH` and friends can't be interpolated in here.
  */
 export const config = {
   matcher: [
-    "/((?!api|archive|_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

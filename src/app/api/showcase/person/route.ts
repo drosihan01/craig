@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/showcase/current-user";
-import { deleteJoiner, getJoiner } from "@/lib/showcase/joiners";
-import { rateLimit } from "@/lib/showcase/rate-limit";
+import { currentUser } from "@/lib/craig/current-user";
+import { deleteJoiner, getJoiner } from "@/lib/craig/joiners";
+import { rateLimit } from "@/lib/craig/rate-limit";
 
 /**
  * Taking somebody's seat back, and their answers with it.

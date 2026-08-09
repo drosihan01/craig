@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/showcase/current-user";
-import { ensureWatch, notificationAddress } from "@/lib/showcase/google-watch";
+import { currentUser } from "@/lib/craig/current-user";
+import { ensureWatch, notificationAddress } from "@/lib/craig/google-watch";
 
 /**
  * One account asking to be told when its own directory changes.
