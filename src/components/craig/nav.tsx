@@ -9,7 +9,7 @@ import {
   NavTreeItem,
   Separator,
 } from "@/components/ui";
-import { AltRoute, Groups, Home } from "@/components/ui/icons";
+import { AltRoute, Groups, Home, MenuBook } from "@/components/ui/icons";
 
 /**
  * The showcase's left column.
@@ -94,6 +94,16 @@ const ITEMS = [
     label: "Workflows",
     href: "/workflows",
     icon: <AltRoute />,
+  },
+  /* The fourth item, added the day the room stopped being empty. The rule above
+     is that a nav must not list rooms the product does not have — and until
+     documents had storage, an access rule and a screen, this would have been
+     exactly that. It has all three now, and a handbook nobody can find is not
+     meaningfully shared. */
+  {
+    label: "Resources",
+    href: "/resources",
+    icon: <MenuBook />,
   },
 ];
 
