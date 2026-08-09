@@ -341,6 +341,16 @@ export type ChatEvent =
 export const CHAT_ENDPOINT = "/api/chat";
 
 /**
+ * The same conversation for the person being onboarded, at its own door.
+ *
+ * A separate route rather than a flag on the one above, because the two are
+ * authenticated by two different cookies naming two different people — and
+ * because the joiner's Craig has no tools, which is the access boundary rather
+ * than a missing feature. `joiner-agent.ts` makes that argument in full.
+ */
+export const JOINER_CHAT_ENDPOINT = "/api/joiner/chat";
+
+/**
  * The sentence the Generate button sends.
  *
  * Here rather than beside the button, because both ends need it: the transcript
