@@ -1,8 +1,10 @@
 import "server-only";
 
-import { Agent } from "@openai/agents";
+import { Agent, tool } from "@openai/agents";
+import { z } from "zod";
 import { CHAT_MODEL, CHAT_TEMPERATURE } from "@/lib/craig/craig-prompt";
 import { progressOf } from "@/lib/craig/joiners";
+import { searchResourcesForJoiner } from "@/lib/craig/documents";
 import type { Joiner } from "@/lib/craig/contract";
 
 /**
@@ -28,16 +30,36 @@ import type { Joiner } from "@/lib/craig/contract";
  * and the failure is silent: nothing breaks, a new hire is just quietly handed
  * the admin's notes about how badly organised the place is.
  *
- * So the boundary is structural instead. This agent has **no tools**, which is
- * not a stub — it is the design, and it is why there is nothing here to audit.
- * There is no call it can make, so there is no call that can reach the wrong
- * row. Everything it knows arrives in the system prompt below, assembled by
- * `briefFor` from exactly one source: the joiner's own record.
+ * So the boundary is structural instead. Everything this agent knows arrives in
+ * the system prompt below, assembled by `briefFor` from exactly one source: the
+ * joiner's own record.
  *
  * The same argument rules out `webSearchTool`. It is the one tool in the other
  * agent that can return something untrue, and the blast radius of Craig
  * inventing a fact about somebody's new employer, to that person, in their first
  * week, is not worth what it buys.
+ *
+ * ## The one tool, and why it is admissible
+ *
+ * This agent shipped with **no tools at all**, and the note left here said any
+ * addition needed the argument made in full first. This is it.
+ *
+ * `search_resources` is admissible because of what it *cannot be asked*. It
+ * takes a search string and nothing else — no document id, no account, no
+ * visibility — and resolves everything else from the `Joiner` on the run
+ * context, which came from a signed cookie rather than from anything the model
+ * or the client can influence. Underneath, `search_shared_documents` writes
+ * `visibility = 'shared'` into the SQL function body rather than accepting it as
+ * a parameter, so there is no argument anywhere in the chain that widens what
+ * comes back.
+ *
+ * That is the rule for the next one too: **a tool here may take a question, and
+ * must never take an identifier.** The moment a tool accepts "which document",
+ * the question of whether that document was theirs moves out of the query and
+ * into somebody's memory of writing the check.
+ *
+ * It is still the only tool. Nothing here can write, and the six editing tools
+ * remain a different agent's business.
  *
  * ## What it may know
  *
@@ -53,6 +75,59 @@ import type { Joiner } from "@/lib/craig/contract";
  * takes the joiner's id and resolves what *they* may read, rather than taking a
  * document id and trusting the caller.
  */
+
+/**
+ * What travels on the run context: the joiner, and only the joiner.
+ *
+ * Carried rather than closed over so the tool resolves its scope from the same
+ * record the route authenticated, at the moment it runs. There is nothing else
+ * on here on purpose — a context that also held, say, an account id would be a
+ * second way to answer "whose documents", and two answers is how they drift.
+ */
+export interface JoinerContext {
+  joiner: Joiner;
+}
+
+const searchResourcesParams = z.object({
+  query: z
+    .string()
+    .describe(
+      "What to look for, in the new starter's own words — e.g. 'parking', 'dress code', 'how much annual leave'.",
+    ),
+});
+
+/**
+ * Looking something up in what the company shared.
+ *
+ * Takes a question and nothing else. Whose documents these are comes off the
+ * run context, and `shared` is written into the SQL rather than passed — see the
+ * header for why that is the whole argument for this tool existing.
+ *
+ * Returns the document's name beside each snippet so Craig can say where an
+ * answer came from. A new starter told "the policy says X" has to take it on
+ * faith; told "the handbook says X" they can go and read it, and the list above
+ * this conversation has it.
+ */
+const searchResources = tool<typeof searchResourcesParams, JoinerContext>({
+  name: "search_resources",
+  description:
+    "Search the documents this company shared with new starters — handbooks, policies, anything they uploaded. Use it whenever you are asked something that a company document would answer rather than saying you don't know. Returns nothing if they haven't shared anything about it.",
+  parameters: searchResourcesParams,
+  execute: async ({ query }, context) => {
+    const joiner = context?.context.joiner;
+    /* No joiner means no scope, and a search with no scope is the one thing
+       this tool must never run. Refusing beats defaulting. */
+    if (!joiner) return "Nothing to search.";
+
+    const hits = await searchResourcesForJoiner(joiner, query);
+    if (hits.length === 0)
+      return "Nothing in what they've shared mentions that.";
+
+    return hits
+      .map((hit) => `From "${hit.name}": ${hit.snippet}`)
+      .join("\n\n");
+  },
+});
 
 /** Everything this Craig is allowed to know, and the only thing he is told. */
 export interface JoinerBrief {
@@ -167,7 +242,13 @@ ${brief.firstName} is the new starter, not the employer. They are one week into 
 
 ## What you know and what you do not
 
-Everything above is everything you have. You do not know who their manager is, what the wifi password is, where the office is, what the holiday policy says, or anything else about ${brief.company} that is not written above — because nobody has told you. When they ask something you cannot answer, say so plainly in one sentence and tell them to ask whoever invited them. Do not guess, do not infer it from the company name, and never soften a "don't know" into a maybe.
+Everything above is everything you know by heart.
+
+You also have **search_resources**, which searches the documents ${brief.company} has shared with new starters. Use it before saying you don't know anything a company document might answer — a handbook, a policy, dress code, leave, expenses, parking, what to bring on day one. Search first, answer second.
+
+When it comes back with something, say which document it came from, so they can go and read it themselves — the list of those documents is on this same screen. Answer from what it returned and not from what you expect a policy to say. If it returns nothing, say that ${brief.company} hasn't shared anything about it, rather than answering from general knowledge.
+
+Outside your steps and those documents you know nothing: not who their manager is, not the wifi password, not where the office is. Say so plainly in one sentence and tell them to ask whoever invited them. Do not guess, do not infer it from the company name, and never soften a "don't know" into a maybe.
 
 You especially do not know anything about **other people** at ${brief.company} — who else is joining, how they are getting on, what the company pays for, or how their onboarding is set up behind the scenes. If asked, say that is not something you can see.
 
@@ -211,15 +292,15 @@ function upcoming(iso: string): boolean {
  * six paragraphs of hedging about a question Craig should have answered "ask
  * Priya" to.
  */
-export function joinerCraigFor(brief: JoinerBrief): Agent {
-  return new Agent({
+export function joinerCraigFor(brief: JoinerBrief): Agent<JoinerContext> {
+  return new Agent<JoinerContext>({
     name: "Craig",
     instructions: joinerSystemPrompt(brief),
     model: CHAT_MODEL,
     modelSettings: { temperature: CHAT_TEMPERATURE, maxTokens: 400 },
-    /* Not an oversight, and not a stub. See the header: the absence of tools is
-       the access boundary, so anything added here needs the argument made in
-       full before it goes in. */
-    tools: [],
+    /* One tool, and the argument for it is in the header. Anything added beside
+       it needs the same argument: it may take a question, never an
+       identifier. */
+    tools: [searchResources],
   });
 }
