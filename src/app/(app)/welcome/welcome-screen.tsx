@@ -103,7 +103,7 @@ export function WelcomeScreen({ user }: { user: Session }) {
   const [handing, setHanding] = React.useState(false);
 
   React.useEffect(() => {
-    if (draft) router.push(`/showcase/workflows/${draft.id}`);
+    if (draft) router.push(`/workflows/${draft.id}`);
   }, [draft, router]);
 
   function generate() {

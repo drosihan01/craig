@@ -257,7 +257,7 @@ function WorkflowRow({
 
   return (
     <ListItem
-      href={`/showcase/workflows/${workflow.id}`}
+      href={`/workflows/${workflow.id}`}
       leading={
         <ListIcon tone="accent">
           <AltRoute />

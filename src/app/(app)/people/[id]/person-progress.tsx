@@ -325,7 +325,7 @@ export function PersonProgress({
       }
 
       startRefresh(() => {
-        router.replace("/showcase/people");
+        router.replace("/people");
         router.refresh();
       });
     } catch {
@@ -564,7 +564,7 @@ function Detail({
       navRail={
         <NavRail>
           <NavRailItem
-            href="/showcase/people"
+            href="/people"
             label="People"
             icon={<ArrowBack />}
           />
@@ -662,7 +662,7 @@ function Detail({
               )}
               {person.workflowId && (
                 <Link
-                  href={`/showcase/workflows/${person.workflowId}`}
+                  href={`/workflows/${person.workflowId}`}
                   className={buttonVariants({
                     variant: "secondary",
                     size: "sm",
@@ -1280,7 +1280,7 @@ function PersonNav({
        can live where the eye already looks for navigation, and the page can
        open on the person's name instead of on a link away from them. */
     <div className="flex flex-col gap-5">
-      <BackLink href="/showcase/people" className="px-2">
+      <BackLink href="/people" className="px-2">
         People
       </BackLink>
 
@@ -1561,7 +1561,7 @@ export function NoPerson({ user }: { user: Session }) {
           description="Whoever this page was for doesn't have a seat on this account. Everyone who does is on People."
           action={
             <Link
-              href="/showcase/people"
+              href="/people"
               className={buttonVariants({ size: "sm", variant: "secondary" })}
             >
               Back to People

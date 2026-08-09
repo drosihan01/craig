@@ -20,7 +20,7 @@ export const metadata = {
  * server rather than shown a form they don't need.
  */
 export default async function ShowcaseSignInPage(
-  props: PageProps<"/showcase/sign-in">,
+  props: PageProps<"/sign-in">,
 ) {
   if (await currentUser()) redirect(AFTER_SIGN_IN);
 

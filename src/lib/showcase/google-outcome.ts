@@ -52,7 +52,7 @@ export const GOOGLE_CALLBACK_PATH = "/api/google/callback";
  * in `?next=`, so the outcome is read once they are signed in and the message
  * is true when they read it.
  */
-export const SETTINGS_PATH = "/showcase/settings";
+export const SETTINGS_PATH = "/settings";
 
 /** The query parameter carrying the code below. */
 export const CONNECT_OUTCOME_PARAM = "google";

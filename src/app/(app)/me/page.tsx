@@ -9,7 +9,7 @@ import { JoinerScreen, type JoinerView, type PlanStep } from "./joiner-screen";
  * A server component wrapping the new starter's screen, for the guard and for
  * the words.
  *
- * The guard first, and for the same reason every other `/showcase` page has
+ * The guard first, and for the same reason every other page in `(app)` has
  * one: the proxy is a matcher that reads a cookie, and it cannot tell whether
  * the person that cookie names still has a seat. `requireJoiner()` can, because
  * the store is genuinely reachable here — which is what makes taking somebody's

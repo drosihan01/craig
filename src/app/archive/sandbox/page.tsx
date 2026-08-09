@@ -45,7 +45,7 @@ import {
 } from "@/components/ui/icons";
 import { AUDIENCE, SENDER, TEMPLATES as EMAIL_TEMPLATES } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
-import { SECTIONS } from "@/app/design-system/sections";
+import { SECTIONS } from "@/app/archive/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
 import { ShowcaseReset } from "@/components/sandbox/showcase-reset";
 import { GoogleConnect } from "@/components/sandbox/google-connect";
@@ -57,7 +57,7 @@ import { cn } from "@/lib/cn";
  *
  * These lived in `google-outcome.ts` while the Google connect flow ended up
  * back in this hub, because the redirect had to name a tab. It doesn't any
- * more — a customer connecting their own Workspace lands on `/showcase/settings`
+ * more — a customer connecting their own Workspace lands on `/settings`
  * — so a file about what an OAuth callback says has no reason to know how the
  * sandbox lays its sections out. Local constants, for the only page that has
  * ever read them.
@@ -499,7 +499,7 @@ export default function SandboxPage() {
  *
  * It used to carry a Google connect outcome too, because the OAuth callback
  * landed here. It doesn't now — connecting a Workspace is a customer's act and
- * ends on `/showcase/settings` — so the only parameter left is which section to
+ * ends on `/settings` — so the only parameter left is which section to
  * show.
  */
 function SandboxWithParams() {

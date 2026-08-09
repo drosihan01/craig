@@ -48,7 +48,7 @@ import {
  *
  * Verified end to end against a real Google Workspace: a consent granted here
  * created a real account on a real tenant. What that consent exposed is why
- * this flow now starts and ends on `/showcase/settings` rather than in the
+ * this flow now starts and ends on `/settings` rather than in the
  * builder's sandbox — see `connectLandingPath`.
  */
 

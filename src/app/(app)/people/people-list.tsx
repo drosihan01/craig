@@ -236,7 +236,7 @@ export function PeopleList({
                  A list of names that does nothing when you press one is a
                  list that answers "who" and refuses "how are they getting
                  on" — which is the question anybody opens this page with. */
-                href={`/showcase/people/${person.id}`}
+                href={`/people/${person.id}`}
                 leading={<Avatar name={person.name} size="md" />}
                 title={person.name}
                 description={`${person.role} · ${person.email}`}
