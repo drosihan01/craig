@@ -51,23 +51,46 @@ import { constantTimeEqual, encode, signingKey } from "./session";
 export const GOOGLE_NOTIFICATIONS_PATH = "/api/google/notifications";
 
 /**
+ * How often the sweep actually runs.
+ *
+ * Once a day, because that is what the Hobby plan allows — see the `crons`
+ * entry in `vercel.json`. It is stated here because the renewal policy below is
+ * meaningless without it: a lead time is only safe relative to how often
+ * anything is looking.
+ */
+const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
  * How close to expiry a channel is renewed.
  *
- * Fifteen minutes is the floor rather than the policy. The policy is a quarter
- * of whatever life Google actually granted, which is the only shape that
- * survives not knowing that number: Gmail documents seven days for its own
- * `users.watch` and the Admin SDK's channel documentation does not commit to
- * anything this repo has verified, so a hardcoded "renew after six days" is
- * either far too eager or catastrophically too late, and there is no way to
- * tell which until a channel silently stops delivering.
+ * The policy is a quarter of whatever life Google actually granted, which is
+ * the shape that survives not knowing that number in advance — Gmail documents
+ * seven days for its own `users.watch` and the Admin SDK does not commit to
+ * anything, so a hardcoded "renew after six days" is either far too eager or
+ * catastrophically too late.
  *
- * A quarter of the life means a seven-day channel is renewed with nearly two
- * days to spare and a six-hour channel with ninety minutes, without either
- * number appearing anywhere. The floor covers the degenerate case: a channel
- * granted a life shorter than an hour is simply always due, which is the
- * correct behaviour for a channel that short.
+ * **Google grants 48 hours.** Measured, on the first real channel this repo
+ * ever created: `expires_at - renewed_at` came back at exactly two days, not
+ * the seven the documentation had led this code to expect.
+ *
+ * That number turns a quarter-life lead into a bug. A quarter of 48 hours is a
+ * twelve-hour window, the sweep runs every twenty-four, and a window narrower
+ * than the interval that checks it can be stepped straight over: the channel is
+ * "not due yet" at one sweep and expired by the next. Pushes would have stopped
+ * every couple of days, silently, which is the exact failure this whole file is
+ * arranged to avoid.
+ *
+ * So the lead is also floored at **one and a half sweep intervals**. A channel
+ * is renewed while it still has comfortably more life than the gap until the
+ * next look, with half an interval spare for a sweep that fails or a deploy
+ * that eats one. For a 48-hour channel that means renewing roughly daily, which
+ * is one API call per tenant per day — the cheap side of the trade by a wide
+ * margin.
+ *
+ * The quarter still governs anything long: a seven-day channel has a 42-hour
+ * lead and is renewed with nearly two days to spare, exactly as before.
  */
-const MIN_RENEW_LEAD_MS = 15 * 60 * 1000;
+const MIN_RENEW_LEAD_MS = Math.round(SWEEP_INTERVAL_MS * 1.5);
 
 /** How long a dedupe record is worth keeping. Comfortably longer than any
     channel life Google has been observed to grant, because a record that
@@ -412,10 +435,12 @@ async function channelFor(connectionId: string): Promise<ChannelRow | null> {
 /**
  * Whether a channel is close enough to expiry to be worth replacing.
  *
- * A quarter of the life Google actually granted, floored at fifteen minutes.
- * The granted life is `expires_at - renewed_at` rather than a constant, which
- * is what makes this correct without knowing the number — see
- * `MIN_RENEW_LEAD_MS`.
+ * A quarter of the life Google actually granted, floored at one and a half
+ * sweep intervals. The granted life is `expires_at - renewed_at` rather than a
+ * constant, which is what makes this correct without knowing the number, and
+ * the floor is what stops a life *shorter* than the docs implied slipping
+ * between two sweeps — Google grants 48 hours, and an unfloored quarter of that
+ * is narrower than the daily sweep that checks it. See `MIN_RENEW_LEAD_MS`.
  *
  * An unreadable expiry is due. That is the conservative direction: renewing a
  * channel that did not need it costs one API call, and not renewing one that
