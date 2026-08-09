@@ -111,10 +111,21 @@ const normalise = (email: string) => email.trim().toLowerCase();
 /**
  * A channel id that says which tenant it belongs to.
  *
- * `craig.<connection uuid>.<32 random hex>`. Google asks only that the id be
- * unique and treats it as opaque, so the structure is entirely for us, and it
- * buys one specific thing: a delivery can be attributed to a tenant *without a
- * database row existing for it*.
+ * `craig_<connection uuid>_<32 random hex>`.
+ *
+ * **Underscores, not dots, and that is not cosmetic.** This was written with
+ * dots on the strength of Google's documentation calling the id opaque, and the
+ * first real `users.watch` call came back:
+ *
+ *     400 Channel id must match [A-Za-z0-9\-_\+/=]+
+ *
+ * There is no `.` in that character class. The id is opaque to Google in the
+ * sense that it ascribes no meaning to it, not in the sense that any string
+ * will do. `_` is in the set and cannot occur in a uuid or in hex, so it stays
+ * an unambiguous separator.
+ *
+ * The structure is entirely for us, and it buys one specific thing: a delivery
+ * can be attributed to a tenant *without a database row existing for it*.
  *
  * That window is real rather than theoretical. Renewal creates the replacement
  * channel at Google before writing it down — it has to, since the row needs the
@@ -134,7 +145,7 @@ function mintChannelId(connectionId: string): string {
   const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
-  return `${CHANNEL_PREFIX}.${connectionId}.${nonce}`;
+  return `${CHANNEL_PREFIX}_${connectionId}_${nonce}`;
 }
 
 /**
@@ -148,7 +159,7 @@ function mintChannelId(connectionId: string): string {
  * this function is deliberately callable on garbage.
  */
 export function tenantOfChannel(channelId: string): string | null {
-  const parts = channelId.split(".");
+  const parts = channelId.split("_");
   if (parts.length !== 3) return null;
   if (parts[0] !== CHANNEL_PREFIX) return null;
   if (!UUID.test(parts[1])) return null;
