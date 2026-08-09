@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     return refuse("Payments aren't set up on this deployment yet.", 501);
   }
 
-  const subscription = subscriptionFor(session.email);
+  const subscription = await subscriptionFor(session.email);
   if (!subscription) {
     return refuse("This account doesn't have a plan to manage.", 404);
   }

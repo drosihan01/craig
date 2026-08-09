@@ -78,8 +78,8 @@ export default async function ShowcaseSettingsPage(
    * two different times would eventually show a total smaller than its own
    * count. `seatEntitlement` is the same function the paywall is quoted from,
    * so Settings and the dialog cannot describe the same plan differently. */
-  const subscription = subscriptionFor(user.email);
-  const taken = listJoiners(user.email).length;
+  const subscription = await subscriptionFor(user.email);
+  const taken = (await listJoiners(user.email)).length;
 
   return (
     <SettingsScreen

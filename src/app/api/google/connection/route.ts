@@ -87,7 +87,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const account = getAccount(session.email);
+  const account = await getAccount(session.email);
   if (!account) {
     return NextResponse.json(
       { ok: false, error: NOT_SIGNED_IN },
@@ -139,7 +139,7 @@ export async function DELETE() {
   /* Only ever this session's own account. The email comes from the signed
      cookie and never from the request, so there is no spelling of this call
      that deletes somebody else's connection. */
-  const removed = disconnectGoogle(session.email);
+  const removed = await disconnectGoogle(session.email);
 
   /* `removed: false` is a success, not a 404. Disconnecting something that was
      already disconnected is the outcome the caller wanted, and the honest

@@ -83,7 +83,7 @@ export async function DELETE(request: Request) {
     .trim()
     .slice(0, MAX_ID);
 
-  const joiner = id ? getJoiner(id) : null;
+  const joiner = id ? await getJoiner(id) : null;
   if (!joiner || !sameAccount(joiner.accountEmail, session.email)) {
     return refuse("That person isn't on this account.", 404);
   }
@@ -93,7 +93,7 @@ export async function DELETE(request: Request) {
      somebody who is already removed is the outcome the caller asked for, so it
      is reported as success rather than as an error about a race the person
      pressing the button had no part in. */
-  deleteJoiner(joiner.id);
+  await deleteJoiner(joiner.id);
 
   return NextResponse.json({ ok: true, id: joiner.id }, { headers: noStore });
 }

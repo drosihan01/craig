@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     if (problem) return refuse(problem, 400);
   }
 
-  const updated = completeStep(joiner.id, stepId, value);
+  const updated = await completeStep(joiner.id, stepId, value);
   if (!updated) {
     /* The store had the last word and said no — which at this point means the
        seat went away between reading it and writing to it. Rare, and worth
@@ -189,7 +189,7 @@ export async function POST(request: Request) {
      harmless: a second request arriving while this one is still in the handler
      finds the step already claimed and does nothing. Only the slow half is
      deferred. */
-  fireNextAutomatedStep(updated, stepId, after);
+  await fireNextAutomatedStep(updated, stepId, after);
 
   /* The whole record back, not just an acknowledgement. It is what the screen
      is a view of, so a caller that wants to show the answer it just saved can

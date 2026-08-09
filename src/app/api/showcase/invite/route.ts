@@ -551,7 +551,7 @@ export async function POST(request: Request) {
      moment it becomes a header. Neither of those is here, and that is
      deliberate: a third copy of the rule in this file is a third thing to keep
      in step. */
-  const account = getAccount(session.email);
+  const account = await getAccount(session.email);
   if (!account) return refuse("Not signed in.", 401);
   if (!account.company) {
     return refuse(
@@ -576,7 +576,7 @@ export async function POST(request: Request) {
      fails in the admin's hands immediately, says so, and is fixed by inviting
      them again. The client only writes the person into People on success, so a
      failed send doesn't put a row in front of anybody either. */
-  const joiner = createJoiner({
+  const joiner = await createJoiner({
     email: to,
     name,
     role,

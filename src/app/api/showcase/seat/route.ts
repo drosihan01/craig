@@ -115,7 +115,7 @@ export async function POST(request: Request) {
      is the one request here that has to be asked for in so many words. */
   const manual = input.manual === true;
 
-  const joiner = joinerId ? getJoiner(joinerId) : null;
+  const joiner = joinerId ? await getJoiner(joinerId) : null;
   /* Missing and not-yours get the same refusal. Both are true of an id that
      isn't on this account, and wording that told them apart would make this an
      oracle for which ids exist. */
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
        step and every other one is refused here, before anything reaches Google.
        A refusal is not an error — it means somebody else already started it,
        which is exactly what was wanted. */
-    const claim = claimAutomatedStep(joiner.id, stepId);
+    const claim = await claimAutomatedStep(joiner.id, stepId);
     if (claim.ok) {
       /* Awaited, unlike the automatic path. Somebody is watching a spinner they
          started, and the honest thing is to show them the outcome rather than
@@ -157,7 +157,9 @@ export async function POST(request: Request) {
      page still re-renders from the server, which is what makes the button and
      the screen incapable of disagreeing; this is for the sentence next to the
      button, not a second source of truth to draw from. */
-  const settled = getJoiner(joiner.id)?.steps.find((s) => s.id === stepId);
+  const settled = (await getJoiner(joiner.id))?.steps.find(
+    (s) => s.id === stepId,
+  );
 
   return NextResponse.json(
     { ok: true, state: settled ? runStateOf(settled) : "waiting" },

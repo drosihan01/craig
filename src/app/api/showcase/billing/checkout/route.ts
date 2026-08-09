@@ -84,7 +84,7 @@ export async function POST(request: Request) {
      the end of the month. The honest answer to "upgrade" when they are already
      upgraded is to send them to the portal, where they can see what they have
      and change it. */
-  const existing = subscriptionFor(session.email);
+  const existing = await subscriptionFor(session.email);
   if (existing && existing.status !== "canceled") {
     return NextResponse.json(
       {

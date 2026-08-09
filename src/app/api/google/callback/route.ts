@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
     return done(request, "personal-account", state.returnTo);
   }
 
-  const saved = saveGoogleConnection(session.email, {
+  const saved = await saveGoogleConnection(session.email, {
     refreshToken: exchanged.connection.refreshToken,
     domain: exchanged.connection.domain,
     adminEmail: exchanged.connection.adminEmail,

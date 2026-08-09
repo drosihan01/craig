@@ -68,7 +68,7 @@ export async function generateMetadata(
   if (!user) return { title: "Person — Craig" };
 
   const { id } = await props.params;
-  const joiner = getJoiner(id);
+  const joiner = await getJoiner(id);
   if (!joiner || !belongsTo(joiner, user.email)) {
     return { title: "Person — Craig" };
   }
@@ -82,7 +82,7 @@ export default async function ShowcasePersonPage(
   const user = await requireUser();
   const { id } = await props.params;
 
-  const joiner = getJoiner(id);
+  const joiner = await getJoiner(id);
   if (!joiner || !belongsTo(joiner, user.email)) {
     return <NoPerson user={user} />;
   }

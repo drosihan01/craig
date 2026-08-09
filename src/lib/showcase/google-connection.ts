@@ -87,7 +87,7 @@ export async function googleForAccount(
      raw one: a seam that normalised differently from the store behind it would
      look up nothing for accounts whose stored address differs in case — nobody
      in testing, and somebody in the end. */
-  const found = googleConnectionFor(accountEmail);
+  const found = await googleConnectionFor(accountEmail);
 
   /* Every refusal collapses to the same pair, deliberately. Whether this
      deployment has no OAuth client, or this customer has never connected, or

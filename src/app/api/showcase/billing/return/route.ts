@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
     return back(request, "pending");
   }
 
-  saveSubscription(session.email, found.subscription);
+  await saveSubscription(session.email, found.subscription);
 
   return back(request, "upgraded");
 }

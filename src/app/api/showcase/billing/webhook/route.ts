@@ -161,7 +161,7 @@ export async function POST(request: Request) {
     return ok();
   }
 
-  saveSubscription(accountEmail, current.subscription);
+  await saveSubscription(accountEmail, current.subscription);
 
   return ok();
 }

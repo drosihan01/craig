@@ -29,7 +29,7 @@ export default async function ShowcasePeoplePage() {
   /* Flattened to what the list actually draws, rather than passing the whole
      record down. The steps are the new starter's business and the person's own
      page is where they belong; the list only needs to say how far along. */
-  const people = listJoiners(user.email).map((joiner) => {
+  const people = (await listJoiners(user.email)).map((joiner) => {
     const { done, total, next, finished } = progressOf(joiner);
     return {
       id: joiner.id,
@@ -54,7 +54,7 @@ export default async function ShowcasePeoplePage() {
    * counted, so the number the button enforces and the number the paywall
    * quotes come from one call rather than two opinions. */
   const entitlement = seatEntitlement(
-    subscriptionFor(user.email),
+    await subscriptionFor(user.email),
     people.length,
   );
 

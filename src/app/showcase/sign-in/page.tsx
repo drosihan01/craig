@@ -37,7 +37,7 @@ export default async function ShowcaseSignInPage(
      confirm that a *particular* email has an account, whereas "nobody has signed
      up yet" identifies no one and withholding it costs the first visitor their
      way in. */
-  if (!hasAnyAccount()) {
+  if (!(await hasAnyAccount())) {
     redirect(`${SIGN_UP_PATH}?next=${encodeURIComponent(next)}`);
   }
 

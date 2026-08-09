@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, SIGN_IN_PATH } from "@/lib/showcase/contract";
+import { SIGN_IN_PATH } from "@/lib/showcase/contract";
 import { createAccount } from "@/lib/showcase/accounts";
 import { clientKey, rateLimit } from "@/lib/showcase/rate-limit";
 import { SIGN_UP_TAKEN, validateSignUp } from "@/lib/showcase/sign-up";
-import {
-  createSession,
-  SESSION_COOKIE_OPTIONS,
-  SESSION_MAX_AGE,
-} from "@/lib/showcase/session";
+import { supabaseServer } from "@/lib/supabase/server";
 
 /**
  * Sign-up, which creates the account.
@@ -17,9 +13,11 @@ import {
  * heard of you, and then it has, because of something you did.
  *
  * It signs her straight in on success rather than sending her back to a form to
- * retype what she just typed. Everything needed to issue a session is already
- * on this request and already verified; bouncing her to sign-in would be asking
- * her to prove something we watched her establish ten milliseconds ago.
+ * retype what she just typed. The password now lives with Supabase Auth, so
+ * "signs her in" means asking GoTrue to verify the credential it stored ten
+ * milliseconds ago and set its session cookies — the same outcome the
+ * hand-rolled HMAC cookie delivered, minted by the thing that owns the
+ * password instead of beside it.
  *
  * The 409 is still here, per email now: one account per address, and "sign up
  * again" must not be a way to take over somebody else's.
@@ -139,11 +137,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: SIGN_UP_CLOSED }, { status: 403 });
   }
 
-  /* One check, not two. An earlier version tested for a duplicate here as well,
-     which read as belt and braces but was really two places that had to agree
-     about the same invariant. The store is the one that can enforce it — it
-     re-checks after its own hashing await — so this asks once and believes the
-     answer. */
+  /* One check, not two. The store asks GoTrue to create the user, and GoTrue's
+     uniqueness guarantee is the one that holds — this asks once and believes
+     the answer. */
   const account = await createAccount(fields);
   if (!account) {
     return NextResponse.json(
@@ -152,11 +148,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(
-    SESSION_COOKIE,
-    await createSession(account.email, account.name, account.company),
-    { ...SESSION_COOKIE_OPTIONS, maxAge: SESSION_MAX_AGE },
-  );
-  return response;
+  /* The session, from the credential's owner. This sets Supabase's cookies on
+     the response via the server client's cookie bridge — nothing here touches
+     a cookie by name, which is what keeps sign-in and sign-out symmetric. */
+  const supabase = await supabaseServer();
+  const signedIn = await supabase.auth.signInWithPassword({
+    email: account.email,
+    password: fields.password,
+  });
+  if (signedIn.error) {
+    /* The account exists and the password was set two calls ago, so this is
+       infrastructure misbehaving rather than the person. The account is real:
+       send them to sign-in rather than pretending nothing happened. */
+    return NextResponse.json(
+      {
+        error:
+          "The account was created but signing you in didn't take. Sign in with the details you just chose.",
+        signInPath: SIGN_IN_PATH,
+      },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true });
 }

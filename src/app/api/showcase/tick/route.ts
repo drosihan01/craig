@@ -120,12 +120,12 @@ export async function POST(request: Request) {
     return refuse("Say whether it's done.", 400);
   }
 
-  const joiner = joinerId ? getJoiner(joinerId) : null;
+  const joiner = joinerId ? await getJoiner(joinerId) : null;
   if (!joiner || !sameAccount(joiner.accountEmail, session.email)) {
     return refuse("That person isn't on this account.", 404);
   }
 
-  const updated = tickStep(joiner.id, stepId, input.done);
+  const updated = await tickStep(joiner.id, stepId, input.done);
   if (!updated) return refuse("That isn't a step you can tick off.", 400);
 
   /* A tick can move the workflow too, and it has to be able to. An automated
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
      After the response, not before it, for the same reason as the new starter's
      route: this is a checkbox, and a checkbox that takes as long as somebody
      else's API is a checkbox people press twice. */
-  fireNextAutomatedStep(updated, stepId, after);
+  await fireNextAutomatedStep(updated, stepId, after);
 
   /* The step is echoed rather than the whole person. The screen re-renders from
      the server anyway — that is what makes the tick and the page incapable of

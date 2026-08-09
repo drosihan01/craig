@@ -134,14 +134,14 @@ const TEMPLATE_ID = "workspace-account";
  * they don't run is missing a variable they can't set would be accurate and
  * useless.
  */
-function settle(
+async function settle(
   failure: GoogleFailed,
   accountEmail: string,
-): {
+): Promise<{
   state: RunState;
   problem: RunProblem;
   message: string;
-} {
+}> {
   if (isWaitingOnSetup(failure)) {
     if (failure.reason === "not-configured") {
       /* The one case the customer genuinely cannot act on, so it is logged as
@@ -169,7 +169,7 @@ function settle(
        would go to fix it, would still be claiming everything is fine. Marking
        it here means the discovery is made once and remembered, wherever it
        happens to be made. */
-    markGoogleNeedsReconnect(accountEmail);
+    await markGoogleNeedsReconnect(accountEmail);
 
     return {
       state: "failed",
@@ -438,7 +438,7 @@ async function createSeat(
   if (!connection || !domain) {
     const probe = await accessTokenFor(connection);
     if (!probe.ok)
-      return { ...settle(probe, joiner.accountEmail), endedAt: now() };
+      return { ...(await settle(probe, joiner.accountEmail)), endedAt: now() };
 
     /* Connected, working, and Google never told us which domain. That means
        somebody consented with a personal Google account: the id token's `hd`
@@ -478,7 +478,7 @@ async function createSeat(
        claimed it, or a colleague with the same name — is not that. Writing it
        down would put an address on the admin's screen under a heading that
        implies this workflow created it. */
-    return { ...settle(created, joiner.accountEmail), endedAt: now() };
+    return { ...(await settle(created, joiner.accountEmail)), endedAt: now() };
   }
 
   const { seat } = created;
@@ -521,14 +521,14 @@ export async function runClaimedStep(
   joinerId: string,
   stepId: string,
 ): Promise<void> {
-  const joiner = getJoiner(joinerId);
+  const joiner = await getJoiner(joinerId);
   if (!joiner) return;
 
   const step = joiner.steps.find((s) => s.id === stepId);
   if (!step || step.actor !== "craig" || runStateOf(step) !== "running") return;
 
   try {
-    updateRun(joinerId, stepId, await createSeat(joiner));
+    await updateRun(joinerId, stepId, await createSeat(joiner));
   } catch (cause) {
     /* Only reachable if something below broke its own contract — nothing in
        `src/lib/google/*` or `send.ts` throws. Recorded as a failure rather than
@@ -536,12 +536,22 @@ export async function runClaimedStep(
        an invisible stuck step is somebody's first week quietly not happening.
        The cause goes to the log; the sentence goes to the screen. */
     console.error(`[showcase/automation] ${stepId} threw:`, cause);
-    updateRun(joinerId, stepId, {
+    /* The write itself can fail now that it crosses a network, and this
+       function's contract is that it never throws — an unhandled rejection on
+       the `after` path is a log line nobody reads and a step stuck on
+       `running`. So the failure of recording a failure is itself only
+       logged. */
+    await updateRun(joinerId, stepId, {
       state: "failed",
       problem: "refused",
       message:
         "Something went wrong here rather than at Google, so nothing was created. The details are in the server log. Try it again — if it keeps happening, this one needs looking at.",
       endedAt: now(),
+    }).catch((writeCause) => {
+      console.error(
+        `[showcase/automation] ${stepId} failed and the failure could not be recorded:`,
+        writeCause,
+      );
     });
   }
 }
@@ -576,15 +586,20 @@ export async function runClaimedStep(
  * because a press that finishes silently a moment after the page reloads is a
  * press that appears to have done nothing.
  */
-export function fireNextAutomatedStep(
+export async function fireNextAutomatedStep(
   joiner: Joiner,
   completedStepId: string,
   after: (task: () => Promise<void>) => void,
-): void {
+): Promise<void> {
   const next = nextAutomatedStep(joiner, completedStepId);
   if (!next) return;
 
-  const claim = claimAutomatedStep(joiner.id, next.id);
+  /* Still inside the request, awaited — the claim is one compare-and-swap
+     against the database now rather than a Map write, but the shape holds:
+     it lands before the response goes out, so a double-submit's second
+     request finds `running` and stands down before either has spoken to
+     Google. Only the work itself belongs in `after`. */
+  const claim = await claimAutomatedStep(joiner.id, next.id);
   if (!claim.ok) return;
 
   after(() => runClaimedStep(joiner.id, next.id));
@@ -632,7 +647,7 @@ export async function reconcileRun(
   stepId: string,
   options: { force?: boolean } = {},
 ): Promise<ReconcileOutcome> {
-  const joiner = getJoiner(joinerId);
+  const joiner = await getJoiner(joinerId);
   if (!joiner) return "skipped";
 
   const step = joiner.steps.find((s) => s.id === stepId);
@@ -676,7 +691,7 @@ async function pollSeat(
       /* The moment the whole step existed for. `updateRun` sets the step's
          `completedAt` alongside this, which is what every count on both screens
          reads. */
-      updateRun(joiner.id, step.id, {
+      await updateRun(joiner.id, step.id, {
         state: "done",
         checkedAt: now(),
         endedAt: now(),
@@ -690,7 +705,7 @@ async function pollSeat(
        `hasAcceptedSeat` vetoes both regardless of the terms, because an account
        nobody can sign into is not a seat somebody has taken. It reads as still
        waiting, which is true, rather than as an error. */
-    updateRun(joiner.id, step.id, {
+    await updateRun(joiner.id, step.id, {
       state: "awaiting",
       checkedAt: now(),
       message: undefined,
@@ -714,7 +729,7 @@ async function pollSeat(
        step back within reach of being run again: nothing of ours exists at that
        address any more, so creating it is the right move rather than a second
        mailbox. */
-    updateRun(joiner.id, step.id, {
+    await updateRun(joiner.id, step.id, {
       state: "failed",
       problem: "refused",
       message: `There's no longer a Google account at ${seatEmail}. It was created here and has since been deleted or renamed in the Google Admin console. Running this step again will create it afresh.`,
@@ -728,7 +743,7 @@ async function pollSeat(
      leaves the state alone. The seat exists and we simply couldn't ask about
      it, and downgrading a good account because a lookup failed would be this
      feature's most damaging possible bug. */
-  updateRun(joiner.id, step.id, {
+  await updateRun(joiner.id, step.id, {
     state: "awaiting",
     checkedAt: now(),
     message: settling ? undefined : cantCheck(found),
@@ -798,7 +813,7 @@ async function resolveInterrupted(
        is exactly the case where assuming "nothing happened" would create a
        second account for somebody who may already have one. */
     const probe = await accessTokenFor(connection);
-    updateRun(joiner.id, step.id, {
+    await updateRun(joiner.id, step.id, {
       state: "running",
       checkedAt: now(),
       message: probe.ok
@@ -812,7 +827,7 @@ async function resolveInterrupted(
   const found = await getUser(connection, seatEmail);
 
   if (found.ok) {
-    updateRun(joiner.id, step.id, {
+    await updateRun(joiner.id, step.id, {
       state: hasAcceptedSeat(found.user) ? "done" : "awaiting",
       seatEmail: found.user.primaryEmail,
       seatCreatedAt: found.user.creationTime ?? now(),
@@ -834,7 +849,7 @@ async function resolveInterrupted(
        `waiting`, with the message cleared — this is the one path that puts an
        interrupted step back in reach of running again, and it is safe precisely
        because Google was asked rather than assumed. */
-    updateRun(joiner.id, step.id, {
+    await updateRun(joiner.id, step.id, {
       state: "waiting",
       problem: undefined,
       message: undefined,
@@ -850,7 +865,7 @@ async function resolveInterrupted(
     found.message,
   );
 
-  updateRun(joiner.id, step.id, {
+  await updateRun(joiner.id, step.id, {
     state: "running",
     checkedAt: now(),
     message:

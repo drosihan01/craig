@@ -115,7 +115,7 @@ export default async function JoinPage(props: PageProps<"/showcase/join">) {
   const raw = typeof token === "string" ? token : undefined;
 
   const joinerId = await readJoinerToken(raw);
-  const joiner = joinerId ? getJoiner(joinerId) : null;
+  const joiner = joinerId ? await getJoiner(joinerId) : null;
 
   /* One screen for every way this can fail, because every way it can fail has
      the same fix and the person reading it did nothing wrong. A link that
@@ -179,7 +179,7 @@ export default async function JoinPage(props: PageProps<"/showcase/join">) {
     "use server";
 
     const stillValid = await readJoinerToken(credential);
-    if (!stillValid || !getJoiner(stillValid)) {
+    if (!stillValid || !(await getJoiner(stillValid))) {
       /* Back to this page with nothing, which renders the screen above. Better
          than sending them onward to a screen that will refuse them for reasons
          it can't explain. */

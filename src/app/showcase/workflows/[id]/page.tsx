@@ -39,7 +39,7 @@ export default async function ShowcaseWorkflowPage(
      seats are taken, and who to offer as the owner of a step — and both are
      answered by the names. Handing down each joiner's steps as well would put
      one person's date of birth into the props of a page about a workflow. */
-  const seats = listJoiners(user.email).map((joiner) => joiner.name);
+  const seats = (await listJoiners(user.email)).map((joiner) => joiner.name);
 
   /**
    * Whether a Google Workspace step could actually run for this account.
@@ -55,7 +55,7 @@ export default async function ShowcaseWorkflowPage(
    * grant Google has revoked would not. The block's own panel draws the
    * distinction, where there is room to say what happened and what fixes it.
    */
-  const account = getAccount(user.email);
+  const account = await getAccount(user.email);
   const google = account?.google ?? null;
   const googleConnected = Boolean(google) && !google?.needsReconnect;
 
