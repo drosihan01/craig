@@ -9,7 +9,7 @@ import {
   NavTreeItem,
   Separator,
 } from "@/components/ui";
-import { AltRoute, Groups } from "@/components/ui/icons";
+import { AltRoute, Forum, Groups } from "@/components/ui/icons";
 
 /**
  * The showcase's left column.
@@ -20,10 +20,10 @@ import { AltRoute, Groups } from "@/components/ui/icons";
  * one place: a nav is a promise about what the product does, and three
  * different navs is three different promises.
  *
- * Two items, not six. The showcase does workflows and people, and listing
- * rooms the product doesn't have is a worse first impression than a short
- * list. A room that exists and is empty is the other case, and it's `disabled`
- * below rather than a missing row.
+ * Three items, not six. Home is where Craig keeps track of the company; the
+ * other two are the things this product does. Listing rooms it doesn't have is
+ * a worse first impression than a short list. A room that exists and is empty
+ * is the other case, and it's `disabled` below rather than a missing row.
  *
  * Current is derived from the pathname rather than passed in, so a page can't
  * render a nav that disagrees with the route it's on.
@@ -67,6 +67,12 @@ import { AltRoute, Groups } from "@/components/ui/icons";
  */
 const ITEMS = [
   {
+    label: "Home",
+    href: "/",
+    icon: <Forum />,
+    shut: "There's nothing here until Craig has something to tell you about",
+  },
+  {
     label: "Workflows",
     href: "/workflows",
     icon: <AltRoute />,
@@ -79,6 +85,17 @@ const ITEMS = [
     shut: "You can give somebody a seat once there's a workflow to start them on",
   },
 ];
+
+/**
+ * Which row is the page you are on.
+ *
+ * A prefix match everywhere except the root, which needs an exact one — Home
+ * lives at `/`, and `"/workflows".startsWith("/")` is true, so a plain prefix
+ * test lights up Home on every screen in the product. Shared by the panel and
+ * the rail so the two cannot disagree about where you are.
+ */
+const isCurrent = (pathname: string, href: string) =>
+  href === "/" ? pathname === "/" : pathname.startsWith(href);
 
 export function ShowcaseNav({
   disabled,
@@ -103,7 +120,7 @@ export function ShowcaseNav({
               href={item.href}
               label={item.label}
               icon={item.icon}
-              current={pathname.startsWith(item.href)}
+              current={isCurrent(pathname, item.href)}
               disabled={disabled}
               reason={item.shut}
             />
@@ -167,7 +184,7 @@ export function ShowcaseNavRail({
           href={item.href}
           label={item.label}
           icon={item.icon}
-          current={pathname.startsWith(item.href)}
+          current={isCurrent(pathname, item.href)}
           disabled={disabled}
           reason={item.shut}
         />

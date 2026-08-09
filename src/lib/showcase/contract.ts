@@ -40,7 +40,24 @@ export interface Session {
 
 /** Where an unauthenticated request is sent, and where it comes back to. */
 export const SIGN_IN_PATH = "/sign-in";
-export const AFTER_SIGN_IN = "/welcome";
+/**
+ * Home, and the first thing anybody sees after signing in.
+ *
+ * It used to be `/welcome`, which is the screen where Craig drafts your first
+ * workflow — right for somebody's first ten minutes and wrong every time after
+ * that, because it dropped a returning admin straight into building rather than
+ * into their own company. Home decides which of the two you actually want: an
+ * account with nothing in it is still sent on to `/welcome`, once.
+ */
+export const AFTER_SIGN_IN = "/";
+
+/** Where Craig's account-wide conversation lives. Same path; named for callers
+    that mean "home" rather than "wherever sign-in goes". */
+export const HOME_PATH = "/";
+
+/** The first run, and only the first run. Home forwards to it when there is
+    nothing to come home to. */
+export const WELCOME_PATH = "/welcome";
 export const SESSION_COOKIE = "craig_session";
 
 /* ---------------------------------------------------------------------- */
