@@ -35,6 +35,7 @@ import {
   Check,
   ChevronLeft,
   Delete,
+  PersonAdd,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { SeatPaywall } from "@/components/showcase/seat-paywall";
@@ -509,6 +510,13 @@ function Editor({
   const [inviting, setInviting] = React.useState(false);
   const [paywall, setPaywall] = React.useState(false);
 
+  /* Which press opened the dialog, because it says something different in each
+     case. Publishing has just changed the workflow's state and the dialog
+     acknowledges it; pressing Add person on a workflow that has been live for a
+     week has nothing to announce, and a "Published" badge there would be
+     reporting news that is days old. */
+  const [justPublished, setJustPublished] = React.useState(false);
+
   /* Shared with People's copy of this dialog, so publishing and inviting can't
      end up handling a failed checkout differently. */
   const upgrade = useUpgrade();
@@ -532,8 +540,24 @@ function Editor({
        published either way: it is live and waiting, which is exactly what the
        paywall says happens if you decline. */
     if (outOfSeats(seats.length, entitlement.limit)) setPaywall(true);
-    else setInviting(true);
+    else {
+      setJustPublished(true);
+      setInviting(true);
+    }
   }
+
+  /* The same press People's header makes, against the same server count and the
+     same paywall. Publishing opens this dialog once and then never again, so
+     without a button here a published workflow with nobody on it is a dead end
+     on the one screen where wanting to add somebody actually occurs to you —
+     the fix for that shouldn't be knowing to walk to People. */
+  const addPerson = React.useCallback(() => {
+    if (outOfSeats(seats.length, entitlement.limit)) setPaywall(true);
+    else {
+      setJustPublished(false);
+      setInviting(true);
+    }
+  }, [seats.length, entitlement.limit]);
 
   return (
     <AppShell
@@ -576,10 +600,16 @@ function Editor({
       }
       actions={
         workflow.published ? (
-          <Badge tone="success">
-            <Check />
-            Published
-          </Badge>
+          <div className="flex items-center gap-2.5">
+            <Badge tone="success">
+              <Check />
+              Published
+            </Badge>
+            <Button size="sm" onClick={addPerson}>
+              <PersonAdd />
+              Add person
+            </Button>
+          </div>
         ) : (
           /* A trigger on its own is valid but pointless, so an empty workflow
              is unpublishable for a different reason to an unconfigured one. */
@@ -817,7 +847,7 @@ function Editor({
         open={inviting}
         onClose={() => setInviting(false)}
         workflowId={workflow.id}
-        justPublished
+        justPublished={justPublished}
         onInvited={() => router.refresh()}
       />
 
