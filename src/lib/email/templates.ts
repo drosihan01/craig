@@ -206,6 +206,41 @@ If something on there doesn't look right, {{sender}} is the person to ask.`,
     cta: "Open your checklist",
   },
   /**
+   * The link again, for somebody who lost the first one.
+   *
+   * Its own template rather than resending `seat-invite`, which opens "We're
+   * really pleased you're joining us" and describes a first day. That is the
+   * right thing to say once, to somebody who has just been hired; said to
+   * somebody who is three steps in and looking for the page again, it reads as
+   * a company that has forgotten them and started over.
+   *
+   * What this one has to do is smaller and more careful. It is sent to an
+   * address typed by whoever was at the keyboard, so it must not confirm
+   * anything to somebody who guessed: no role, no start date, nothing about
+   * where they are up to. The person it is genuinely for already knows all of
+   * that — what they are missing is the link.
+   *
+   * `{{company}}` stays because a name they recognise is what stops a magic
+   * link reading as phishing, and it is the one detail somebody guessing at the
+   * address would already have had to know to be guessing at all.
+   */
+  {
+    id: "joiner-link",
+    name: "New link to your checklist",
+    trigger: "The new starter asks for their link again",
+    audience: "starter",
+    subject: "Your link to {{company}}'s checklist",
+    preheader: "A fresh link to the checklist you were sent.",
+    body: `Hi {{first_name}},
+
+Here's a new link to your {{company}} checklist. The one you were sent before will have stopped working — they expire after a while, which is deliberate.
+
+Anything you'd already filled in is still there. You can pick up where you left off.
+
+If you weren't expecting this, somebody typed your address into the sign-in page by mistake. You can ignore it — nothing has changed and the link below only works from this message.`,
+    cta: "Open your checklist",
+  },
+  /**
    * The one Craig sends himself, at the end of a step he ran himself.
    *
    * Google creates the account and tells nobody — the Directory API sends no
