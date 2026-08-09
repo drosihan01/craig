@@ -11,6 +11,7 @@ import {
   googleStorageStatus,
 } from "@/lib/showcase/accounts";
 import { currentUser } from "@/lib/showcase/current-user";
+import { watchStatusFor } from "@/lib/showcase/google-watch";
 import { GOOGLE_CALLBACK_PATH } from "@/lib/showcase/google-outcome";
 import { stopWatch } from "@/lib/showcase/google-watch";
 
@@ -123,6 +124,11 @@ export async function GET(request: Request) {
       },
       storage: googleStorageStatus(),
       connection: account.google,
+      /* Whether acceptance is actually reaching us, which is a different
+         question from whether consent was granted and has a different answer
+         more often than it should — see `watchStatusFor`. Only meaningful when
+         connected, and null otherwise rather than a misleading `false`. */
+      push: account.google ? await watchStatusFor(session.email) : null,
     },
     { headers: noStore },
   );
