@@ -286,6 +286,50 @@ export async function listJoiners(accountEmail: string): Promise<Joiner[]> {
 }
 
 /**
+ * The most recent invitation sent to an address, if there is one.
+ *
+ * For the joiner who has lost their link and is asking for another. It looks up
+ * by the address the invitation was *sent to* rather than by any account,
+ * because the person typing it has no account and no session — that is the
+ * whole situation.
+ *
+ * **The newest only, deliberately.** One address can hold several invitations:
+ * somebody hired by two companies, or invited twice after a false start. Every
+ * alternative to "the newest" is worse. Sending one message per invitation
+ * turns a forgotten link into a small pile of mail and leaks how many places
+ * have hired them to anybody who guessed the address. Listing the companies in
+ * one message leaks the same thing more efficiently. Asking them to choose
+ * means a screen that names their employers before they have proved they are
+ * them.
+ *
+ * The newest is also nearly always the one they want: an onboarding is a thing
+ * with a start date, and the one you are currently doing is the one you were
+ * invited to last. Somebody in the genuinely rare double-onboarding case still
+ * has the older invitation in their inbox, which is where they were looking
+ * when they gave up.
+ *
+ * Returns null for an address nobody has invited, and the caller must be
+ * careful to say the same thing either way — see the route.
+ */
+export async function latestJoinerByEmail(
+  email: string,
+): Promise<Joiner | null> {
+  const address = email.trim().toLowerCase();
+  if (!address) return null;
+
+  const { data, error } = await db()
+    .from("joiners")
+    .select("*, joiner_steps(*)")
+    .ilike("email", address)
+    .order("invited_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`Looking up the invitation failed: ${error.message}`);
+
+  const row = (data as unknown as JoinerWithSteps[])[0];
+  return row ? toJoiner(row, row.joiner_steps) : null;
+}
+
+/**
  * Record an answer.
  *
  * Refuses a step that isn't theirs, doesn't exist, or has no field — a step

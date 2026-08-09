@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui";
+import { JoinerLinkForm } from "@/components/craig/joiner-link-form";
 import { CraigMark } from "@/components/ui/craig-mark";
 import { JOIN_PATH, JOINER_HOME } from "@/lib/craig/contract";
 import { getJoiner, progressOf } from "@/lib/craig/joiners";
@@ -136,15 +137,24 @@ export default async function JoinPage(props: PageProps<"/join">) {
     return (
       <Screen>
         <h1 className="text-2xl font-semibold tracking-[-0.02em]">
-          This link didn&rsquo;t work
+          {raw ? "This link didn\u2019t work" : "Get your link"}
         </h1>
         <p className="text-base leading-relaxed text-text-muted">
-          Links like this one stop working after a while, and they only work for
-          the person they were sent to.
+          {raw
+            ? "Links like this one stop working after a while, and they only work for the person they were sent to. Put your email address in below and we\u2019ll send you a new one."
+            : "Enter the email address your invitation was sent to and we\u2019ll send you a link to your checklist."}
         </p>
-        <p className="text-base leading-relaxed text-text-muted">
-          Ask whoever invited you to send a new one — it takes them a moment,
-          and nothing you&rsquo;ve already filled in is lost.
+
+        {/* The form rather than "ask whoever invited you", which is what this
+            screen used to say. It was true and it was a dead end: somebody's
+            onboarding stopped until an admin read a message and remembered how
+            to resend, on a product whose whole promise is that things keep
+            moving while nobody is watching. */}
+        <JoinerLinkForm />
+
+        <p className="text-sm leading-relaxed text-text-subtle">
+          Nothing you&rsquo;ve already filled in is lost — a new link opens the
+          same checklist, where you left it.
         </p>
       </Screen>
     );
