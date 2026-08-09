@@ -11,6 +11,7 @@ import {
 } from "@/lib/showcase/contract";
 import { missingRequired } from "@/lib/workflow/library";
 import { blankTrigger } from "@/lib/showcase/draft";
+import { forgetSync, hydrate, scheduleSync } from "@/lib/showcase/workflow-sync";
 
 /**
  * Everything the showcase knows, which to begin with is nothing.
@@ -225,6 +226,11 @@ const listeners = new Set<() => void>();
 function set(next: Partial<ShowcaseState>) {
   state = { ...state, ...next };
   persist();
+  /* One hook for every workflow mutation, rather than a call in each of the
+     five that exist. `scheduleSync` is debounced and compares against what was
+     last sent, so a `set` that touched only the conversation costs a map
+     lookup. */
+  if (next.workflows) scheduleSync(state.accountEmail, state.workflows);
   listeners.forEach((l) => l());
 }
 
@@ -479,6 +485,30 @@ export function claimAccount(email: string | null) {
     ? restore(email)
     : { ...initial(), simpleDraft: state.simpleDraft, accountEmail: null };
   listeners.forEach((l) => l());
+
+  if (!email) {
+    forgetSync();
+    return;
+  }
+
+  /* The workflows this account has anywhere, not merely the ones this browser
+     happens to remember. Without it, signing in on a second machine finds an
+     empty store and Craig — seeing no workflows — starts onboarding somebody
+     who has been using this for a week.
+
+     Deliberately after the listeners have already been told about the local
+     copy: the screen paints immediately from what is on this device and
+     corrects itself a moment later, rather than waiting on the network to show
+     anything at all. */
+  void hydrate(email, state.workflows).then((merged) => {
+    /* Guarded, because a hydrate is a fetch and somebody can sign out or switch
+       accounts while it is in flight. Applying it then would drop one account's
+       workflows into another's session. */
+    if (!merged || state.accountEmail !== email) return;
+    state = { ...state, workflows: merged };
+    persist();
+    listeners.forEach((l) => l());
+  });
 }
 
 /* ---------------------------------------------------------------------- */
@@ -580,6 +610,12 @@ export const resetShowcase = () => {
       localStorage.removeItem(keyFor(state.accountEmail));
     } catch {}
   }
+  /* And what the sync believes it has told the server, including the mark that
+     says this browser has already rescued its local-only workflows. The server
+     rows go with the account itself — `clearAccounts` cascades — so leaving the
+     mark set would mean the next sign-up on this browser skipped a rescue it
+     genuinely needs. */
+  forgetSync(state.accountEmail);
   /* The switch survives, because it isn't part of what's being cleared. */
   state = { ...initial(), simpleDraft: state.simpleDraft };
   listeners.forEach((l) => l());

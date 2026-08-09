@@ -194,6 +194,50 @@ export type Database = {
           },
         ]
       }
+      workflows: {
+        Row: {
+          account_id: string
+          blocks: Json
+          created_at: string
+          drafted_by: string | null
+          id: string
+          name: string
+          published: boolean
+          revealed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          blocks?: Json
+          created_at?: string
+          drafted_by?: string | null
+          id: string
+          name: string
+          published?: boolean
+          revealed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          blocks?: Json
+          created_at?: string
+          drafted_by?: string | null
+          id?: string
+          name?: string
+          published?: boolean
+          revealed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflows_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
