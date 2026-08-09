@@ -22,8 +22,15 @@ import type { Json, Tables } from "@/lib/supabase/types";
  * - **workflow** — one per workflow, forever. Scoped to a *thing*. Coming back
  *   to a workflow after a month should find the conversation that built it,
  *   which is the whole reason it is not a moment.
- * - **onboarding** — one per account, and it *graduates* rather than ending.
- *   See `graduateOnboarding`.
+ * - **draft** — a conversation whose purpose is producing a workflow. As many
+ *   as somebody starts, each beginning empty, and each *graduating* into the
+ *   workflow it produced rather than ending. See `graduateThread`.
+ *
+ *   It was `onboarding`, one per account, until that met somebody building a
+ *   second workflow: get-or-create handed them the account's original first-run
+ *   conversation, and Craig carried on discussing a company they had finished
+ *   describing weeks earlier. A first run is a draft conversation that happened
+ *   to be first, which is not a category of its own.
  *
  * The database enforces all three: partial unique indexes for the two that are
  * singular, nothing for the one that is not, and a check constraint tying
@@ -33,7 +40,7 @@ import type { Json, Tables } from "@/lib/supabase/types";
 type ThreadRow = Tables<"threads">;
 type MessageRow = Tables<"messages">;
 
-export type ThreadKind = "god" | "workflow" | "onboarding";
+export type ThreadKind = "god" | "workflow" | "draft";
 
 export interface StoredMessage {
   id: string;
@@ -267,27 +274,6 @@ export async function threadForWorkflow(
     .maybeSingle();
   if (existing.data) return toThread(existing.data);
 
-  /**
-   * A first workflow inherits the onboarding conversation rather than starting
-   * blank.
-   *
-   * Graduation is *also* fired explicitly when Craig's draft tool produces a
-   * workflow, and that call is the fast path — it happens while the canvas is
-   * still animating. But it is a fetch, and the editor mounts and asks for this
-   * thread within a few hundred milliseconds of the same event. Whichever
-   * arrived second used to lose: if the editor got here first it inserted an
-   * empty thread, and the explicit graduation then found the slot taken and
-   * silently did nothing, leaving the conversation that produced the workflow
-   * orphaned as an `onboarding` row nothing would ever open again.
-   *
-   * Doing it here as well removes the race rather than narrowing it: the server
-   * decides, at the one moment the answer is actually needed, and both paths
-   * are idempotent. Whoever gets here first performs the flip and the other
-   * finds it done.
-   */
-  const graduated = await graduateOnboarding(accountEmail, workflowId);
-  if (graduated) return graduated;
-
   const { data, error } = await db()
     .from("threads")
     .insert({
@@ -315,53 +301,40 @@ export async function threadForWorkflow(
 }
 
 /**
- * The account's onboarding thread, made on first use.
+ * A new workflow-building conversation, always empty, always new.
  *
- * Only ever one, and only before there is a workflow — once `graduateOnboarding`
- * has run, the row's `kind` is no longer `onboarding` and this makes a fresh one
- * for an account starting over with nothing. That is correct: a second first
- * run is a second first conversation.
+ * Create rather than get-or-create, and that is the fix rather than a
+ * simplification. This was `onboardingThread`, one per account: the second time
+ * anybody opened the builder they were handed the first run's transcript, and
+ * Craig answered a question about a new role by continuing a discussion about
+ * the company somebody had described the first time.
+ *
+ * Nothing is lost by starting fresh. The old conversation graduated into the
+ * workflow it produced and is reachable from that workflow, which is where
+ * somebody looking for it would go.
  */
-export async function onboardingThread(
+export async function startDraftThread(
   accountEmail: string,
   id: string,
   /* The Home conversation this was handed over from, when Craig offered the
-     door rather than the person navigating there themselves. Only ever set on
-     creation — a second visit does not rewrite where the first one came from. */
+     door rather than the person navigating there themselves. Recorded, never
+     copied — see `parent_thread_id` in the migration. */
   parentThreadId?: string,
 ): Promise<StoredThread | null> {
   const accountId = await accountIdFor(accountEmail);
   if (!accountId) return null;
-
-  const existing = await db()
-    .from("threads")
-    .select()
-    .eq("account_id", accountId)
-    .eq("kind", "onboarding")
-    .maybeSingle();
-  if (existing.data) return toThread(existing.data);
 
   const { data, error } = await db()
     .from("threads")
     .insert({
       id,
       account_id: accountId,
-      kind: "onboarding",
+      kind: "draft",
       parent_thread_id: parentThreadId ?? null,
     })
     .select()
     .maybeSingle();
-
-  if (error) {
-    const raced = await db()
-      .from("threads")
-      .select()
-      .eq("account_id", accountId)
-      .eq("kind", "onboarding")
-      .maybeSingle();
-    if (raced.data) return toThread(raced.data);
-    throw new Error(`Opening the onboarding thread failed: ${error.message}`);
-  }
+  if (error) throw new Error(`Starting the draft failed: ${error.message}`);
   return data ? toThread(data) : null;
 }
 
@@ -396,39 +369,31 @@ export async function startGodThread(
 }
 
 /**
- * The onboarding thread becomes the first workflow's thread.
+ * The conversation that produced a workflow becomes that workflow's own.
  *
- * This is the answer to a question that was left open, and it is the one the
- * rest of the product already implied. The onboarding conversation *is* the
- * workflow's origin story: every step in that draft exists because of something
- * said in it. Abandoning it would mean opening the workflow you just spent a
- * conversation producing and finding an empty transcript beside it — and
- * `store.ts` had already argued, for the single-transcript design, that
- * discovery and editing are one conversation. They are. That was the half of
- * the old behaviour worth keeping.
+ * Every step in a draft exists because of something said in the turns above it,
+ * so opening the workflow and finding an empty transcript beside it would throw
+ * away the only record of why it looks like that. A flip of the same row —
+ * `kind` and `workflow_id` together — never a copy: copying the turns would
+ * leave the same sentences in two places with no way to say which was edited.
  *
- * A flip rather than a copy: same row, same messages, `kind` and `workflow_id`
- * changed together. Copying the turns into a new thread would leave the same
- * sentences in two places with no way to say which was edited.
+ * Takes the thread *by id*. It used to take the account and find "the"
+ * onboarding thread, which worked precisely while there could only be one of
+ * those and became a coin toss the moment there could be several. The caller
+ * always knows which conversation it is in; asking the database to guess was
+ * the mistake.
  *
- * Nothing happens if this account never had an onboarding thread, or if that
- * workflow already has one of its own — both are ordinary, and neither is worth
- * failing a draft over.
+ * Silent about a thread that is already a workflow's, or belongs to somebody
+ * else, or has gone: all three are ordinary, and none is worth failing a draft
+ * over.
  */
-export async function graduateOnboarding(
+export async function graduateThread(
   accountEmail: string,
+  threadId: string,
   workflowId: string,
 ): Promise<StoredThread | null> {
   const accountId = await accountIdFor(accountEmail);
   if (!accountId) return null;
-
-  const { data: onboarding } = await db()
-    .from("threads")
-    .select()
-    .eq("account_id", accountId)
-    .eq("kind", "onboarding")
-    .maybeSingle();
-  if (!onboarding) return null;
 
   const { data: taken } = await db()
     .from("threads")
@@ -441,8 +406,9 @@ export async function graduateOnboarding(
   const { data, error } = await db()
     .from("threads")
     .update({ kind: "workflow", workflow_id: workflowId })
-    .eq("id", onboarding.id)
+    .eq("id", threadId)
     .eq("account_id", accountId)
+    .eq("kind", "draft")
     .select()
     .maybeSingle();
   if (error)

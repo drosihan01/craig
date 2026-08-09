@@ -80,12 +80,12 @@ export function WelcomeScreen({
       here. Recorded on the thread; nothing is copied out of it. */
   from?: string;
 }) {
-  /* The account's onboarding conversation, which is one per account and lives
-     until it graduates. Opening it here rather than letting the discovery
-     transcript sit in module state is what makes it survive a reload — and it
-     is the same row the first workflow inherits, so the conversation that
-     produced a draft is the one waiting beside it in the editor. */
-  useCraigThread("onboarding", undefined, from);
+  /* A new workflow-building conversation, every time. It is created on the
+     first thing typed rather than on arrival — see `useCraigThread` — so
+     opening the builder and changing your mind leaves nothing behind, and
+     opening it to describe a new role starts a new conversation instead of
+     resuming whichever old one the account happened to have. */
+  useCraigThread("draft", undefined, from);
   const { messages, send, phase, busy, error, drafted } = useCraigChat();
   const { gaps, facts, workflows } = useShowcase();
 

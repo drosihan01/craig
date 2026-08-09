@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { clearThread, setThread, showcaseState } from "./store";
-import { openThread, readThread } from "./thread-sync";
+import { openThread, readThread, rememberHandover } from "./thread-sync";
 
 /**
  * Which conversation this screen is holding.
@@ -14,13 +14,15 @@ import { openThread, readThread } from "./thread-sync";
  * The three kinds differ in when the thread comes into existence, and that
  * difference is the whole design rather than an implementation detail:
  *
- * - **workflow** and **onboarding** are opened on arrival, because they already
- *   exist or are about to and there is a transcript to read back. Coming to a
- *   workflow you built last month should find the conversation that built it.
- * - **god** is *not*. Home clears the screen and makes the thread on the first
- *   send. Opening a thread on arrival would mean an empty conversation in the
- *   history for every time somebody glanced at Home and left, and a history
- *   full of blanks is a history nobody opens.
+ * - **workflow** is opened on arrival, because it already exists and there is a
+ *   transcript to read back. Coming to a workflow you built last month should
+ *   find the conversation that built it.
+ * - **god** and **draft** are *not*. The screen starts empty and the thread is
+ *   made on the first send. Two reasons, and the second is the one that bit:
+ *   opening on arrival puts an empty conversation in the history every time
+ *   somebody glances and leaves; and for a draft it is the difference between
+ *   "a new conversation about a new workflow" and being handed whichever old
+ *   one the server happened to find.
  *
  * Nothing here fails loudly. A conversation that could not reach the server is
  * still a usable conversation on this device; what is lost is the other device
@@ -29,7 +31,7 @@ import { openThread, readThread } from "./thread-sync";
  */
 
 export function useCraigThread(
-  kind: "god" | "workflow" | "onboarding",
+  kind: "god" | "workflow" | "draft",
   workflowId?: string,
   /**
    * The conversation this one was handed over from, if any.
@@ -45,10 +47,14 @@ export function useCraigThread(
   React.useEffect(() => {
     let live = true;
 
-    if (kind === "god") {
-      /* A god thread is scoped to a moment. Arriving is a new conversation;
-         last night's is in history rather than in front of you. */
+    if (kind === "god" || kind === "draft") {
+      /* Both are scoped to a moment somebody started. Arriving is a new
+         conversation — last night's, or last week's workflow, is reachable
+         from its own place rather than sitting in front of you. */
       clearThread();
+      /* Held rather than written: the thread this belongs to does not exist
+         until something is typed into it. */
+      rememberHandover(parentThreadId ?? null);
       return () => {
         live = false;
       };
