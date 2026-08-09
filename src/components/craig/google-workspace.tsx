@@ -803,3 +803,43 @@ function ConnectLink({
     </a>
   );
 }
+
+/* --- The step's settings panel -------------------------------------------- */
+
+/**
+ * The Google Workspace step's settings, which are its connection and nothing
+ * else.
+ *
+ * This block used to ask for an email domain, who provisions it and when — all
+ * three of which describe decisions that are no longer anybody's to make here.
+ * The domain is whatever Google says the connected Workspace is, because a
+ * domain somebody types is a domain somebody can typo and the failure is
+ * silent; who provisions it is Craig, which is the entire point of the block;
+ * and when is where the step sits in the workflow. Three inputs with no effect
+ * is worse than none, because an admin who fills them in reasonably expects
+ * them to matter.
+ *
+ * So the space they took is now the one thing about this step that genuinely is
+ * a decision. The sentence above the card is about the *step* rather than the
+ * account, because that is what somebody is looking at: a step that cannot run
+ * is a different worry to an account that hasn't connected something, even
+ * though they are the same fact.
+ */
+export function GoogleStep({ account }: { account: WorkspaceAccount }) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-1">
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Connection
+        </p>
+        <p className="text-xs leading-relaxed text-text-muted">
+          I create the account in your company&apos;s Google Workspace, on
+          whatever domain it belongs to. Nothing else on this step needs
+          answering — but it can&apos;t run until that Workspace is connected.
+        </p>
+      </div>
+
+      <GoogleWorkspaceConnect account={account} />
+    </div>
+  );
+}
