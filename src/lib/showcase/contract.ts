@@ -58,6 +58,21 @@ export const HOME_PATH = "/";
 /** The first run, and only the first run. Home forwards to it when there is
     nothing to come home to. */
 export const WELCOME_PATH = "/welcome";
+
+/**
+ * Seats, and where Stripe sends somebody back to.
+ *
+ * A constant because the two places that need it are *outside* the app: the
+ * checkout session's cancel URL and the billing portal's return URL are built
+ * into strings we hand to Stripe, and they both still read `/showcase/people`
+ * long after that prefix was removed. Nothing caught it — a template literal
+ * does not match a search for the quoted path, and neither redirect is
+ * exercised by a build or by any screen, so the only way to find out was to
+ * cancel a real checkout and land on a 404.
+ *
+ * Named here so the next rename moves them with everything else.
+ */
+export const PEOPLE_PATH = "/people";
 export const SESSION_COOKIE = "craig_session";
 
 /* ---------------------------------------------------------------------- */
