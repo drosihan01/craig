@@ -55,6 +55,15 @@ import { AltRoute, Groups } from "@/components/ui/icons";
  * every screen that finds it empty. So the nav owns the sentence and a page
  * owns only the flag, and the second screen that needs to shut a row can't
  * invent a second wording for a door this file has already described.
+ *
+ * `hidden` is the stronger version of that, and it exists for exactly one
+ * moment: somebody's very first run, before they have anything at all. The
+ * argument above — that a shut door labelled with its reason beats a list that
+ * quietly grows — holds for an account with *some* history, where the rooms are
+ * real and merely empty. It does not hold for the first screen anybody sees,
+ * where two locked doors beside a stepper are two things to wonder about
+ * instead of one thing to do. So the first run gets the stepper and nothing
+ * else, and the rooms appear, unlocked, the moment there is something in them.
  */
 const ITEMS = [
   {
@@ -73,35 +82,44 @@ const ITEMS = [
 
 export function ShowcaseNav({
   disabled,
+  hidden,
   children,
 }: {
   /** Shuts both rows. See the note above `ITEMS`. */
   disabled?: boolean;
+  /** Removes both rows outright. First run only — see the note above `ITEMS`. */
+  hidden?: boolean;
   children?: React.ReactNode;
 }) {
   const pathname = usePathname();
 
   return (
     <div className="flex flex-col gap-5">
-      <NavTree>
-        {ITEMS.map((item) => (
-          <NavTreeItem
-            key={item.href}
-            href={item.href}
-            label={item.label}
-            icon={item.icon}
-            current={pathname.startsWith(item.href)}
-            disabled={disabled}
-            reason={item.shut}
-          />
-        ))}
-      </NavTree>
+      {!hidden && (
+        <NavTree>
+          {ITEMS.map((item) => (
+            <NavTreeItem
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              icon={item.icon}
+              current={pathname.startsWith(item.href)}
+              disabled={disabled}
+              reason={item.shut}
+            />
+          ))}
+        </NavTree>
+      )}
 
       {/* Page-specific detail sits under the nav, not instead of it — which
-          is exactly the mistake that stranded the setup screen. */}
+          is exactly the mistake that stranded the setup screen.
+
+          The separator goes with the rows it separates: with the nav hidden
+          there is nothing above this to divide it from, and a rule floating at
+          the top of an otherwise empty column reads as a missing section. */}
       {children && (
         <>
-          <Separator />
+          {!hidden && <Separator />}
           {children}
         </>
       )}
@@ -125,9 +143,21 @@ export function ShowcaseNav({
  * into the empty page while the expanded panel refused would make collapsing
  * the panel the way round the rule, and the two widths would be telling the
  * person two different things about the same account.
+ *
+ * `hidden` travels with it for exactly that reason. A first run that hid the
+ * rooms in the panel and kept them in the rail would put the whole point of
+ * hiding them one click away.
  */
-export function ShowcaseNavRail({ disabled }: { disabled?: boolean }) {
+export function ShowcaseNavRail({
+  disabled,
+  hidden,
+}: {
+  disabled?: boolean;
+  hidden?: boolean;
+}) {
   const pathname = usePathname();
+
+  if (hidden) return null;
 
   return (
     <NavRail>
