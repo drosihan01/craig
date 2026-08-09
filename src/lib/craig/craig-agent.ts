@@ -492,6 +492,17 @@ const draftWorkflow = tool<typeof draftWorkflowParams, Notebook>({
     if (notebook.editing)
       return "They already have a workflow open. Change that one with add_step, set_step_config or remove_step.";
 
+    /* The same refusal, for the screen rather than the moment.
+       `HOME_NOTE` already says he cannot draft here, and that was the whole
+       guard — while the two conditions that would let him do it anyway are
+       trivially met: `askedToDraft` matches "can you build me one for
+       contractors", which is an ordinary thing to say on Home, and nothing is
+       open there to trip the check above. So the one place a workflow must
+       never appear from was the one place only a paragraph was stopping it.
+       The door out of here is `offer_new_workflow`; see its note. */
+    if (notebook.home)
+      return "Not from Home. A workflow that appears out of a status conversation is one nobody watched being made. Call offer_new_workflow instead — it draws a button that takes them to the screen where workflows are built, and they can ask you there.";
+
     /* The person decides when it gets built, not him. Refused rather than
        discouraged in the prompt alone, because "do not do X unless asked" is
        exactly the kind of instruction a model follows four times out of five —
@@ -649,6 +660,60 @@ const setStepConfig = tool<typeof setStepConfigParams, Notebook>({
   },
 });
 
+const renameWorkflowParams = z.object({
+  name: z
+    .string()
+    .describe(
+      "What to call it, in their words. The role or the company — 'Designer onboarding', 'Contractor onboarding' — never the person who happens to be starting first.",
+    ),
+});
+
+/** A header, a list row and a delete confirmation all have to show it. */
+const MAX_NAME_CHARS = 60;
+
+/**
+ * Change what the workflow is called.
+ *
+ * This exists because of the worst bug this product has had. Asked to rename a
+ * workflow, Craig replied "The workflow has been named 'aus workflow'" — and
+ * nothing happened, because nothing in the product could rename a workflow at
+ * all. Not him, not the editor, not the list. The name was fixed at birth, and
+ * he narrated the helpful-sounding thing rather than the true one.
+ *
+ * The prompt now forbids claiming an action he has not taken, which is the
+ * general fix and the important one. This is the specific half: a name is a
+ * thing people say out loud about a workflow — "call this the designer one" —
+ * and answering "I can't" to something that ordinary, on the one screen where
+ * he is meant to be doing the editing, is a worse product than one that can.
+ *
+ * Only when asked. A name he improved on his own initiative is a row somebody
+ * no longer recognises in their own list.
+ */
+const renameWorkflow = tool<typeof renameWorkflowParams, Notebook>({
+  name: "rename_workflow",
+  description:
+    "Change what the workflow they have open is called, when they ask — 'call this the designer one', 'rename it to Contractor onboarding'. Only when they have asked: a name you improved on your own is a row they no longer recognise in their own list. Name it for the role or the company, never for the person starting first.",
+  parameters: renameWorkflowParams,
+  execute: ({ name }, context) => {
+    const notebook = notebookOf(context);
+    const open = notebook.editing;
+    if (!open) return noWorkflow;
+
+    const next = name.replace(/\s+/g, " ").trim().slice(0, MAX_NAME_CHARS);
+    if (!next) return "That isn't a name. Ask them what to call it.";
+
+    /* A rename to what it is already called is agreement, not an edit. The
+       store refuses it too — belt and braces, because only one of the two is
+       reading a name it was told rather than the one on the canvas. */
+    if (open.name && next === open.name) {
+      return `It's already called ${next}. Nothing to change.`;
+    }
+
+    notebook.edits.push({ type: "renamed", name: next });
+    return `Renamed to ${next}. ${openSummary(open)}`;
+  },
+});
+
 const removeStep = tool<typeof removeStepParams, Notebook>({
   name: "remove_step",
   description:
@@ -729,9 +794,13 @@ export interface ToolActivity {
  * The editing tools produce nothing here on purpose: their result depends on
  * the workflow rather than only on the arguments, so they push onto the
  * notebook as they run and the route drains that instead. `notebook` is passed
- * anyway for the one thing this function does need to know about the workflow —
- * whether there is one, which decides if a stray `draft_workflow` is allowed to
- * put a second one in the account.
+ * anyway for the two things this function does need — whether a workflow is
+ * open, and which screen this is. Both decide whether a call *counted*, and
+ * this half of a tool runs before `execute` can refuse it: without them a stray
+ * `draft_workflow` puts a second workflow in the account, and an
+ * `offer_new_workflow` from the editor draws a button the tool itself said no
+ * to. Anything that arrives from here has already happened as far as the client
+ * is concerned, so the two halves have to agree.
  */
 export function describeToolCall(
   name: string,
@@ -751,11 +820,24 @@ export function describeToolCall(
     typeof args[key] === "string" ? (args[key] as string).trim() : "";
 
   switch (name) {
+    case "rename_workflow": {
+      const name = text("name");
+      return {
+        phase: "Renaming the workflow",
+        label: name ? `Renaming to ${name}` : "Renaming the workflow",
+      };
+    }
     case "offer_new_workflow":
       return {
         phase: "Working out what that needs",
         label: "Offering a new workflow",
-        offer: "new-workflow",
+        /* Withheld off Home, matching the refusal in `execute` — the same rule
+           `draft_workflow` follows below and for the same reason. This half
+           runs off the call event and the refusal happens later, so a call made
+           in the editor used to draw the button anyway: the tool said no, the
+           screen said yes, and the person got a control offering to start a
+           workflow while they were standing in one. */
+        offer: notebook?.home ? "new-workflow" : undefined,
       };
     case "note_gap": {
       const what = text("what");
@@ -818,10 +900,18 @@ export function describeToolCall(
            there is one draft rather than two that agree by luck.
            Withheld when a workflow is already open, matching the refusal in
            `execute`: he is meant to edit that one, and the two halves of this
-           tool must not disagree about whether the call counted. */
-        workflow: notebook?.editing
-          ? undefined
-          : parseDraft(args, notebook?.simpleDraft),
+           tool must not disagree about whether the call counted.
+
+           Withheld on Home for the same reason and a worse consequence. That
+           refusal is newer than this line, and until it existed the screen was
+           the only thing standing between a status conversation and a workflow
+           arriving in the account — except it isn't standing anywhere, because
+           this half runs off the call event and hands the client real blocks
+           before `execute` gets a say. */
+        workflow:
+          notebook?.editing || notebook?.home
+            ? undefined
+            : parseDraft(args, notebook?.simpleDraft),
       };
     case "add_step":
       return { phase: "Adding a step", label: "Adding a step" };
@@ -980,12 +1070,24 @@ export function splitCitations(buffered: string): {
  * somebody who came to ask whether Irena's account had been made. The absence
  * of a workflow means two different things now, and this is the sentence that
  * tells them apart.
+ *
+ * The paragraph about not having been told is the same fix as the one in
+ * `craig-prompt.ts` for claiming work he didn't do, arriving from the other
+ * direction. This note tells him to answer about people, seats and runs, and
+ * `ChatRequest` carries none of those — no seat list, no step progress, no
+ * activity — so the instruction on its own is an invitation to invent a status,
+ * which is the one kind of sentence somebody would act on without checking.
+ * Whether he should be handed that data is a real question with a cost attached;
+ * until it is, saying plainly that he hasn't got it is the honest half and it is
+ * free.
  */
 const HOME_NOTE = `## Where you are
 
 This is Home. They are not building anything right now; they came to find out what is going on, or to get something moving.
 
-Answer about their people and their account: who is waiting on what, what has run, what failed. Short, and about the specific person or thing they asked about.
+Answer about their people and their account — who is waiting on what, what has run, what failed — out of what you have actually been told. Short, and about the specific person or thing they asked about.
+
+**You have not been given any of it.** Nobody's seat, nobody's steps, nothing that has run and nothing that has failed reaches you here. If the answer is not somewhere in this conversation then you do not have it, and you must say so rather than produce a likely-sounding one: People has the list, and a person's own page has every step and where it got to. A made-up "her account was set up on Tuesday" is indistinguishable from the real thing to the person reading it, and being able to trust that sentence is the entire product.
 
 **Do not interview them.** Discovery — what you sell, who does what — belongs on the screen where a workflow gets built, and running it here means asking a returning admin to re-explain a company you already have notes on.
 
@@ -1044,6 +1146,7 @@ export const craig = new Agent<Notebook>({
     recall,
     offerNewWorkflow,
     draftWorkflow,
+    renameWorkflow,
     addStep,
     setStepConfig,
     removeStep,

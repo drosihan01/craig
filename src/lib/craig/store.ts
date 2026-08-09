@@ -379,6 +379,32 @@ export function applyEdit(id: string, edit: WorkflowEdit) {
   if (!workflow) return;
   const blocks = workflow.blocks;
 
+  /**
+   * The only edit that isn't about a block.
+   *
+   * Not through `setWorkflowBlocks` — there are no blocks to write — but
+   * `pending` is cleared the same way and for the same reason: naming a
+   * workflow you started from blank is a real edit, and one thrown away on the
+   * next load because nothing happened to touch its steps would be a rename
+   * that silently didn't happen. Which is the bug this whole edit exists to
+   * stop.
+   *
+   * A rename to the name it already has does nothing, so that Craig agreeing
+   * with somebody — "yes, it's called that" — cannot land in the activity feed
+   * as a change nobody made.
+   */
+  if (edit.type === "renamed") {
+    const name = edit.name.trim();
+    if (!name || name === workflow.name) return;
+    set({
+      workflows: state.workflows.map((w) =>
+        w.id === id ? { ...w, name, pending: undefined } : w,
+      ),
+    });
+    logActivity({ verb: "Renamed", what: `${workflow.name} to ${name}` });
+    return;
+  }
+
   if (edit.type === "step-added") {
     if (blocks.some((b) => b.id === edit.block.id)) return;
     const at = edit.after
@@ -822,6 +848,7 @@ export function openWorkflow(
 
   return {
     id: workflow.id,
+    name: workflow.name,
     outstanding: outstanding?.length ? outstanding : undefined,
     steps: workflow.blocks.flatMap((b) =>
       b.kind === "trigger" || !b.preset
