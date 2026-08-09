@@ -70,6 +70,28 @@ export interface ShowcaseWorkflow {
    * that costs you two seconds every time you come back to it.
    */
   revealedAt?: string;
+  /**
+   * Started from the blank button and not yet touched.
+   *
+   * A blank workflow is created the instant somebody presses "Start blank",
+   * because the editor renders from the store and there has to be something for
+   * it to render. That is fine right up until they change their mind: pressing
+   * back is confirmed and throws it away, but closing the tab, using the
+   * browser's own back button, or simply wandering off is not — and every one
+   * of those used to leave a row called "New workflow" in the list, holding
+   * nothing but the trigger every workflow starts with.
+   *
+   * So it exists locally and is not durable. Nothing pending is ever synced, so
+   * it is gone on the next load however somebody leaves; the first real edit
+   * clears the flag and it becomes an ordinary workflow that saves like any
+   * other.
+   *
+   * A flag rather than "has no steps", which is the tempting test and is wrong:
+   * deleting the last step of a real, published workflow would look identical,
+   * and this would quietly stop saving the one workflow somebody is actively
+   * emptying on purpose.
+   */
+  pending?: boolean;
 }
 
 /**
@@ -322,7 +344,13 @@ export function addWorkflow(workflow: ShowcaseWorkflow) {
  */
 export function setWorkflowBlocks(id: string, blocks: WorkflowBlock[]) {
   set({
-    workflows: state.workflows.map((w) => (w.id === id ? { ...w, blocks } : w)),
+    workflows: state.workflows.map((w) =>
+      /* The first edit is what makes a blank workflow real — see `pending`.
+         Cleared here rather than at each call site because every route into
+         changing a workflow comes through this one function, including Craig's
+         own edits, and a second place to remember would be a place to forget. */
+      w.id === id ? { ...w, blocks, pending: undefined } : w,
+    ),
   });
 }
 
@@ -459,6 +487,7 @@ export function createBlankWorkflow(): ShowcaseWorkflow {
     blocks: [blankTrigger()],
     createdAt: now,
     revealedAt: now,
+    pending: true,
   };
 
   /* Not `addWorkflow` — that one logs "Drafted … from what you told me",
@@ -568,8 +597,26 @@ export function setThread(threadId: string, messages: CraigMessage[]) {
      closed. Left in place, the first write to this one would send only the
      turns that happen to differ from the previous conversation's. */
   forgetThreadSync();
-  set({ threadId, messages });
+  set({ threadId, messages, ...clearedNotes() });
 }
+
+/**
+ * The notes belong to the conversation, not to the account.
+ *
+ * `gaps` and `facts` are what Craig worked out *while talking to you*, and they
+ * were global for as long as there was only one conversation to be in. With
+ * threads that became wrong twice over: the strength meter beside a brand-new
+ * discovery showed everything he had ever recorded, so it opened near full and
+ * never moved; and the notes travel back to him each turn as "what you already
+ * know", so he was handed another conversation's facts about another workflow
+ * and answered as though he had been told them here.
+ *
+ * Cleared on every deliberate change of thread. Not restored, because they are
+ * not stored per thread yet — that is a real gap and the honest state of it is
+ * an empty meter that fills as you talk, rather than a full one describing a
+ * conversation you are not having.
+ */
+const clearedNotes = () => ({ gaps: [], facts: [] });
 
 /**
  * Attach the conversation already on screen to a thread that has just been made.
@@ -602,7 +649,7 @@ export function adoptThread(threadId: string) {
 export function clearThread() {
   if (state.threadId === null && state.messages.length === 0) return;
   forgetThreadSync();
-  set({ threadId: null, messages: [] });
+  set({ threadId: null, messages: [], ...clearedNotes() });
 }
 
 /**

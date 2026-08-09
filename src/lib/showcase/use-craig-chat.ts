@@ -101,6 +101,15 @@ export interface CraigChat {
    * Null until it happens, and it only ever happens once per conversation.
    */
   drafted: string | null;
+  /**
+   * Craig has offered a door to somewhere he cannot go himself.
+   *
+   * Only ever `"new-workflow"` today: Home has no drafting tool, so when what
+   * somebody describes needs a workflow that does not exist, the answer is a
+   * control rather than a canvas. Cleared by the next send, because it belongs
+   * to the turn that offered it.
+   */
+  offer: "new-workflow" | null;
 }
 
 /** Nothing here is persisted, so a counter is enough and stays stable in SSR. */
@@ -139,6 +148,9 @@ export function useCraigChat(
   /* What the screen already knows is blocking publication, so his answer to
      "what's left?" is the same as the one on screen beside him. */
   outstanding?: string[],
+  /* Home. Both this and discovery send no workflow, and they want opposite
+     tools — see `HOME_NOTE` in `craig-agent.ts`. */
+  home = false,
 ): CraigChat {
   /* Through a ref so `send` keeps one identity. It changes whenever a field is
      answered, and rebuilding the callback on every keystroke would remount the
@@ -153,6 +165,7 @@ export function useCraigChat(
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [drafted, setDrafted] = React.useState<string | null>(null);
+  const [offer, setOffer] = React.useState<"new-workflow" | null>(null);
 
   const abortRef = React.useRef<AbortController | null>(null);
 
@@ -190,6 +203,9 @@ export function useCraigChat(
       }
 
       setError(null);
+      /* Cleared per turn. The door belongs to the answer that offered it — left
+         standing, it would sit under a later reply about something else. */
+      setOffer(null);
       setBusy(true);
       setPhase(null);
       setTools([]);
@@ -229,6 +245,7 @@ export function useCraigChat(
                 ? openWorkflow(workflowId, outstandingRef.current)
                 : undefined,
               simpleDraft: store.simpleDraft,
+              home,
             }),
           });
 
@@ -352,6 +369,8 @@ export function useCraigChat(
                       : t,
                   );
                 });
+              } else if (event.type === "offer") {
+                setOffer(event.offer);
               } else if (event.type === "error") {
                 setError(event.message);
               }
@@ -368,8 +387,8 @@ export function useCraigChat(
         finish();
       })();
     },
-    [workflowId],
+    [workflowId, home],
   );
 
-  return { messages, send, phase, notes, tools, busy, error, drafted };
+  return { messages, send, phase, notes, tools, busy, error, drafted, offer };
 }

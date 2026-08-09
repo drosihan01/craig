@@ -54,7 +54,20 @@ import {
  */
 
 export function WorkflowList({ user }: { user: Session }) {
-  const { workflows } = useShowcase();
+  const store = useShowcase();
+  /**
+   * Everything except a blank somebody started and has not touched.
+   *
+   * Pressing "Start blank" has to create a workflow immediately, because the
+   * editor renders from the store and needs something to render. Until the
+   * first edit that workflow is not real — it is not synced, and it is gone on
+   * the next load — so listing it here would be this screen making a promise
+   * the rest of the product does not keep. See `pending` in `store.ts`.
+   */
+  const workflows = React.useMemo(
+    () => store.workflows.filter((w) => !w.pending),
+    [store.workflows],
+  );
   const [choosing, setChoosing] = React.useState(false);
 
   /**

@@ -7,7 +7,11 @@ import {
 } from "@/lib/showcase/contract";
 import { currentUser } from "@/lib/showcase/current-user";
 import { getAccount } from "@/lib/showcase/accounts";
-import { createJoiner, stepsFromBlocks } from "@/lib/showcase/joiners";
+import {
+  createJoiner,
+  deleteJoiner,
+  stepsFromBlocks,
+} from "@/lib/showcase/joiners";
 import { createJoinerToken } from "@/lib/showcase/joiner-session";
 import { rateLimit } from "@/lib/showcase/rate-limit";
 import { findTemplate, SENDER } from "@/lib/email";
@@ -456,6 +460,75 @@ function originOf(request: Request): string {
 const refuse = (error: string, status: number) =>
   NextResponse.json({ ok: false, error }, { status, headers: noStore });
 
+/* --- Taking the seat back when the invitation never leaves ------------------ */
+
+/**
+ * Undo the row, and say honestly whether it went.
+ *
+ * The compensating half of the create-then-send order below. It is the only
+ * thing standing between a failed send and a person sitting in People holding a
+ * seat, a workflow snapshot and a magic link that nobody ever received — so
+ * what matters most about it is that it cannot itself throw. A cleanup that
+ * fails the request it is cleaning up after would replace a leaked row with a
+ * leaked row *and* an unhandled 500, which is strictly worse.
+ *
+ * `false` covers both ways of not knowing: a store that refused, and a delete
+ * that matched nothing. The second is a contradiction — this id came back from
+ * an insert seconds ago — and the pessimistic reading is the right one, because
+ * the only cost of claiming a seat might be left behind is that somebody looks
+ * at People and finds it already tidy.
+ *
+ * One attempt, deliberately. The failure this is guarding against is almost
+ * never independent: the reason the send didn't land is usually that this
+ * process can't reach anything right now, and Supabase is the other thing it
+ * can't reach. A retry fifty milliseconds later fails with it, and the request
+ * is already up to ten seconds old with somebody watching a spinner. What makes
+ * this recoverable is not a second attempt — it is the log line here and the
+ * sentence in the response, which together turn an invisible leak into a row
+ * somebody has been told to remove.
+ */
+async function withdrawSeat(joinerId: string): Promise<boolean> {
+  try {
+    const removed = await deleteJoiner(joinerId);
+    if (!removed) {
+      console.error(
+        `[showcase/invite] seat ${joinerId} was created and then not found to remove`,
+      );
+    }
+    return removed;
+  } catch (cause) {
+    /* The id is the whole point of this line. Without it the leak is a fact
+       with no address; with it, whoever reads the log can remove exactly one
+       row. */
+    console.error(
+      `[showcase/invite] left a seat behind for joiner ${joinerId}:`,
+      cause,
+    );
+    return false;
+  }
+}
+
+/**
+ * What the admin is told about the state of their own account.
+ *
+ * Appended to whatever went wrong rather than replacing it, because the two
+ * halves answer different questions: the provider's sentence says why no email
+ * went out, and this says whether the server is now as they left it. A failure
+ * message that only answered the first would leave the second to be discovered
+ * by scrolling People, which is exactly how the leak this route used to have
+ * stayed invisible.
+ *
+ * The unhappy sentence names the person and names the fix, because it is the
+ * only notice anybody will ever get: nothing else in the product knows this
+ * row is wrong, and a row that looks like every other seat is not something
+ * anybody would think to delete a week later.
+ */
+function aftermath(removed: boolean, name: string): string {
+  return removed
+    ? "No seat was taken and nothing was left behind, so you can invite them again once that's sorted."
+    : `${name}'s seat was created before the email failed and couldn't be taken back — remove them from People before inviting them again, or they'll hold a seat against an invitation nobody received.`;
+}
+
 export async function POST(request: Request) {
   const session = await currentUser();
   if (!session) return refuse("Not signed in.", 401);
@@ -565,17 +638,61 @@ export async function POST(request: Request) {
     return refuse("The invitation template is missing.", 500);
   }
 
-  /* The person exists before the email does, and it has to be that way round:
-     the link is derived from their id, so there is nothing to put in the message
-     until the record is written. The cost is an honest one — a send that fails
-     after this leaves a joiner nobody was told about.
-
-     That is the better of the two failures. The alternative is an email
-     carrying a link to a person who doesn't exist, which fails in the new
-     starter's hands a week later with nothing anybody can do about it; this one
-     fails in the admin's hands immediately, says so, and is fixed by inviting
-     them again. The client only writes the person into People on success, so a
-     failed send doesn't put a row in front of anybody either. */
+  /**
+   * The person exists before the email does, and everything from here to the
+   * send is inside a guard that takes them back out again.
+   *
+   * The order is forced: the link is derived from their id, so there is nothing
+   * to put in the message until the record is written. What is *not* forced is
+   * what happens when the message then doesn't go, and this route used to get
+   * that wrong in a way that was invisible for a good reason. The argument that
+   * stood here said a leftover joiner was the cheaper failure because "the
+   * client only writes the person into People on success" — and while the store
+   * was a JSON file that died with the process, that was true. It is Supabase
+   * now, People is rendered from `listJoiners` on the server, and the row is
+   * therefore a person: in the list, holding one of five seats, carrying a magic
+   * link that reached nobody, and unfixable by anyone who doesn't already know
+   * they are looking at rubbish. Inviting them again makes a second one.
+   *
+   * So: create, send, and delete the row if the send fails. The two rejected
+   * alternatives are worth writing down because both are defensible and neither
+   * survives being costed.
+   *
+   * *Send first, then create.* Buildable — mint the UUID here instead of letting
+   * Postgres do it, sign the token against it, send, then insert with that id.
+   * It fails worse. A single store failure after a successful send puts a real
+   * invitation in a stranger's inbox pointing at a joiner that does not exist,
+   * and it leaves this route with nothing true to say: the send succeeded, so
+   * "it didn't send" is a lie, and "it sent" promises a link that 404s. The
+   * order below needs *two* independent failures to reach a comparably bad
+   * state, and it always has something honest to report.
+   *
+   * *A status column — write the row `pending`, flip it to `invited` on
+   * success.* This is the right answer for a system that wants an audit trail of
+   * attempts, and it is the wrong one here. It is a schema change plus a new
+   * rule that every existing reader of the table has to learn — the seat count
+   * on the home page, People, the workflow editor's seat list, `outstanding.ts`,
+   * the paywall — and the first reader that forgets to filter reproduces
+   * precisely this bug wearing a new column. A row that exists or doesn't needs
+   * no reader to be taught anything.
+   *
+   * The guard starts *here* rather than around `sendEmail`, and that is not
+   * tidiness. `createJoinerToken` throws outright when `SESSION_SECRET` is
+   * missing, and a throw between the insert and the send leaves exactly the same
+   * orphan through a different door — one that would never have shown up in a
+   * fix aimed only at a failed send. The window that has to be closed is "the
+   * row exists and the invitation hasn't left", not "sendEmail returned false".
+   *
+   * What this trade costs, stated plainly rather than buried: the delete can
+   * revoke an invitation that actually arrived. `unreachable` reports "nothing
+   * was sent", which is optimistic for a ten-second timeout, and a 200 with no
+   * id may well have delivered. In those cases a real person ends up holding a
+   * dead link. That is still the better half, twice over — the link fails
+   * *closed*, which is the only acceptable direction for a bearer credential we
+   * have lost track of, and the admin has already been told to invite again,
+   * which produces a working one. The leftover row fails open and is fixed by
+   * nobody, because nobody knows it is there.
+   */
   const joiner = await createJoiner({
     email: to,
     name,
@@ -590,55 +707,79 @@ export async function POST(request: Request) {
     steps,
   });
 
-  /* The credential, and the only one they will ever have. Built after the
-     record so it can name it, and never derived from anything in the request —
-     an address, a name and a start date are all things somebody else could
-     know, and a link guessable from them would be a link anybody who knows a
-     new starter's details could walk in through. */
-  const token = await createJoinerToken(joiner.id);
-  const link = `${originOf(request)}${JOIN_PATH}?token=${encodeURIComponent(token)}`;
+  /* Built rather than sent, so that the one `catch` below covers minting the
+     credential and rendering the copy as well as the send itself — see the
+     window described above. `null` is the only thing that leaves this block on
+     a failure, because there is nothing partial worth carrying forward. */
+  let message: {
+    subject: string;
+    html: string;
+    text: string;
+    fromName: string;
+  } | null = null;
 
-  /* Every token in the vocabulary, not merely the ones this template reads
-     today. `render` fills anything absent from the *preview's* fixtures — so a
-     token left out here doesn't arrive blank, it arrives as a stranger's name
-     in somebody's real welcome email, and it does that the day the copy gains a
-     merge field rather than the day anyone changes this file.
+  try {
+    /* The credential, and the only one they will ever have. Built after the
+       record so it can name it, and never derived from anything in the request —
+       an address, a name and a start date are all things somebody else could
+       know, and a link guessable from them would be a link anybody who knows a
+       new starter's details could walk in through. */
+    const token = await createJoinerToken(joiner.id);
+    const link = `${originOf(request)}${JOIN_PATH}?token=${encodeURIComponent(token)}`;
 
-     Which is why the two with nothing real behind them at invite time are
-     supplied empty. An invitation with a visible gap in it is a bug somebody
-     reports; an invitation naming a person from a demo company reads as
-     correct.
+    /* Every token in the vocabulary, not merely the ones this template reads
+       today. `render` fills anything absent from the *preview's* fixtures — so a
+       token left out here doesn't arrive blank, it arrives as a stranger's name
+       in somebody's real welcome email, and it does that the day the copy gains a
+       merge field rather than the day anyone changes this file.
 
-     `step` and `owner` are those two: an invitation is about the whole
-     onboarding rather than about any one step of it, and nobody owns it but the
-     person receiving it. The invitation copy is written not to use either, and
-     supplying them empty is what makes that a choice rather than a dependency —
-     a template that starts using one gets a blank, which is visible, instead of
-     Jason's name, which isn't. */
-  const values = {
-    first_name: name.split(" ")[0],
-    full_name: name,
-    company: account.company,
-    role,
-    start_date: startDate,
-    sender: session.name,
-    workflow: workflowName,
-    step: "",
-    owner: "",
-    link,
-  };
+       Which is why the two with nothing real behind them at invite time are
+       supplied empty. An invitation with a visible gap in it is a bug somebody
+       reports; an invitation naming a person from a demo company reads as
+       correct.
 
-  const { subject, html, text } = renderEmail(template, values);
-  const fromName = SENDER.name(account.company);
+       `step` and `owner` are those two: an invitation is about the whole
+       onboarding rather than about any one step of it, and nobody owns it but the
+       person receiving it. The invitation copy is written not to use either, and
+       supplying them empty is what makes that a choice rather than a dependency —
+       a template that starts using one gets a blank, which is visible, instead of
+       Jason's name, which isn't. */
+    const values = {
+      first_name: name.split(" ")[0],
+      full_name: name,
+      company: account.company,
+      role,
+      start_date: startDate,
+      sender: session.name,
+      workflow: workflowName,
+      step: "",
+      owner: "",
+      link,
+    };
 
-  const result = await sendEmail({
-    to,
-    bcc: BCC,
-    subject,
-    html,
-    text,
-    fromName,
-  });
+    const rendered = renderEmail(template, values);
+    message = { ...rendered, fromName: SENDER.name(account.company) };
+  } catch (cause) {
+    /* Server-side and nobody's fault but this deployment's — a missing
+       `SESSION_SECRET` is the realistic one. The reason goes to the log rather
+       than the browser for the same reason Resend's words do: it names an
+       environment variable. */
+    console.error("[showcase/invite] couldn't build the invitation:", cause);
+  }
+
+  if (!message) {
+    const removed = await withdrawSeat(joiner.id);
+    return NextResponse.json(
+      {
+        ok: false,
+        seatRemoved: removed,
+        error: `The invitation couldn't be prepared, so nothing was sent. ${aftermath(removed, name)}`,
+      },
+      { status: 500, headers: noStore },
+    );
+  }
+
+  const result = await sendEmail({ to, bcc: BCC, ...message });
 
   /* Counted here, against the ceiling checked at the top — after Resend has
      accepted it, because this is a cap on mail that went out rather than on
@@ -646,6 +787,13 @@ export async function POST(request: Request) {
   if (result.ok) recordSend(session.email);
 
   if (!result.ok) {
+    /* The seat goes back before the failure is reported, so that by the time
+       anybody reads the sentence it is already true. Unconditional on the
+       reason: `sendEmail`'s taxonomy is about what to *fix*, not about whether
+       a message was delivered, and there is no value of `reason` that means
+       "keep the row". */
+    const removed = await withdrawSeat(joiner.id);
+
     /* Configuration this deployment got wrong is a 500 — the caller did nothing
        unusual and can't fix it by asking differently. A provider that refused
        or vanished is a 502. Neither ever carries Resend's own words. */
@@ -657,7 +805,16 @@ export async function POST(request: Request) {
           : 500;
 
     return NextResponse.json(
-      { ok: false, reason: result.reason, error: result.message },
+      {
+        ok: false,
+        reason: result.reason,
+        /* Two sentences, because there are two things they need: why no email
+           went out, and whether anything is left on their account because of
+           it. `seatRemoved` says the same thing in a form a client can branch
+           on without reading prose. */
+        error: `${result.message} ${aftermath(removed, name)}`,
+        seatRemoved: removed,
+      },
       {
         status,
         headers: result.retryAfter
@@ -694,8 +851,8 @@ export async function POST(request: Request) {
          again here. Two ways of writing the same header is how a response comes
          to describe a message that wasn't sent — and this one is shown to the
          admin as evidence of what a stranger received. */
-      from: fromHeader(fromName, SENDER.address),
-      subject,
+      from: fromHeader(message.fromName, SENDER.address),
+      subject: message.subject,
       person: { name, role, startDate },
       workflow: { id: workflowId, name: workflowName },
     },

@@ -35,9 +35,18 @@ import { safeCompany } from "./sign-up";
  * enforce it now, which is stronger than the in-memory check ever was.
  */
 
-/** The one provider this generalised table holds today. The next block adds a
-    string here, not a table. */
-const GOOGLE_PROVIDER = "google-workspace";
+/**
+ * The one provider this generalised table holds today. The next block adds a
+ * string here, not a table.
+ *
+ * Exported since `google-watch.ts` queries `connections` directly — it needs
+ * the row's *id* to hang a push channel off, which nothing this file returns
+ * carries. A second copy of the string over there would be a filter that
+ * silently matches nothing the day this one is renamed, and the way anybody
+ * would find out is a customer's notification channel quietly never being
+ * created.
+ */
+export const GOOGLE_PROVIDER = "google-workspace";
 
 /**
  * What a screen may know about somebody's Google Workspace connection.

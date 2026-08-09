@@ -12,6 +12,7 @@ import {
 } from "@/lib/showcase/accounts";
 import { currentUser } from "@/lib/showcase/current-user";
 import { GOOGLE_CALLBACK_PATH } from "@/lib/showcase/google-outcome";
+import { stopWatch } from "@/lib/showcase/google-watch";
 
 /**
  * What the connect screen reads, and the button that undoes a connection.
@@ -135,6 +136,21 @@ export async function DELETE() {
       { status: 401, headers: noStore },
     );
   }
+
+  /* Told to stop before the token it would be stopped with is deleted, and
+     awaited rather than deferred — this is the one ordering in the feature that
+     cannot be rearranged. `channels.stop` is an authenticated call on the
+     customer's own connection, so once the row is gone there is no credential
+     left anywhere with which to cancel the subscription; the channel would keep
+     delivering for up to a week to a tenant that has just revoked us, and each
+     delivery would spend a lookup finding out it no longer has permission to
+     ask. Deferring it to `after` has the same problem for the same reason.
+
+     One Google round trip on a button press, which is the cost. It is a rare
+     and deliberate press, and it never blocks: `stopWatch` swallows every
+     failure, because a disconnect that refused because Google was slow would be
+     a customer unable to revoke us. */
+  await stopWatch(session.email);
 
   /* Only ever this session's own account. The email comes from the signed
      cookie and never from the request, so there is no spelling of this call

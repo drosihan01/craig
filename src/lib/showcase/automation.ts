@@ -616,12 +616,23 @@ export type ReconcileOutcome =
 /**
  * Find out where a seat actually stands, without changing anything.
  *
- * A poll rather than a webhook, and the trade is worth stating. Google can push
- * directory changes, but a push receiver needs a public HTTPS endpoint, a
- * channel registered per tenant, and that channel renewed before it expires —
- * three pieces of standing infrastructure for an event that happens once per
- * new starter. A read, taken when somebody looks, costs one request against a
- * quota measured in thousands and needs nothing that has to be kept alive.
+ * A poll, and no longer the only thing that asks. The argument this comment
+ * used to make against a webhook was that a push receiver needs a public HTTPS
+ * endpoint, a channel registered per tenant, and that channel renewed before it
+ * expires — three pieces of standing infrastructure for an event that happens
+ * once per new starter. Those three pieces exist now, in
+ * `api/google/notifications/route.ts` and `lib/showcase/google-watch.ts`, and
+ * what they do when a notification arrives is call this function. That is the
+ * whole design: push decides *when* the question is worth asking, and every rule
+ * about what the answer means stays here, in one place, where a second
+ * implementation cannot drift away from it.
+ *
+ * The poll stays exactly as it was, deliberately. Push is best-effort at both
+ * ends — a channel can lapse, a delivery can be dropped, a renewal sweep can be
+ * late, and a deployment may have no public address at all — while a read taken
+ * when somebody looks costs one request against a quota measured in thousands
+ * and needs nothing kept alive. After a notification it nearly always finds the
+ * work already done, which is what a safety net should look like.
  *
  * Two questions, and they are asked of the same call:
  *

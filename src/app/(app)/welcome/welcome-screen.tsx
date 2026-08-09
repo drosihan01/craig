@@ -71,13 +71,21 @@ import { useCraigThread } from "@/lib/showcase/use-craig-thread";
  */
 const BACK = "/workflows";
 
-export function WelcomeScreen({ user }: { user: Session }) {
+export function WelcomeScreen({
+  user,
+  from,
+}: {
+  user: Session;
+  /** The Home conversation Craig offered this from, if that is how they got
+      here. Recorded on the thread; nothing is copied out of it. */
+  from?: string;
+}) {
   /* The account's onboarding conversation, which is one per account and lives
      until it graduates. Opening it here rather than letting the discovery
      transcript sit in module state is what makes it survive a reload — and it
      is the same row the first workflow inherits, so the conversation that
      produced a draft is the one waiting beside it in the editor. */
-  useCraigThread("onboarding");
+  useCraigThread("onboarding", undefined, from);
   const { messages, send, phase, busy, error, drafted } = useCraigChat();
   const { gaps, facts, workflows } = useShowcase();
 
@@ -124,8 +132,12 @@ export function WelcomeScreen({ user }: { user: Session }) {
    * stepper introduces the product, which somebody on their second workflow
    * has already had; and the way out only exists once there is somewhere to go
    * back to. See the nav below.
+   *
+   * A blank somebody started and abandoned does not count. It is not synced and
+   * will not survive the next load — see `pending` in `store.ts` — so treating
+   * it as history would offer a back link to a list that is about to be empty.
    */
-  const returning = workflows.length > 0;
+  const returning = workflows.some((w) => !w.pending);
 
   /**
    * A workflow appearing is the end of this screen.

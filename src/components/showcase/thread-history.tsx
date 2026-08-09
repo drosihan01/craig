@@ -54,9 +54,17 @@ export function ThreadHistory() {
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-2 px-2 pb-1">
+      {/* A fixed height rather than one the button decides.
+
+          "New" comes and goes with whether there is a conversation open, and
+          while the row sized itself to its contents that made the whole list
+          jump a few pixels every time somebody started or left one — a shift
+          under the pointer, on the rows you are trying to click. `h-6` is the
+          taller of the two states, so the label sits still and the button
+          appears inside a space already reserved for it. */}
+      <div className="flex h-6 items-center justify-between gap-2 px-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Earlier
+          Recents
         </p>
         {/* Only once there is something to come back to. On a screen whose
             conversation is already empty, "New" is a button that does nothing
@@ -65,7 +73,7 @@ export function ThreadHistory() {
           <button
             type="button"
             onClick={clearThread}
-            className="flex items-center gap-1 rounded px-1 py-0.5 text-2xs text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            className="-mr-1 flex items-center gap-1 rounded px-1 py-0.5 text-2xs text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
             <Add className="size-3.5" />
             New
