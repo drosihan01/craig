@@ -166,9 +166,15 @@ export async function POST(request: Request) {
       try {
         const result = await run(agent, input, {
           stream: true,
-          /* One, and no tools to take a second with. `maxTurns` above 1 here
-             would only ever buy a loop with nothing to loop over. */
-          maxTurns: 1,
+          /* The joiner rides the context so `search_resources` resolves whose
+             documents these are from the record this route authenticated,
+             rather than from anything the model produced. */
+          context: { joiner },
+          /* Two: one to call `search_resources`, one to answer with what it
+             returned. Not more — there is a single tool and nothing it can
+             return that warrants calling it again, so a higher ceiling would
+             only buy a loop. */
+          maxTurns: 2,
           signal: abort.signal,
         });
 

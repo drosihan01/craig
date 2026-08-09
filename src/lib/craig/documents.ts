@@ -143,6 +143,8 @@ export async function uploadDocument(
   const accountId = await accountIdFor(accountEmail);
   if (!accountId) throw new Error("No account to upload against.");
 
+  const extracted = extractText(file.contentType, file.bytes);
+
   const id = crypto.randomUUID();
   const storagePath = `${accountId}/${id}`;
 
@@ -166,6 +168,7 @@ export async function uploadDocument(
       name: file.name,
       content_type: file.contentType,
       size_bytes: file.bytes.byteLength,
+      extracted_text: extracted,
     })
     .select("*")
     .single();
@@ -248,6 +251,39 @@ export async function deleteDocument(
   return true;
 }
 
+/**
+ * The words in a file, when they are already words.
+ *
+ * Honest about its limits rather than pretending to be a parser. Plain text and
+ * markdown *are* their own text, so extracting them is a decode; a PDF is a
+ * layout format and a .docx is a zip archive of XML, and neither yields anything
+ * useful without a real dependency. Returning `null` for those is what lets the
+ * rest of the system tell "nothing in it" from "nothing extracted yet" — the
+ * search vector still carries the **filename**, so a PDF called "Parking
+ * policy" is findable even while its body is opaque.
+ *
+ * Capped, because the column is searched rather than displayed and a 25 MB text
+ * file would put 25 MB through `to_tsvector` on every write. Two hundred
+ * thousand characters is a long handbook.
+ */
+const MAX_EXTRACTED_CHARS = 200_000;
+
+function extractText(contentType: string, bytes: ArrayBuffer): string | null {
+  if (contentType !== "text/plain" && contentType !== "text/markdown")
+    return null;
+
+  try {
+    /* `fatal` so that a file mislabelled as text fails here rather than
+       producing a column full of replacement characters that match nothing and
+       look, in the database, exactly like a successful extraction. */
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const trimmed = text.slice(0, MAX_EXTRACTED_CHARS).trim();
+    return trimmed || null;
+  } catch {
+    return null;
+  }
+}
+
 /* --- The new starter's view ----------------------------------------------- */
 
 /**
@@ -313,4 +349,52 @@ export async function signedUrlForJoiner(
 
   if (signError || !signed) return null;
   return { name: row.name, url: signed.signedUrl };
+}
+
+export interface ResourceHit {
+  id: string;
+  name: string;
+  /** A couple of fragments around the match, already trimmed for a prompt. */
+  snippet: string;
+}
+
+/**
+ * Search what this joiner may read, and hand back the relevant paragraphs.
+ *
+ * The scoping lives in `search_shared_documents`, in SQL, where
+ * `visibility = 'shared'` is part of the function body rather than an argument.
+ * That is deliberate and it is the same argument as everywhere else here: a
+ * search helper that *accepted* a visibility would be one caller away from a new
+ * starter reading the private half of the filing cabinet. This wrapper's only
+ * job is to turn a `Joiner` into the account id the function needs, so there is
+ * no widening a caller could ask for.
+ *
+ * Empty on no match rather than falling back to "here is everything". Craig
+ * saying "I can't find anything about that in what they shared" is the honest
+ * answer, and a fallback that returns unrelated documents would have him quote
+ * the wrong policy confidently.
+ */
+export async function searchResourcesForJoiner(
+  joiner: Joiner,
+  query: string,
+): Promise<ResourceHit[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const accountId = await accountIdFor(joiner.accountEmail);
+  if (!accountId) return [];
+
+  const { data, error } = await db().rpc("search_shared_documents", {
+    p_account: accountId,
+    p_query: trimmed,
+    p_limit: 4,
+  });
+
+  if (error) throw new Error(`Searching documents failed: ${error.message}`);
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    snippet: row.snippet.replace(/\s+/g, " ").trim(),
+  }));
 }

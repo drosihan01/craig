@@ -95,8 +95,10 @@ export type Database = {
         Row: {
           account_id: string
           content_type: string
+          extracted_text: string | null
           id: string
           name: string
+          search: unknown | null
           size_bytes: number
           storage_path: string
           uploaded_at: string
@@ -105,6 +107,7 @@ export type Database = {
         Insert: {
           account_id: string
           content_type: string
+          extracted_text?: string | null
           id?: string
           name: string
           size_bytes: number
@@ -115,6 +118,7 @@ export type Database = {
         Update: {
           account_id?: string
           content_type?: string
+          extracted_text?: string | null
           id?: string
           name?: string
           size_bytes?: number
@@ -542,6 +546,14 @@ export type Database = {
           title: string
           value: string | null
           version: number
+        }[]
+      }
+      search_shared_documents: {
+        Args: { p_account: string; p_limit?: number; p_query: string }
+        Returns: {
+          id: string
+          name: string
+          snippet: string
         }[]
       }
     }
