@@ -147,19 +147,34 @@ export function WelcomeScreen({
    * interesting part — the canvas assembling itself — happening somewhere
    * nobody was yet.
    *
-   * Deliberately not gated on having pressed Generate, which is what this tried
-   * first. He owns his own tool and he fires it unprompted more often than not:
-   * three answers in, he'd draft, and a run nobody had pressed a button for
-   * fell back to exactly the two-step this replaced. The button is one way to
-   * reach the draft, not the only one, so the navigation follows the workflow
-   * rather than the press.
+   * The navigation follows the *workflow*, not the press. Pressing Generate is
+   * one way to ask for one; typing "build it" is another, and both should end
+   * up in the same place. What must not happen is a second thing to press: once
+   * the draft exists this screen has finished, and anything it draws after that
+   * is asking somebody to confirm a decision they already made.
    *
-   * Nothing is lost by moving. The conversation is held in the store and the
-   * editor's panel is the same thread continued, so his closing question is
-   * still on screen when the canvas opens.
+   * Nothing is lost by moving. The conversation is held in the thread and the
+   * editor's panel is that same thread continued — the onboarding thread has
+   * literally become the workflow's — so his closing question is still on
+   * screen when the canvas opens.
    */
   const router = useRouter();
   const [handing, setHanding] = React.useState(false);
+
+  /**
+   * On its way out.
+   *
+   * `router.push` is not instant — it fetches a route this session has not
+   * loaded — and the stream is still arriving underneath it, so without this
+   * there are a couple of seconds where the screen keeps behaving like a live
+   * conversation. That gap is what was drawing a "Built — Open it" card and a
+   * thinking line for a workflow that was already being opened: two pieces of
+   * furniture offering to do the thing in progress.
+   *
+   * Set from `drafted` — the id off the stream — rather than from finding the
+   * workflow in the store, so it flips on the event itself.
+   */
+  const leaving = Boolean(drafted);
 
   React.useEffect(() => {
     if (draft) router.push(`/workflows/${draft.id}`);
@@ -379,10 +394,25 @@ export function WelcomeScreen({
 
         <CraigConversation
           messages={messages}
-          phase={phase}
+          /* Silent on the way out. He carries on writing his reply after the
+             draft tool fires — the stream does not stop because the workflow
+             exists — so this kept showing a thinking line for a screen that was
+             already being replaced. The rest of that answer is not lost: it is
+             the same thread, and it is still arriving in the editor's panel. */
+          phase={leaving ? null : phase}
           busy={busy}
           error={error}
-          draft={draft}
+          /* Never the drafted one. Handing `draft` in is what drew the
+             "Built — Open it" card, which is a button offering to do the thing
+             that is already happening: by the time it can render, the push to
+             the editor has been issued. It existed as a fallback for a
+             navigation that never happened, and a fallback that appears every
+             single time is not a fallback, it is a second step. */
+          draft={null}
+          /* And no Generate card once it has been pressed. `offerDraft` is what
+             gates the whole block, so this closes both halves — nothing is
+             offered on the way out. */
+          offerDraft={!leaving}
           onSend={send}
           onGenerate={generate}
           /* Matched to the heading above it, for the same reason. The default
