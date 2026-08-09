@@ -39,8 +39,8 @@ export interface Session {
 }
 
 /** Where an unauthenticated request is sent, and where it comes back to. */
-export const SIGN_IN_PATH = "/showcase/sign-in";
-export const AFTER_SIGN_IN = "/showcase/welcome";
+export const SIGN_IN_PATH = "/sign-in";
+export const AFTER_SIGN_IN = "/welcome";
 export const SESSION_COOKIE = "craig_session";
 
 /* ---------------------------------------------------------------------- */
@@ -516,9 +516,9 @@ export interface Joiner {
 }
 
 /** Where a magic link lands before it becomes a session. */
-export const JOIN_PATH = "/showcase/join";
+export const JOIN_PATH = "/join";
 /** The new starter's own screen, once the link has been accepted. */
-export const JOINER_HOME = "/showcase/me";
+export const JOINER_HOME = "/me";
 /** Separate from the admin's cookie: they are different people, possibly at once. */
 export const JOINER_COOKIE = "craig_joiner";
 

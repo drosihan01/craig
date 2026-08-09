@@ -120,7 +120,7 @@ const TEMPLATE_ID = "workspace-account";
  * `src/lib/google/*` is written for whoever runs this deployment, and it says
  * so in its own vocabulary: `GOOGLE_OAUTH_CLIENT_ID`, the Cloud console, the
  * server log, "this one is ours to fix, not the customer's". All of that is
- * exactly right one layer down and none of it may appear on `/showcase`, which
+ * exactly right one layer down and none of it may appear in the app, which
  * is a screen a customer looks at. So each reason is said again here in terms
  * of *their* company and *their* Google Workspace, and the library's own
  * sentence goes to the server log where the person it was written for is

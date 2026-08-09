@@ -868,7 +868,7 @@ function accountItems(
       label: "Settings",
       icon: <Settings />,
       onSelect: () =>
-        router.push(`/showcase/settings?from=${encodeURIComponent(from)}`),
+        router.push(`/settings?from=${encodeURIComponent(from)}`),
     },
     /* The sandbox is a builder's tool, not an admin's — it doesn't belong in
        the product nav, but it has to be reachable from every screen. */

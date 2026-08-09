@@ -16,7 +16,7 @@ import { WelcomeScreen } from "./welcome-screen";
  * to a live account, which is what makes the sandbox reset take effect in a
  * browser that is still holding its old cookie.
  *
- * Every `/showcase/*` page needs this. The proxy is a matcher, not a wall —
+ * Every page in `(app)` needs this. The proxy is a matcher, not a wall —
  * Next's own docs say so, and a Server Function on an excluded path skips it
  * entirely.
  */

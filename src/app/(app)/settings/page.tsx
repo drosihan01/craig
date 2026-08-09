@@ -52,13 +52,13 @@ export const metadata = {
  */
 function parentArea(from: unknown): { href: string; label: string } {
   const raw = typeof from === "string" ? from : "";
-  return raw.startsWith("/showcase/people")
-    ? { href: "/showcase/people", label: "People" }
-    : { href: "/showcase/workflows", label: "Workflows" };
+  return raw.startsWith("/people")
+    ? { href: "/people", label: "People" }
+    : { href: "/workflows", label: "Workflows" };
 }
 
 export default async function ShowcaseSettingsPage(
-  props: PageProps<"/showcase/settings">,
+  props: PageProps<"/settings">,
 ) {
   const user = await requireUser();
 

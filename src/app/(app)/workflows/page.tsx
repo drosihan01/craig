@@ -8,7 +8,7 @@ export const metadata = {
 /**
  * A server component wrapping the screen, purely to hold the guard.
  *
- * Every `/showcase/*` page needs `requireUser()` for the reasons set out on
+ * Every page in `(app)` needs `requireUser()` for the reasons set out on
  * the welcome page: the proxy is a matcher rather than a wall, and it only
  * ever sees the cookie. This is the check that knows whether the account
  * behind it still exists.

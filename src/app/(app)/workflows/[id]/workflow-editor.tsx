@@ -166,7 +166,7 @@ export function WorkflowEditor({
        on purpose would flash an error at you on the way out. */
     setLeaving(true);
     deleteWorkflow(workflow.id);
-    router.push("/showcase/workflows");
+    router.push("/workflows");
   }
 
   if (!workflow) return leaving ? null : <NoWorkflow user={user} />;
@@ -578,7 +578,7 @@ function Editor({
       navRail={
         <NavRail>
           <NavRailItem
-            href="/showcase/workflows"
+            href="/workflows"
             label="Workflows"
             icon={<ArrowBack />}
           />
@@ -967,7 +967,7 @@ function EditorNav({
        out of it. Which makes this link load-bearing rather than decorative:
        without it there is no way back except the browser's own button. */
     <div className="flex flex-col gap-5">
-      <BackLink href="/showcase/workflows" className="px-2">
+      <BackLink href="/workflows" className="px-2">
         Workflows
       </BackLink>
 
@@ -1107,13 +1107,13 @@ function NoWorkflow({ user }: { user: Session }) {
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Link
-                href="/showcase/workflows"
+                href="/workflows"
                 className={buttonVariants({ variant: "secondary", size: "sm" })}
               >
                 All workflows
               </Link>
               <Link
-                href="/showcase/welcome"
+                href="/welcome"
                 className={buttonVariants({ size: "sm" })}
               >
                 <AutoAwesome />

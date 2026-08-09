@@ -25,7 +25,7 @@ import { getAccount } from "./accounts";
  * `cache` memoises it for the length of one render, so a layout, a page and
  * three components can each ask independently without repeating the work.
  *
- * The proxy already turns anonymous requests away at the edge of `/showcase`.
+ * The proxy already turns anonymous requests away at the app's edge.
  * This exists anyway because that guard is a matcher — one refactor away from
  * not covering a route — and because it only ever sees the cookie. This is
  * the check that knows whether the account behind it is real.

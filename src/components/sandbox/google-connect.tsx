@@ -19,7 +19,7 @@ import { SETTINGS_PATH } from "@/lib/showcase/google-outcome";
  * account the consent would land on, and because the sandbox is signed in as
  * whoever the builder last was.
  *
- * So the flow moved to `/showcase/settings`, where a customer does it and where
+ * So the flow moved to `/settings`, where a customer does it and where
  * the account is named before anybody leaves for Google. What did *not* move is
  * this: the three variables and the encryption key, which are the deployment's
  * own configuration, are named here and only here. A customer cannot register

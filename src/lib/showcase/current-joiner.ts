@@ -26,7 +26,7 @@ import { readJoinerToken } from "./joiner-session";
  * the joiner, they run separately, and without this the alternative is either
  * two lookups or threading the record through props that don't otherwise exist.
  *
- * The proxy already turns anonymous requests away at the edge of `/showcase`,
+ * The proxy already turns anonymous requests away at the app's edge,
  * and this exists anyway for the reason the admin's copy spells out — that
  * guard is a matcher one refactor away from not covering a route, and it only
  * ever sees a cookie. This is the check that knows whether there is anybody
@@ -52,7 +52,7 @@ export const currentJoiner = cache(async (): Promise<Joiner | null> => {
  * first week at a new job, and a screen that asks them to prove who they are
  * and then refuses every answer reads as something they have done wrong.
  *
- * `/showcase/join` with nothing in the query is where they go instead, because
+ * `/join` with nothing in the query is where they go instead, because
  * that page already renders exactly this failure and already has the words for
  * it — the link has aged out or was never theirs, and whoever invited them can
  * send another. Every way of arriving here is one of those: a ninety-day token

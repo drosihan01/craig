@@ -331,7 +331,7 @@ function failureMessage(error: unknown): string {
 
 export async function POST(request: Request) {
   /* Before anything else, and before anything is spent. `currentUser` reads the
-     cookie and checks the signature; the proxy guards `/showcase` but not this,
+     cookie and checks the signature; the proxy guards the app but not this,
      and a route that spends money on an unverified caller is the actual risk. */
   const session = await currentUser();
   if (!session) {

@@ -47,7 +47,7 @@ export function NewWorkflowDialog({
        like the press didn't land — the second press would make a second
        workflow, and they'd arrive at the editor with a stray one behind them. */
     onClose();
-    router.push(`/showcase/workflows/${workflow.id}`);
+    router.push(`/workflows/${workflow.id}`);
   }
 
   return (
@@ -68,7 +68,7 @@ export function NewWorkflowDialog({
             behind this one. */}
         <List>
           <ListItem
-            href="/showcase/welcome"
+            href="/welcome"
             leading={
               <ListIcon tone="accent">
                 <AutoAwesome />

@@ -10,7 +10,7 @@
  * client can run it.
  */
 
-export const SIGN_UP_PATH = "/showcase/sign-up";
+export const SIGN_UP_PATH = "/sign-up";
 
 /** Domains that say nothing about where somebody works. */
 /* Only used to decide that an address says nothing about where somebody

@@ -11,7 +11,7 @@ export const metadata = {
 /**
  * A server component wrapping the editor, holding the guard and the seats.
  *
- * Same reasoning as every other `/showcase/*` page: the proxy turns anonymous
+ * Same reasoning as every other page in `(app)`: the proxy turns anonymous
  * requests away at the edge, but it is a matcher rather than a wall and it can
  * only see the cookie. `requireUser()` is the check that knows whether the
  * account behind that cookie still exists.
@@ -30,7 +30,7 @@ export const metadata = {
  * accumulated, and a tab that named it would have to fetch it twice.
  */
 export default async function ShowcaseWorkflowPage(
-  props: PageProps<"/showcase/workflows/[id]">,
+  props: PageProps<"/workflows/[id]">,
 ) {
   const user = await requireUser();
   const { id } = await props.params;

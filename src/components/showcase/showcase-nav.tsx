@@ -59,13 +59,13 @@ import { AltRoute, Groups } from "@/components/ui/icons";
 const ITEMS = [
   {
     label: "Workflows",
-    href: "/showcase/workflows",
+    href: "/workflows",
     icon: <AltRoute />,
     shut: "Craig drafts your first workflow from this conversation",
   },
   {
     label: "People",
-    href: "/showcase/people",
+    href: "/people",
     icon: <Groups />,
     shut: "You can give somebody a seat once there's a workflow to start them on",
   },

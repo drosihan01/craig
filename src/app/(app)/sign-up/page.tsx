@@ -22,7 +22,7 @@ export const metadata = {
  * is whoever you actually are.
  */
 export default async function ShowcaseSignUpPage(
-  props: PageProps<"/showcase/sign-up">,
+  props: PageProps<"/sign-up">,
 ) {
   if (await currentUser()) redirect(AFTER_SIGN_IN);
 

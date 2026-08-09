@@ -130,7 +130,7 @@ export function safeReturnTo(value: string | null | undefined): string | null {
   if (!value) return null;
   if (!value.startsWith("/")) return null;
   if (value.startsWith("//") || value.includes("\\")) return null;
-  if (!value.startsWith("/showcase/")) return null;
+  if (!value.startsWith("/")) return null;
   return value.length > 200 ? null : value;
 }
 

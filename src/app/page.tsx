@@ -7,7 +7,7 @@ import { SIGN_IN_PATH } from "@/lib/showcase/contract";
  * This used to be the original demo home — Ada Yildiz, a fixed company, people
  * who never existed — and it is archived at `/archive` rather than deleted,
  * because it is where a lot of the design was worked out. But it is not the
- * product: `/showcase` is the closest thing to production, and landing a
+ * product: the signed-in app is the product, and landing a
  * visitor in the archive means the first thing they see is the version with
  * nobody real in it.
  *

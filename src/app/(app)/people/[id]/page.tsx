@@ -19,7 +19,7 @@ import { NoPerson, PersonProgress } from "./person-progress";
  * progress is read from the one place both people write to.
  *
  * Two guards, and they are the same guard twice over. `requireUser()` is the
- * check every `/showcase/*` page carries: the proxy turns anonymous requests
+ * check every page in `(app)` carries: the proxy turns anonymous requests
  * away at the edge but it is a matcher rather than a wall, and it only ever
  * sees the cookie, so this is the check that knows whether the account behind
  * it still exists.
@@ -62,7 +62,7 @@ const belongsTo = (joiner: Joiner, email: string) =>
  * the generic title on their way to sign-in.
  */
 export async function generateMetadata(
-  props: PageProps<"/showcase/people/[id]">,
+  props: PageProps<"/people/[id]">,
 ) {
   const user = await currentUser();
   if (!user) return { title: "Person — Craig" };
@@ -77,7 +77,7 @@ export async function generateMetadata(
 }
 
 export default async function ShowcasePersonPage(
-  props: PageProps<"/showcase/people/[id]">,
+  props: PageProps<"/people/[id]">,
 ) {
   const user = await requireUser();
   const { id } = await props.params;

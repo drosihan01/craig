@@ -106,7 +106,7 @@ function Screen({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default async function JoinPage(props: PageProps<"/showcase/join">) {
+export default async function JoinPage(props: PageProps<"/join">) {
   const { token } = await props.searchParams;
 
   /* A repeated `?token=` arrives as an array, and there is no sensible way to
@@ -127,7 +127,7 @@ export default async function JoinPage(props: PageProps<"/showcase/join">) {
 
      It is also the only such screen in the product, and that is on purpose.
      `requireJoiner()` redirects here rather than rendering its own version of
-     this apology, so somebody whose session has run out on `/showcase/me` reads
+     this apology, so somebody whose session has run out on `/me` reads
      these exact words instead of a second, slightly different set that would
      drift from them — and instead of the admin's password form, which is what
      they used to be shown and which they can never satisfy. Anything changed

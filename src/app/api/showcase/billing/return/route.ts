@@ -55,7 +55,7 @@ const sameAccount = (a: string, b: string) =>
  * where the seat count is the answer to the only question they have.
  */
 function back(request: NextRequest, note: string) {
-  const target = `/showcase/people?billing=${encodeURIComponent(note)}`;
+  const target = `/people?billing=${encodeURIComponent(note)}`;
   return NextResponse.redirect(new URL(target, request.url), {
     status: 303,
     headers: { "Cache-Control": "no-store" },
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
      another. Sending them to sign in is right, and the webhook will have
      recorded the subscription regardless — there is nothing to lose here. */
   if (!session) {
-    return NextResponse.redirect(new URL("/showcase/sign-in", request.url), {
+    return NextResponse.redirect(new URL("/sign-in", request.url), {
       status: 303,
     });
   }

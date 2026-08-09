@@ -463,7 +463,7 @@ function Handoff({
           </p>
         </div>
         <Link
-          href={`/showcase/workflows/${draft.id}`}
+          href={`/workflows/${draft.id}`}
           className={buttonVariants({ size: "sm", className: "w-fit" })}
         >
           Open it

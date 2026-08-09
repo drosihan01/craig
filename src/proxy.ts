@@ -4,7 +4,7 @@ import { JOIN_PATH, JOINER_HOME, SIGN_IN_PATH } from "@/lib/showcase/contract";
 import { SIGN_UP_PATH } from "@/lib/showcase/sign-up";
 
 /**
- * The guard on `/showcase/*`.
+ * The guard on the signed-in app.
  *
  * Next 16 renamed `middleware.ts` to `proxy.ts` and the exported function with
  * it; `middleware.ts` still runs but is deprecated, so this is the new spelling
@@ -82,8 +82,30 @@ export async function proxy(request: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-/* Must be a literal — matchers are read statically at build time, so
-   `SIGN_IN_PATH` and friends can't be interpolated in here. */
+/**
+ * The app, and nothing else.
+ *
+ * It used to be `/showcase/:path*`, which was a tidy way of saying "the real
+ * product" back when the real product lived behind a prefix. It doesn't any
+ * more — the app is the site — so the matcher is now everything *except* the
+ * three things that must not be guarded:
+ *
+ * `/api` keeps its own front door. Those routes check `currentUser` or a
+ * signature themselves, and several of them — the Stripe webhook above all —
+ * are called by machines that have no session to offer and would be redirected
+ * into a sign-in page they cannot read.
+ *
+ * `/archive` is the demo this was built from. It has no accounts in it, reads
+ * from fixtures, and asking somebody to sign in to look at Ada Yildiz would be
+ * asking for a credential that unlocks nothing.
+ *
+ * The rest is Next's own static output.
+ *
+ * Must be a literal — matchers are read statically at build time, so
+ * `SIGN_IN_PATH` and friends can't be interpolated in here.
+ */
 export const config = {
-  matcher: "/showcase/:path*",
+  matcher: [
+    "/((?!api|archive|_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };
