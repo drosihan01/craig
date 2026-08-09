@@ -124,6 +124,15 @@ export interface OpenStep {
 /** The workflow being edited, as much of it as Craig needs to change it. */
 export interface OpenWorkflow {
   id: string;
+  /**
+   * What it is currently called.
+   *
+   * Sent because without it he cannot answer "what's this one called?" except
+   * by inventing something, and because a rename to the name it already has
+   * should be a no-op rather than an edit. Absent on a client that predates
+   * this, which reads as "don't claim to know".
+   */
+  name?: string;
   steps: OpenStep[];
   /**
    * What is standing between this workflow and being publishable, in words.
@@ -206,7 +215,22 @@ export type WorkflowEdit =
       stepId: string;
       config: Record<string, string | string[]>;
     }
-  | { type: "step-removed"; stepId: string };
+  | { type: "step-removed"; stepId: string }
+  /**
+   * The workflow's own name — the one thing he can change that is not a step.
+   *
+   * Whole rather than merged, because a name has no parts. Trimmed, collapsed
+   * and capped on the server before it reaches here, so what arrives is
+   * something that will fit in a list row.
+   *
+   * It exists because the alternative was worse than a missing feature. Asked
+   * to rename a workflow, Craig replied "The workflow has been named 'aus
+   * workflow'" and nothing happened — a product built to be trusted with work
+   * nobody is watching, confidently reporting work it had not done. Nothing in
+   * the product could rename a workflow at all: no store writer, no edit, no
+   * control in the editor. The name was fixed at birth.
+   */
+  | { type: "renamed"; name: string };
 
 /**
  * The stream is newline-delimited JSON, one object per line.

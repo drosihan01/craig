@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { currentUser } from "@/lib/craig/current-user";
 import { saveSubscription } from "@/lib/craig/accounts";
+import { entitles } from "@/lib/craig/seats";
 import { stripeConfig } from "@/lib/stripe/config";
 import { retrieveCheckoutSession } from "@/lib/stripe/billing";
 
@@ -98,15 +99,88 @@ export async function GET(request: NextRequest) {
     return back(request, "unknown");
   }
 
-  /* Paid but not yet settled. Some payment methods take days, and Stripe says
-     so rather than pretending. Nothing is written — the webhook will write it
-     when the money actually arrives — and the page says it's pending instead
-     of promising seats that aren't paid for. */
-  if (!found.subscription) {
+  /* One branch per thing that can actually have happened, which is the whole
+     of the fix here. This used to be `if (!found.subscription) pending`, and
+     that single test answered four different questions with one sentence:
+     a payment genuinely in flight, a checkout still sitting open, a session
+     Stripe expired without anybody paying, and a subscription this build could
+     not read. Three of those four were told "Payment still clearing… no need to
+     pay again", which is a claim that money moved, made on no evidence at all.
+
+     The order below is not arbitrary — it runs from "we know least" to "we know
+     most", so that nothing reassuring is reachable without the fact that would
+     justify it. */
+  const outcome = found.outcome;
+
+  /* Stripe answered and this build couldn't describe the answer. It is already
+     logged loudly in `retrieveCheckoutSession`, with the session id; the second
+     line here is worth its noise because this is where it turns into something
+     a customer reads, and because a `?billing=unknown` in a support screenshot
+     should be traceable to a specific route and a specific reason.
+
+     Nothing is written, and the message is the one that never reassures. There
+     probably *is* a subscription behind this — that is the likeliest way to get
+     here — so "you haven't paid" would be as wrong as "you have". The only
+     honest position is that we cannot see, and that they should not pay twice
+     on our say-so. */
+  if (outcome.kind === "unreadable") {
+    console.error(
+      "[showcase/billing] return session came back in a shape this build can't read",
+    );
+    return back(request, "unknown");
+  }
+
+  /* Nobody paid. The session is open (they can still finish it) or expired
+     (they can't), and neither is an error or a fault — abandoning a checkout is
+     an ordinary thing to do. This route is not normally how somebody arrives at
+     either, because abandoning sends the browser to `cancel_url`; the ways in
+     are a bookmarked return URL, a back button, or a hand-edited query string,
+     and all three are entitled to a true answer. Both notes say plainly that
+     nothing was charged, which is a statement this branch can support and the
+     old `pending` could not. */
+  if (outcome.kind === "unfinished") {
+    return back(
+      request,
+      outcome.sessionStatus === "expired" ? "expired" : "unpaid",
+    );
+  }
+
+  /* The one case the old `pending` was actually written for: they finished, and
+     Stripe has no subscription to hand over yet. Some payment methods settle
+     over days and Stripe is honest about it, so this is honest about it too —
+     nothing is written, and the webhook does the writing when the money lands.
+
+     Logged, because it is rare enough on this integration to be worth knowing
+     about, and `paymentStatus` is the whole reason it is worth logging: `paid`
+     means the money is in and only the subscription is lagging, `unpaid` means
+     the bank has it. Those age very differently, and by the time anybody looks,
+     the session will read the same for both. */
+  if (outcome.kind === "settling") {
+    console.warn(
+      `[showcase/billing] return session complete with no subscription yet (payment_status=${outcome.paymentStatus ?? "unknown"})`,
+    );
     return back(request, "pending");
   }
 
-  await saveSubscription(session.email, found.subscription);
+  /* A real subscription, so record it whatever state it is in. The status is
+     Stripe's fact about this account and the store keeps facts, not verdicts —
+     the webhook already writes `canceled` and `past_due` here, and a return leg
+     that only wrote the flattering ones would leave the two halves disagreeing
+     about the same subscription. It also captures the `cus_…`, which is what a
+     later checkout needs in order not to create a second customer. */
+  await saveSubscription(session.email, outcome.subscription);
 
-  return back(request, "upgraded");
+  /* And *this* is the seat question, which is not the same question as "is
+     there a subscription". `entitles` is the single place that decides which
+     statuses open the paid seats, and this branch used to key off the mere
+     presence of a subscription instead — so an `incomplete` one, the ordinary
+     shape of a first payment that hasn't gone through, produced "You're on the
+     Team plan / your seats are available now" over a seat count still sitting at
+     the free limit. The customer reads a promise, clicks Add, and is told they
+     are out of seats. Asking the same function the paywall asks is what keeps
+     the sentence and the seat count from being able to disagree. */
+  return back(
+    request,
+    entitles(outcome.subscription.status) ? "upgraded" : "inactive",
+  );
 }

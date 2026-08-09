@@ -341,10 +341,25 @@ export function PeopleList({
 /**
  * What Stripe sent them back with, said in one line.
  *
- * Four outcomes, and the three that aren't success matter more than the one
+ * Seven outcomes, and the six that aren't success matter more than the one
  * that is. Somebody who has just typed a card number into another website and
  * been bounced back here is owed a plain answer, and "nothing appears to have
  * happened" is the answer that makes people pay twice.
+ *
+ * There used to be four, and the missing three were all hiding inside
+ * `pending`: a checkout still open, one Stripe had expired, and a subscription
+ * the server couldn't read were every one of them told "Payment still
+ * clearing… no need to pay again". Two of those three describe somebody who
+ * has not paid a cent. The return route can now tell them apart — see
+ * `CheckoutOutcome` in `src/lib/stripe/billing.ts` — and the only reason to
+ * split them there was to say something different here.
+ *
+ * The rule these are written to: never claim money moved unless the server had
+ * evidence it did, and never claim it didn't unless the server had evidence of
+ * that. Those are two different lies with two different costs — one makes
+ * somebody wait for seats that are never coming, the other makes them pay
+ * twice — and the notes below are ordered so that neither is reachable by
+ * accident.
  *
  * It reads the query string rather than being told by the server, because this
  * is a fact about the journey rather than about the account — the account's own
@@ -365,15 +380,61 @@ function BillingNotice() {
     );
   }
 
-  /* Paid, but the money hasn't landed. Some payment methods take days to
-     settle and Stripe is honest about it, so this is honest about it too: no
-     seats yet, nothing wrong, and nothing for them to do. */
+  /* Finished at Stripe's end and no subscription handed over yet. Some payment
+     methods take days to settle and Stripe is honest about it, so this is
+     honest about it too: no seats yet, nothing wrong, and nothing for them to
+     do. It no longer says "your bank hasn't settled it" — the server now knows
+     this can also be a payment that has gone through with the subscription a
+     beat behind, and naming the bank in that case would be inventing a detail
+     to sound certain with. */
   if (billing === "pending") {
     return (
       <Callout tone="warning" className="mb-4" title="Payment still clearing">
-        Your bank hasn&apos;t settled it yet. The seats appear here the moment
-        it goes through — there&apos;s nothing else to do, and no need to pay
-        again.
+        You&apos;ve finished checkout and Stripe hasn&apos;t handed over the
+        plan yet. The seats appear here the moment it goes through — there&apos;s
+        nothing else to do, and no need to pay again.
+      </Callout>
+    );
+  }
+
+  /* A real subscription is attached and it isn't one that opens seats — most
+     often `incomplete`, which is a first payment that hasn't gone through.
+     Deliberately does not say "don't pay again": for `incomplete` Stripe is
+     still trying and a second payment would be a second subscription, but for
+     the states that are simply over, paying again is the correct thing to do.
+     Pointing at the receipt lets them tell which they're in. */
+  if (billing === "inactive") {
+    return (
+      <Callout
+        tone="warning"
+        className="mb-4"
+        title="Checkout finished, but the plan isn't live"
+      >
+        Stripe hasn&apos;t confirmed the payment, so the seats aren&apos;t open
+        yet. Check your email for a Stripe receipt before paying again — if it
+        clears, the seats appear here on their own.
+      </Callout>
+    );
+  }
+
+  /* The two that the old `pending` was lying about. Both say plainly that
+     nothing was charged, because the server has now read the session's own
+     status and that is a thing it can state. Neutral rather than warning: not
+     finishing a checkout is an ordinary decision, not a problem to flag. */
+  if (billing === "unpaid") {
+    return (
+      <Callout tone="neutral" className="mb-4" title="That checkout wasn't finished">
+        Nothing has been charged and nothing has changed here. Press Upgrade
+        whenever you&apos;re ready and Stripe will pick it up again.
+      </Callout>
+    );
+  }
+
+  if (billing === "expired") {
+    return (
+      <Callout tone="neutral" className="mb-4" title="That checkout link expired">
+        Stripe closes a checkout a day after it&apos;s created, and nothing was
+        charged on this one. Press Upgrade to start a fresh one.
       </Callout>
     );
   }

@@ -69,6 +69,8 @@ const MAX_NOTE_CHARS = 300;
 const MAX_STEPS = 40;
 /** Ids, presets and field names — none of them prose. */
 const MAX_ID_CHARS = 64;
+/** A header, a list row and a delete confirmation all have to show it. */
+const MAX_NAME_CHARS = 60;
 /** Titles and owners, which do reach the prompt as words. */
 const MAX_LABEL_CHARS = 120;
 
@@ -199,9 +201,29 @@ const label = (value: unknown, limit: number) =>
 function openWorkflow(value: unknown): OpenWorkflow | undefined {
   if (!value || typeof value !== "object") return undefined;
 
-  const { id, steps } = value as OpenWorkflow;
+  const { id, name, steps, outstanding } = value as OpenWorkflow;
   const workflowId = label(id, MAX_ID_CHARS);
   if (!workflowId || !Array.isArray(steps)) return undefined;
+
+  /**
+   * Kept, which it was not.
+   *
+   * This function used to return `{ id, steps }` and drop the rest, and dropping
+   * this field is not the harmless narrowing it looks like: `openWorkflowNote`
+   * branches on it, and an absent list does not make it say nothing — it makes
+   * it say *"Nothing. This workflow is ready to publish right now."* So the one
+   * thing the screen works out where it cannot be wrong, and sends precisely so
+   * that Craig's answer matches the interface beside him, was being turned into
+   * its opposite on every turn. Somebody with Google Workspace unconnected and
+   * three steps unanswered was told they could publish whenever they liked.
+   *
+   * Through `notes` because these are sentences that reach the prompt, and that
+   * is already the sanitiser for exactly that — capped in count and in length,
+   * whitespace collapsed, so a step title carrying newlines cannot write its own
+   * instructions. Nothing here is trusted beyond being strings: it is shown to
+   * him as the screen's own finding and decides nothing on the server.
+   */
+  const blocking = notes(outstanding);
 
   const kept = steps.slice(0, MAX_STEPS).flatMap((raw): OpenStep[] => {
     if (!raw || typeof raw !== "object") return [];
@@ -226,7 +248,21 @@ function openWorkflow(value: unknown): OpenWorkflow | undefined {
     ];
   });
 
-  return { id: workflowId, steps: kept };
+  /* Capped like every other string that reaches the prompt. It is shown to him
+     as a fact about the workflow and decides nothing, but a name carrying
+     newlines could otherwise write its own paragraph in the middle of the
+     note. */
+  const workflowName = label(name, MAX_NAME_CHARS);
+
+  return {
+    id: workflowId,
+    name: workflowName || undefined,
+    steps: kept,
+    /* Absent rather than empty, because the note's two branches read it that
+       way: an empty array would print the heading with nothing under it, where
+       `undefined` is what makes it say plainly that nothing is outstanding. */
+    outstanding: blocking.length > 0 ? blocking : undefined,
+  };
 }
 
 /**

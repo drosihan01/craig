@@ -383,23 +383,191 @@ export async function createCheckoutSession(
   return { ok: true, url, id };
 }
 
+/**
+ * How far Stripe got with a Checkout Session, in Stripe's own words.
+ *
+ * Three values and no more: `open` (the page exists and nobody has finished
+ * with it), `complete` (they finished — which is not the same as the money
+ * having arrived) and `expired` (Stripe closed it, twenty-four hours after it
+ * was created by default, and it can never be paid now).
+ *
+ * Narrowed against a list the way `toStatus` narrows a subscription status, and
+ * for a blunter reason. This value decides which sentence somebody is shown
+ * about their own money, and the two wrong sentences here are "we have your
+ * payment" told to a person who never paid and "you haven't paid" told to a
+ * person who has. A fourth value invented by a later API version has to arrive
+ * as "this build cannot tell" rather than fall through to whichever branch
+ * happens to be written last.
+ */
+const SESSION_STATUSES = ["open", "complete", "expired"] as const;
+
+type SessionStatus = (typeof SESSION_STATUSES)[number];
+
+function toSessionStatus(value: unknown): SessionStatus | null {
+  const raw = asString(value);
+  return raw && (SESSION_STATUSES as readonly string[]).includes(raw)
+    ? (raw as SessionStatus)
+    : null;
+}
+
+/**
+ * Whether Stripe has the money, which is a different question from whether the
+ * session is finished.
+ *
+ * `no_payment_required` is the one worth naming: it is not a failure and not an
+ * oddity, it is what a 100%-off coupon or a trial that collects a card and
+ * charges nothing today looks like, both of which produce a real subscription.
+ *
+ * Nothing in this file branches on this. It is carried because a session that
+ * completed and has no subscription on it yet is two different situations —
+ * waiting on a bank (`unpaid`) or waiting on Stripe to attach the subscription
+ * it has already been paid for (`paid`) — and the difference is invisible in
+ * the logs unless somebody carries it there. The customer is told the same true
+ * thing either way; whoever reads the log at 2am is not.
+ */
+const PAYMENT_STATUSES = ["paid", "unpaid", "no_payment_required"] as const;
+
+type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+function toPaymentStatus(value: unknown): PaymentStatus | null {
+  const raw = asString(value);
+  return raw && (PAYMENT_STATUSES as readonly string[]).includes(raw)
+    ? (raw as PaymentStatus)
+    : null;
+}
+
+/**
+ * What a browser coming back from Checkout is actually looking at.
+ *
+ * This used to be one field — `subscription: Subscription | null` — with the
+ * null documented as "paid, no entitlement yet". That was true of one of the
+ * four ways the null could happen and a lie about the other three, and the lie
+ * was load-bearing rather than cosmetic: the return route read that null and
+ * nothing else, not `status` and not `payment_status`, and sent everybody who
+ * reached it to a page reading *"Payment still clearing… there's nothing else
+ * to do, and no need to pay again."*
+ *
+ * Verified against the sandbox rather than reasoned about. Session
+ * `cs_test_a11Cc8…` on `acct_1U2DqZAJzn3u1xQ6` is `status: "expired"`,
+ * `payment_status: "unpaid"`, `subscription: null` — nobody was ever charged a
+ * cent — and the old shape reported it identically to a payment genuinely in
+ * flight. It is admittedly hard to arrive at: abandoning Checkout sends the
+ * browser to `cancel_url`, so the ordinary way to see this is a bookmarked or
+ * hand-edited return URL. "Hard to reach" is not a defence for a page that
+ * tells somebody their money is on its way when it is not, and this is the
+ * screen where being wrong costs the most — a person who believes a payment is
+ * settling waits instead of paying, and finds out days later that they have no
+ * seats and never did.
+ *
+ * So the four cases are four cases, and every one of them is a different
+ * sentence:
+ *
+ * - `subscribed` — Stripe attached a subscription and this build could read it.
+ *   Note that this still does not mean *entitled*: a subscription can be
+ *   attached with a status like `incomplete`, and deciding what that grants is
+ *   `entitles`' job in `src/lib/craig/seats.ts`, not this file's. All this says
+ *   is that there is a real subscription and here it is.
+ * - `settling` — the session is `complete` and no subscription is attached yet.
+ *   This is the state the old null was documented as, and the only one it
+ *   described correctly.
+ * - `unfinished` — `open` or `expired`. Nothing was paid, and the difference
+ *   between the two matters to what you tell somebody: an open session is one
+ *   they can still finish, an expired one is gone.
+ * - `unreadable` — Stripe says something this build cannot describe. Grouped
+ *   deliberately, because the several ways of not understanding an answer all
+ *   have the same honest response, which is to claim nothing.
+ *
+ * A discriminated union rather than three nullable fields, so that adding a
+ * fifth case is a compile error at every call site instead of a branch somebody
+ * forgets. The whole bug being fixed here was a caller reading one field and
+ * inferring the rest.
+ */
+export type CheckoutOutcome =
+  | { kind: "subscribed"; subscription: Subscription }
+  | { kind: "settling"; paymentStatus: PaymentStatus | null }
+  | { kind: "unfinished"; sessionStatus: Exclude<SessionStatus, "complete"> }
+  | { kind: "unreadable" };
+
 export type CheckoutSessionResult =
   | {
       ok: true;
       /** From `client_reference_id`. Null if the session was made elsewhere. */
       accountEmail: string | null;
-      /**
-       * Null is a legitimate success, not a failure.
-       *
-       * A session can be `complete` with no subscription attached yet, because
-       * some payment methods settle asynchronously — the customer has finished
-       * and the money has not arrived. The honest answer then is "paid, no
-       * entitlement yet", which a caller can turn into a pending state. Making
-       * it a failure would mean showing somebody who has just paid an error.
-       */
-      subscription: Subscription | null;
+      outcome: CheckoutOutcome;
     }
   | StripeFailed;
+
+/**
+ * The session, read down to the one thing a caller has to decide.
+ *
+ * Split out from `retrieveCheckoutSession` because it is where all the
+ * judgement is, and because the order of these branches is the answer to the
+ * second bug this file had. `toSubscription` returns null for a subscription
+ * this build cannot map — an unrecognised status, or a `current_period_end`
+ * that moved again under a bumped API version — and that null used to arrive at
+ * the caller as the *same* null as "no subscription attached", with no log line
+ * anywhere. `retrieveSubscription` shouts about exactly this condition and has
+ * since it was written; the Checkout path was silent about it, so a customer
+ * whose perfectly real subscription this build could not parse was told their
+ * payment was still clearing, forever, and nothing in the logs looked wrong.
+ *
+ * The bare-string branch is not defensive padding. `subscription` comes back as
+ * a `sub_…` id whenever the expansion did not happen, and an id is Stripe
+ * telling us a subscription exists — the opposite of `null`. Treating that as
+ * "nothing attached" would put a paying customer into the settling branch on
+ * the day an `expand` is mistyped or Stripe's four-level cap bites a level
+ * earlier than it does today. It is also the one failure of this kind that can
+ * be produced on demand against the real API, by asking for the session without
+ * the expansion, which is how it was checked.
+ *
+ * Everything unreadable is logged here rather than left to the caller, for the
+ * same reason `retrieveSubscription` logs: the caller has a customer waiting and
+ * will do the kind thing, and the kind thing is silent.
+ */
+async function checkoutOutcome(
+  sessionId: string,
+  session: {
+    status?: unknown;
+    payment_status?: unknown;
+    subscription?: unknown;
+  },
+): Promise<CheckoutOutcome> {
+  const raw = session.subscription;
+
+  if (raw && typeof raw === "object") {
+    const subscription = await toSubscription(raw as RawSubscription);
+    if (subscription) return { kind: "subscribed", subscription };
+
+    console.error(
+      `[lib/stripe] checkout session ${sessionId} carries a subscription that didn't map to a known shape`,
+    );
+    return { kind: "unreadable" };
+  }
+
+  const unexpanded = asString(raw);
+  if (unexpanded) {
+    console.error(
+      `[lib/stripe] checkout session ${sessionId} returned subscription ${unexpanded} unexpanded, so nothing can be said about it`,
+    );
+    return { kind: "unreadable" };
+  }
+
+  const status = toSessionStatus(session.status);
+
+  if (status === "complete") {
+    return {
+      kind: "settling",
+      paymentStatus: toPaymentStatus(session.payment_status),
+    };
+  }
+
+  if (status) return { kind: "unfinished", sessionStatus: status };
+
+  console.error(
+    `[lib/stripe] checkout session ${sessionId} has no subscription and a status this build doesn't recognise`,
+  );
+  return { kind: "unreadable" };
+}
 
 /**
  * Reads a Checkout Session back, with the subscription already expanded.
@@ -434,6 +602,11 @@ export async function retrieveCheckoutSession(
   const result = await stripeRequest<{
     client_reference_id?: unknown;
     metadata?: Record<string, unknown>;
+    /* Both read, and both needed. Between them they are the difference between
+       a payment on its way and a checkout nobody ever completed — see
+       `CheckoutOutcome` for what reading only `subscription` used to cost. */
+    status?: unknown;
+    payment_status?: unknown;
     subscription?: unknown;
   }>(`/checkout/sessions/${encodeURIComponent(sessionId)}`, {
     method: "GET",
@@ -449,13 +622,11 @@ export async function retrieveCheckoutSession(
     asString(result.data.client_reference_id) ??
     asString(result.data.metadata?.account);
 
-  const raw = result.data.subscription;
-  const subscription =
-    raw && typeof raw === "object"
-      ? await toSubscription(raw as RawSubscription)
-      : null;
-
-  return { ok: true, accountEmail, subscription };
+  return {
+    ok: true,
+    accountEmail,
+    outcome: await checkoutOutcome(sessionId, result.data),
+  };
 }
 
 export type SubscriptionResult =
