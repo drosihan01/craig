@@ -373,6 +373,7 @@ export type Database = {
           account_id: string
           created_at: string
           id: string
+          joiner_id: string | null
           kind: string
           last_message_at: string
           parent_message_id: string | null
@@ -384,6 +385,7 @@ export type Database = {
           account_id: string
           created_at?: string
           id?: string
+          joiner_id?: string | null
           kind: string
           last_message_at?: string
           parent_message_id?: string | null
@@ -395,6 +397,7 @@ export type Database = {
           account_id?: string
           created_at?: string
           id?: string
+          joiner_id?: string | null
           kind?: string
           last_message_at?: string
           parent_message_id?: string | null
@@ -408,6 +411,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "threads_joiner_id_fkey"
+            columns: ["joiner_id"]
+            isOneToOne: false
+            referencedRelation: "joiners"
             referencedColumns: ["id"]
           },
           {
