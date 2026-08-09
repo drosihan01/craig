@@ -3,7 +3,14 @@ import { currentJoiner, requireJoiner } from "@/lib/craig/current-joiner";
 import { progressOf } from "@/lib/craig/joiners";
 import type { Joiner } from "@/lib/craig/contract";
 import { dueDateFrom } from "@/lib/workflow/library";
-import { JoinerScreen, type JoinerView, type PlanStep } from "./joiner-screen";
+import { listDocumentsForJoiner } from "@/lib/craig/documents";
+import type { StoredDocument } from "@/lib/craig/documents";
+import {
+  JoinerScreen,
+  type JoinerView,
+  type PlanStep,
+  type Resource,
+} from "./joiner-screen";
 
 /**
  * A server component wrapping the new starter's screen, for the guard and for
@@ -44,6 +51,13 @@ export default async function JoinerHomePage() {
   const joiner = await requireJoiner();
   const progress = progressOf(joiner);
 
+  /* Their employer's shared documents, and only those — the filtering is
+     `listDocumentsForJoiner`'s, done in the query, so nothing here has to
+     remember the rule. It takes the joiner rather than an account id for the
+     same reason: there is no argument this page could pass that would widen
+     it. */
+  const documents = await listDocumentsForJoiner(joiner);
+
   /* `next` is the one step with a form on it. It skips over the company's own
      steps deliberately: a new starter waiting on somebody else's name tag is
      not a new starter who should be stopped from giving their date of birth,
@@ -67,9 +81,53 @@ export default async function JoinerHomePage() {
        "That is everything" the morning the company has not made the name tag
        yet would be this screen's one outright lie. */
     allDone: progress.overall.finished,
+    resources: documents.map(toResource),
   };
 
   return <JoinerScreen view={view} />;
+}
+
+/**
+ * One stored document as one row of the list.
+ *
+ * The kind and the size are words here rather than a MIME type and a byte
+ * count, for the same reason every date on this page is formatted server-side:
+ * this is the only place that has to know, and doing it once means there is only
+ * ever one answer. "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+ * is not a thing to show somebody in their first week.
+ */
+function toResource(document: StoredDocument): Resource {
+  return {
+    id: document.id,
+    name: document.name,
+    kind: KINDS[document.contentType] ?? "File",
+    size: readableSize(document.sizeBytes),
+  };
+}
+
+const KINDS: Record<string, string> = {
+  "application/pdf": "PDF",
+  "text/plain": "Text",
+  "text/markdown": "Text",
+  "application/msword": "Word",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "Word",
+  "application/rtf": "Word",
+  "image/png": "Image",
+  "image/jpeg": "Image",
+};
+
+/**
+ * Bytes as a person reads them.
+ *
+ * One decimal place on megabytes and none on kilobytes, because "1.2 MB" is a
+ * useful distinction and "847.3 KB" is noise. Base 1024, matching what every
+ * operating system will have told them about the same file.
+ */
+function readableSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**

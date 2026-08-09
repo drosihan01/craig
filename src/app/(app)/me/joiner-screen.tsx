@@ -124,6 +124,24 @@ export interface JoinerView {
   finished: boolean;
   /** ...and the company has finished their half too, which is a different day. */
   allDone: boolean;
+  /**
+   * What their employer has shared with new starters. Only that.
+   *
+   * Assembled on the server by `listDocumentsForJoiner`, which filters by their
+   * employer *and* by `shared` in one statement — so this array cannot contain
+   * a document nobody decided to share, and the screen has no filtering of its
+   * own to get wrong.
+   */
+  resources: Resource[];
+}
+
+export interface Resource {
+  id: string;
+  name: string;
+  /** "PDF", "Word", "Image" — the kind, not the MIME type. */
+  kind: string;
+  /** "1.2 MB", already rounded on the server. */
+  size: string;
 }
 
 /**
@@ -297,6 +315,47 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
             </ol>
           )}
         </section>
+
+        {/* Only when there is something in it. An empty "Resources" heading on
+            somebody's onboarding reads as a section that failed to load, or as
+            a promise their employer has not kept — and this person cannot tell
+            which, or do anything about either. Nothing is the honest state. */}
+        {view.resources.length > 0 && (
+          <section className="flex flex-col gap-4" aria-label="Resources">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold tracking-[-0.01em]">
+                Things to read
+              </h2>
+              <p className="text-sm text-text-muted">
+                {company} shared these with everyone joining.
+              </p>
+            </div>
+
+            <ul className="flex flex-col gap-2">
+              {view.resources.map((resource) => (
+                <li key={resource.id}>
+                  {/* A plain link to a route that checks, then redirects to a
+                      URL good for a minute. Not an <a download>: the file may
+                      be a PDF somebody wants to read rather than keep, and the
+                      browser is better at deciding that than we are. */}
+                  <a
+                    href={`/api/joiner/documents/${resource.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-3 transition-colors hover:border-border-strong"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {resource.name}
+                    </span>
+                    <span className="shrink-0 text-2xs text-text-subtle">
+                      {resource.kind} · {resource.size}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* Underneath the plan, not above it. The checklist is what this person
             came for and the thing with a deadline on it; a chat box at the top
