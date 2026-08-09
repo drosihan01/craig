@@ -17,6 +17,7 @@ import {
   toISODate,
 } from "@/components/ui";
 import { Check, DoneAll, Schedule } from "@/components/ui/icons";
+import { JoinerCraig } from "@/components/craig/joiner-craig";
 import { cn } from "@/lib/cn";
 import type { JoinerField, StepActor } from "@/lib/craig/contract";
 
@@ -297,10 +298,19 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
           )}
         </section>
 
+        {/* Underneath the plan, not above it. The checklist is what this person
+            came for and the thing with a deadline on it; a chat box at the top
+            would make answering a question look like the first task. It sits
+            above the line about replying to the email on purpose, so the two
+            ways of getting help read as a pair — him for what is on this screen,
+            a person for everything else. */}
+        <JoinerCraig firstName={firstName} />
+
         {/* The way out, and the only one there is. This person cannot raise a
             ticket, and nothing on this screen can correct a name somebody else
             typed — so the last line is a route back to a human rather than a
-            legal notice about why they are receiving this. */}
+            legal notice about why they are receiving this. Craig above does not
+            replace it: he can answer questions and change nothing. */}
         <p className="text-xs leading-relaxed text-text-subtle">
           You&apos;re seeing this because {company} gave you a seat. If
           something here looks wrong, reply to the email that brought you — it
