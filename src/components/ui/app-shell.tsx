@@ -400,7 +400,25 @@ export function AppShell({
         </div>
       </header>
 
-      <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1500px] border-x border-border">
+      {/* `fill` is a *fixed* height, not a floor.
+       *
+       * These were both `min-h` until a long conversation proved the
+       * difference. A screen that pins its own composer sizes itself with
+       * `h-full`, and a percentage height resolves against whatever the parent
+       * actually is — so under `min-h` the row grew past the viewport as the
+       * transcript did, `h-full` grew with it, and the composer stayed glued to
+       * the bottom of the *content* while the whole page scrolled. It looked
+       * pinned right up until there was enough conversation to scroll, which is
+       * why it survived a short test.
+       *
+       * The floor is still right for every other screen: they scroll as pages
+       * and should reach the bottom of the window when there is little on them. */}
+      <div
+        className={cn(
+          "relative mx-auto flex max-w-[1500px] border-x border-border",
+          fill ? "h-[calc(100vh-3rem)]" : "min-h-[calc(100vh-3rem)]",
+        )}
+      >
         {nav && isDesktop && (
           <Panel
             side="left"
@@ -418,8 +436,16 @@ export function AppShell({
           </Panel>
         )}
 
+        {/* Under `fill`, main is itself a column that cannot outgrow its share.
+            `min-h-0` is the half that is easy to leave off and impossible to
+            spot: without it a flex child's floor is its content, so a long
+            transcript pushes the column taller than the row and takes the
+            composer past the bottom of the window rather than scrolling. */}
         <main
-          className={cn("min-w-0 flex-1 px-4 lg:px-8", fill ? "pb-0" : "pb-24")}
+          className={cn(
+            "min-w-0 flex-1 px-4 lg:px-8",
+            fill ? "flex min-h-0 flex-col pb-0" : "pb-24",
+          )}
         >
           {children}
         </main>

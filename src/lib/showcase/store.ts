@@ -12,6 +12,10 @@ import {
 import { missingRequired } from "@/lib/workflow/library";
 import { blankTrigger } from "@/lib/showcase/draft";
 import { forgetSync, hydrate, scheduleSync } from "@/lib/showcase/workflow-sync";
+import {
+  forgetThreadSync,
+  scheduleThreadSync,
+} from "@/lib/showcase/thread-sync";
 
 /**
  * Everything the showcase knows, which to begin with is nothing.
@@ -97,7 +101,27 @@ interface ShowcaseState {
   gaps: { id: string; text: string }[];
   /** Concrete things he learned about the company. */
   facts: { id: string; text: string }[];
-  /** The one conversation, across every screen it's held on. */
+  /**
+   * The conversation currently open, and which one it is.
+   *
+   * This used to be *the* conversation — one transcript, written to by every
+   * screen. The argument for that was real and is worth keeping half of:
+   * discovery and the editing that follows it genuinely are one conversation,
+   * and a thread that restarts when you open your own workflow is two
+   * conversations pretending to be one.
+   *
+   * What it got wrong is that *every* pair of screens is like that. Asking
+   * after a new starter on Home appended to the conversation that had built a
+   * workflow last week, and Craig was handed both as one train of thought. So
+   * the transcript is now per thread — see `threads.ts` for the three kinds —
+   * and this holds whichever one is on screen.
+   *
+   * `threadId` is null before a conversation has been opened, and on Home
+   * before the first thing is said: a god thread is made on the first send
+   * rather than on arrival, so opening Home and leaving does not litter the
+   * history with empty conversations.
+   */
+  threadId: string | null;
   messages: CraigMessage[];
   /**
    * Force every draft to the one-step test workflow. On by default.
@@ -136,6 +160,7 @@ const initial = (): ShowcaseState => ({
   activity: [],
   gaps: [],
   facts: [],
+  threadId: null,
   messages: [],
   simpleDraft: true,
   accountEmail: null,
@@ -161,6 +186,17 @@ const keyFor = (email: string) => `craig-showcase:${email}`;
  * The switch is left out on purpose. It belongs to whoever is driving the
  * sandbox, not to the account being demonstrated, and restoring it per account
  * would mean a test run inheriting a setting from whoever signed in last.
+ *
+ * **The conversation is left out too, and that is a change.** It used to be
+ * saved here, which was right while a transcript existed nowhere else. Now that
+ * threads are rows, a local copy is a second answer to "what was said", and it
+ * lost: arriving at Home is meant to start a fresh conversation, and the
+ * restore raced `clearThread` and put the previous one back on screen. Whoever
+ * won that race decided what Craig believed you had just been talking about.
+ *
+ * What replaces it is not nothing. A workflow's thread is re-read when the
+ * screen opens, and Home's history lists the god threads — both from the
+ * server, which is the copy every device can see.
  */
 function persist() {
   if (typeof window === "undefined" || !state.accountEmail) return;
@@ -175,7 +211,6 @@ function persist() {
         activity: state.activity,
         gaps: state.gaps,
         facts: state.facts,
-        messages: state.messages,
       }),
     );
   } catch {
@@ -208,11 +243,6 @@ function restore(email: string): ShowcaseState {
       activity: Array.isArray(parsed.activity) ? parsed.activity : [],
       gaps: Array.isArray(parsed.gaps) ? parsed.gaps : [],
       facts: Array.isArray(parsed.facts) ? parsed.facts : [],
-      /* Any turn caught mid-stream when the tab closed is finished, not
-         resumed — there is no request still running to append to it. */
-      messages: Array.isArray(parsed.messages)
-        ? parsed.messages.map((m) => ({ ...m, streaming: false }))
-        : [],
     };
   } catch {
     return fresh;
@@ -231,6 +261,11 @@ function set(next: Partial<ShowcaseState>) {
      last sent, so a `set` that touched only the conversation costs a map
      lookup. */
   if (next.workflows) scheduleSync(state.accountEmail, state.workflows);
+  /* Same hook, same reason: every write to the transcript reaches the sync
+     without each of the four writers below having to remember to call it. The
+     sync itself skips turns that are still streaming, so a `set` per delta
+     costs a string compare rather than a request. */
+  if (next.messages) scheduleThreadSync(state.threadId, state.messages);
   listeners.forEach((l) => l());
 }
 
@@ -486,6 +521,10 @@ export function claimAccount(email: string | null) {
     : { ...initial(), simpleDraft: state.simpleDraft, accountEmail: null };
   listeners.forEach((l) => l());
 
+  /* The other account's conversation must not be what the next push writes
+     into. Same argument as `forgetSync` beside it. */
+  forgetThreadSync();
+
   if (!email) {
     forgetSync();
     return;
@@ -514,6 +553,57 @@ export function claimAccount(email: string | null) {
 /* ---------------------------------------------------------------------- */
 /*  The conversation                                                      */
 /* ---------------------------------------------------------------------- */
+
+/**
+ * Show a conversation, replacing whatever was open.
+ *
+ * The two halves are set together on purpose. A thread id that arrives a render
+ * before its messages is a screen showing the last conversation's turns under
+ * the new one's heading, and the sync — which is keyed on the id — would push
+ * them into the wrong thread.
+ */
+export function setThread(threadId: string, messages: CraigMessage[]) {
+  if (state.threadId === threadId && messages === state.messages) return;
+  /* What the server has been told belongs to the thread that has just been
+     closed. Left in place, the first write to this one would send only the
+     turns that happen to differ from the previous conversation's. */
+  forgetThreadSync();
+  set({ threadId, messages });
+}
+
+/**
+ * Attach the conversation already on screen to a thread that has just been made.
+ *
+ * The counterpart to `setThread`, and the reason it is separate: this one keeps
+ * the messages. Home makes its god thread on the *first send* rather than on
+ * arrival — so that opening Home and leaving does not litter the history with
+ * empty conversations — which means by the time the id lands, a turn has
+ * already been typed and is streaming. Replacing the transcript with the
+ * server's (empty) copy at that moment would delete the sentence that caused
+ * the thread to exist.
+ *
+ * Re-setting `messages` to the same array is deliberate: it is what tells `set`
+ * a transcript write happened, so the turn in flight is pushed to the thread it
+ * now belongs to rather than waiting for another one.
+ */
+export function adoptThread(threadId: string) {
+  if (state.threadId === threadId) return;
+  forgetThreadSync();
+  set({ threadId, messages: state.messages });
+}
+
+/**
+ * Put the screen back to a conversation that has not started.
+ *
+ * Home does this on arrival: a god thread is scoped to a moment, so coming back
+ * is a new conversation rather than a continuation. The old one is not deleted
+ * — it is in history, which is the whole point of it having been a thread.
+ */
+export function clearThread() {
+  if (state.threadId === null && state.messages.length === 0) return;
+  forgetThreadSync();
+  set({ threadId: null, messages: [] });
+}
 
 /**
  * The person's turn, and the empty reply about to be streamed into it.
@@ -616,6 +706,7 @@ export const resetShowcase = () => {
      mark set would mean the next sign-up on this browser skipped a rescue it
      genuinely needs. */
   forgetSync(state.accountEmail);
+  forgetThreadSync();
   /* The switch survives, because it isn't part of what's being cleared. */
   state = { ...initial(), simpleDraft: state.simpleDraft };
   listeners.forEach((l) => l());

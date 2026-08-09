@@ -84,6 +84,9 @@ export function CraigConversation({
   onSend,
   onGenerate,
   generating = false,
+  offerDraft = true,
+  placeholder,
+  header,
 }: {
   messages: CraigMessage[];
   phase: string | null;
@@ -100,6 +103,25 @@ export function CraigConversation({
   onGenerate?: () => void;
   /** Generate has been pressed and the workflow hasn't arrived yet. */
   generating?: boolean;
+  /**
+   * Whether a long enough conversation should offer to build a workflow.
+   *
+   * True on the screen whose whole purpose is producing one. False on Home,
+   * where the same three-answer heuristic would interrupt somebody asking after
+   * a new starter with an offer to build something they never mentioned.
+   */
+  offerDraft?: boolean;
+  /** Overrides the opening prompt. The default is written for a first run. */
+  placeholder?: string;
+  /**
+   * Above the transcript and inside the scroller.
+   *
+   * Inside, because a header on a conversation is read once — Home's greeting
+   * answers "what should I do", which is the question somebody has before they
+   * have asked one. Held outside the scroller it would be a permanent band that
+   * every later message passes behind.
+   */
+  header?: React.ReactNode;
 }) {
   const [text, setText] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
@@ -199,7 +221,7 @@ export function CraigConversation({
   }, [replies, pick]);
 
   const offerHandoff =
-    Boolean(draft) || (!busy && !error && readyToDraft(messages));
+    offerDraft && (Boolean(draft) || (!busy && !error && readyToDraft(messages)));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -213,6 +235,23 @@ export function CraigConversation({
         }}
         className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-8"
       >
+        {/* Clearance under the header, as an element rather than as padding on
+            the scroller or the column around it.
+
+            Padding on the *column* is the worst of the three: it is outside the
+            scrollable area, so it is a permanent band that every message passes
+            behind on its way up and never occupies. Padding on the scroller
+            scrolls away correctly but cannot be scrolled *into* — the content
+            can never reach the top of the box, which is what makes a long
+            transcript feel like it is stuck an inch below the rule.
+
+            A spacer is content. It holds the first line clear on arrival and
+            then scrolls fully out of the way like anything else, so the top of
+            the conversation really is the top. */}
+        <div aria-hidden className="h-10 shrink-0" />
+
+        {header}
+
         {messages.map((m, i) => {
           if (m.role === "user") {
             return (
@@ -258,9 +297,10 @@ export function CraigConversation({
           inputRef={composerRef}
           numberHint={replies.length > 0 ? replies.length + 1 : undefined}
           placeholder={
-            started
+            placeholder ??
+            (started
               ? "Tell him the next bit…"
-              : "start anywhere — what you sell, who does what, who's arriving…"
+              : "start anywhere — what you sell, who does what, who's arriving…")
           }
           onSubmit={submit}
           onAttach={setFiles}

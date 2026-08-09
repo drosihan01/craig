@@ -9,7 +9,7 @@ import {
   NavTreeItem,
   Separator,
 } from "@/components/ui";
-import { AltRoute, Forum, Groups } from "@/components/ui/icons";
+import { AltRoute, Groups, Home } from "@/components/ui/icons";
 
 /**
  * The showcase's left column.
@@ -69,7 +69,7 @@ const ITEMS = [
   {
     label: "Home",
     href: "/",
-    icon: <Forum />,
+    icon: <Home />,
     shut: "There's nothing here until Craig has something to tell you about",
   },
   {
