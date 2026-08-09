@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthSplit } from "@/components/ui";
-import { AFTER_SIGN_IN } from "@/lib/craig/contract";
+import { AFTER_SIGN_IN, JOIN_PATH } from "@/lib/craig/contract";
 import { hasAnyAccount } from "@/lib/craig/accounts";
 import { currentUser } from "@/lib/craig/current-user";
 import { safeNext } from "@/lib/craig/redirect";
@@ -50,15 +50,38 @@ export default async function ShowcaseSignInPage(
 
         <SignInForm next={next} />
 
-        <p className="text-sm text-text-subtle">
-          No account?{" "}
-          <Link
-            href={SIGN_UP_PATH}
-            className="text-accent underline-offset-4 hover:underline"
-          >
-            Create one
-          </Link>
-        </p>
+        <div className="flex flex-col gap-1.5 text-sm text-text-subtle">
+          <p>
+            No account?{" "}
+            <Link
+              href={SIGN_UP_PATH}
+              className="text-accent underline-offset-4 hover:underline"
+            >
+              Create one
+            </Link>
+          </p>
+
+          {/* The only thing in the product that points at `/join`, which until
+              now nothing did. A new starter who has lost the link in their
+              invitation has one instinct — find the login page — and this is
+              the page they find. Without this line it is a dead end: an email
+              and password form for an account they were never given and cannot
+              create, on somebody's first week.
+
+              Below the sign-up line rather than above it, because this page is
+              addressed to the person who bought Craig and they are still the
+              likelier reader. It is a way out for the person on the wrong
+              screen, not a second front door. */}
+          <p>
+            Joining a company?{" "}
+            <Link
+              href={JOIN_PATH}
+              className="text-accent underline-offset-4 hover:underline"
+            >
+              Get your link
+            </Link>
+          </p>
+        </div>
       </div>
     </AuthSplit>
   );
