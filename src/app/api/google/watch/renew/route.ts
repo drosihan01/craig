@@ -27,12 +27,24 @@ import { constantTimeEqual } from "@/lib/showcase/session";
  * so the choice is this or a job that cannot be scheduled. The bearer check
  * below is what stops it being a public button.
  *
- * **Nothing schedules this yet.** There is no `crons` entry in `vercel.json`,
- * deliberately — Vercel rejects a schedule the account's plan does not allow at
- * deploy time, and a deploy that fails because of a cron expression is a worse
- * outcome than a sweep somebody has to add on purpose. See the report: this
- * needs one line of configuration and a `CRON_SECRET`, and until it has them
- * the channels created elsewhere expire and are never replaced.
+ * **Scheduled daily**, at `0 15 * * *` in `vercel.json` — 15:00 UTC, which is
+ * the small hours in Sydney where the functions run.
+ *
+ * Once a day rather than more often, because this account is on Hobby and that
+ * is the only cadence Hobby allows. It is comfortably enough: Google's watch
+ * channels last on the order of a week, this renews at a quarter of whatever
+ * life it was actually granted, and a sweep that finds nothing near expiry
+ * costs two indexed reads and no network call. The margin is days, not hours.
+ *
+ * A daily expression is also the one that cannot fail a deploy. Vercel rejects
+ * a schedule the plan does not allow *at deploy time*, so a more frequent
+ * cadence chosen on the assumption of a paid plan would take the whole site
+ * down at the next push rather than merely running the sweep too rarely.
+ *
+ * Still needs `CRON_SECRET` set in the deployment's environment. Without it
+ * `authorised` refuses everything, including Vercel, and the sweep never runs —
+ * which is the safe failure, but it is a failure and it is silent apart from
+ * the log line below.
  */
 
 const noStore = { "Cache-Control": "no-store" };
