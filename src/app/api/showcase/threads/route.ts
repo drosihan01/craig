@@ -6,9 +6,11 @@ import {
   onboardingThread,
   readThread,
   saveMessages,
+  saveNotes,
   startGodThread,
   threadForWorkflow,
   titleThread,
+  type StoredNote,
   type ThreadKind,
 } from "@/lib/showcase/threads";
 
@@ -94,11 +96,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
 
-  const { open, graduate, threadId, messages, title } = (body ?? {}) as {
+  const { open, graduate, threadId, messages, notes, title } = (body ?? {}) as {
     open?: unknown;
     graduate?: unknown;
     threadId?: unknown;
     messages?: unknown;
+    notes?: unknown;
     title?: unknown;
   };
 
@@ -206,5 +209,21 @@ export async function POST(request: Request) {
   }
 
   await saveMessages(session.email, threadId, clean);
+
+  /* The conversation's notes ride the same flush as its turns. Shape-checked
+     like everything else that lands in a table: an unknown kind or a
+     non-string is dropped, and the cap is because a note is a sentence — a
+     payload trying to store a novel in one is not a note. */
+  const rawNotes = Array.isArray(notes) ? notes.slice(0, 100) : [];
+  const cleanNotes: StoredNote[] = [];
+  for (const item of rawNotes) {
+    if (!item || typeof item !== "object") continue;
+    const { kind, text } = item as { kind?: unknown; text?: unknown };
+    if (kind !== "gap" && kind !== "fact") continue;
+    if (typeof text !== "string" || !text.trim()) continue;
+    cleanNotes.push({ kind, text: text.trim().slice(0, 2000) });
+  }
+  await saveNotes(session.email, threadId, cleanNotes);
+
   return NextResponse.json({ ok: true, saved: clean.length });
 }

@@ -2,6 +2,13 @@
 
 import type { CraigMessage } from "./store";
 
+/** A gap or a fact, as it travels. The id stays client-side — the server
+    dedupes on content, and an id minted per browser would defeat that. */
+export interface ThreadNote {
+  kind: "gap" | "fact";
+  text: string;
+}
+
 /**
  * Keeping a conversation and its durable copy in step.
  *
@@ -30,7 +37,11 @@ const PUSH_DELAY_MS = 700;
 /** What the server was last told, so an unchanged turn isn't re-sent. */
 let pushed = new Map<string, string>();
 let timer: ReturnType<typeof setTimeout> | null = null;
-let pending: { threadId: string; messages: CraigMessage[] } | null = null;
+let pending: {
+  threadId: string;
+  messages: CraigMessage[];
+  notes: ThreadNote[];
+} | null = null;
 
 const serialise = (m: CraigMessage) =>
   JSON.stringify([m.role, m.content, m.sources ?? null]);
@@ -49,7 +60,11 @@ export async function openThread(
     workflowId?: string;
     from?: { threadId: string; messageId?: string };
   } = {},
-): Promise<{ id: string; messages: CraigMessage[] } | null> {
+): Promise<{
+  id: string;
+  messages: CraigMessage[];
+  notes: ThreadNote[];
+} | null> {
   const id = crypto.randomUUID();
   try {
     const response = await fetch("/api/showcase/threads", {
@@ -67,9 +82,12 @@ export async function openThread(
        second round trip in front of the first message. Anything else is one we
        were handed rather than given — the workflow's existing conversation,
        say — and its turns are the point. */
-    const messages = threadId === id ? [] : await readThread(threadId);
-    seed(messages);
-    return { id: threadId, messages };
+    const read =
+      threadId === id
+        ? { messages: [] as CraigMessage[], notes: [] as ThreadNote[] }
+        : await readThread(threadId);
+    seed(read.messages);
+    return { id: threadId, messages: read.messages, notes: read.notes };
   } catch {
     /* Offline, or the route is unreachable. The screen carries on with a local
        conversation; the next open retries. */
@@ -77,20 +95,28 @@ export async function openThread(
   }
 }
 
-/** One thread's turns, for opening it or picking it out of history. */
-export async function readThread(threadId: string): Promise<CraigMessage[]> {
+/** One thread's turns and notes, for opening it or picking it from history. */
+export async function readThread(
+  threadId: string,
+): Promise<{ messages: CraigMessage[]; notes: ThreadNote[] }> {
   try {
     const response = await fetch(
       `/api/showcase/threads?id=${encodeURIComponent(threadId)}`,
     );
-    if (!response.ok) return [];
-    const body = (await response.json()) as { messages?: CraigMessage[] };
+    if (!response.ok) return { messages: [], notes: [] };
+    const body = (await response.json()) as {
+      messages?: CraigMessage[];
+      notes?: ThreadNote[];
+    };
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    /* Nothing read back is still arriving: there is no request running to
-       append to it, whatever it looked like when the tab closed. */
-    return messages.map((m) => ({ ...m, streaming: false }));
+    return {
+      /* Nothing read back is still arriving: there is no request running to
+         append to it, whatever it looked like when the tab closed. */
+      messages: messages.map((m) => ({ ...m, streaming: false })),
+      notes: Array.isArray(body.notes) ? body.notes : [],
+    };
   } catch {
-    return [];
+    return { messages: [], notes: [] };
   }
 }
 
@@ -150,9 +176,14 @@ function seed(messages: CraigMessage[]) {
 export function scheduleThreadSync(
   threadId: string | null,
   messages: CraigMessage[],
+  /* The whole current list, every time. Notes are few, append-only, and the
+     server diffs against what the thread already has — client-side "what have
+     I sent" bookkeeping is how a note recorded during a dropped sync never
+     arrives anywhere. */
+  notes: ThreadNote[] = [],
 ) {
   if (!threadId) return;
-  pending = { threadId, messages };
+  pending = { threadId, messages, notes };
 
   if (timer) clearTimeout(timer);
   timer = setTimeout(flush, PUSH_DELAY_MS);
@@ -161,12 +192,13 @@ export function scheduleThreadSync(
 function flush() {
   timer = null;
   if (!pending) return;
-  const { threadId, messages } = pending;
+  const { threadId, messages, notes } = pending;
   pending = null;
 
   /* Paired with its index before filtering, because `seq` is the turn's
      position in the *whole* transcript — looked up afterwards, an unsettled
      turn earlier in the list would shift every position after it. */
+  const saveNotes = notes.length > 0;
   const save = messages
     .map((m, seq) => ({ m, seq }))
     .filter(
@@ -179,7 +211,7 @@ function flush() {
         m.content.trim() !== "" &&
         pushed.get(m.id) !== serialise(m),
     );
-  if (save.length === 0) return;
+  if (save.length === 0 && !saveNotes) return;
 
   /* The first thing anybody typed, which is what they came to ask. Titled from
      that rather than from anything Craig generated: it is already written, and
@@ -199,13 +231,14 @@ function flush() {
       seq,
       sources: m.sources,
     })),
+    notes,
     title: opener,
   });
 }
 
 async function send(
   threadId: string,
-  payload: { messages: unknown[]; title?: string },
+  payload: { messages: unknown[]; notes?: ThreadNote[]; title?: string },
 ) {
   try {
     await fetch("/api/showcase/threads", {
