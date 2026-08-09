@@ -215,7 +215,6 @@ export type Database = {
           name: string
           role: string
           start_date: string
-          steps: Json
           workflow_id: string
           workflow_name: string
         }
@@ -229,7 +228,6 @@ export type Database = {
           name: string
           role?: string
           start_date: string
-          steps?: Json
           workflow_id: string
           workflow_name: string
         }
@@ -243,7 +241,6 @@ export type Database = {
           name?: string
           role?: string
           start_date?: string
-          steps?: Json
           workflow_id?: string
           workflow_name?: string
         }
@@ -495,10 +492,6 @@ export type Database = {
           value: string | null
           version: number
         }[]
-      }
-      replace_joiner_steps: {
-        Args: { p_expected: Json; p_id: string; p_next: Json }
-        Returns: boolean
       }
     }
     Enums: {

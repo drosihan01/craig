@@ -350,6 +350,9 @@ export function addWorkflow(workflow: ShowcaseWorkflow) {
  * with the canvas it was counting.
  */
 export function setWorkflowBlocks(id: string, blocks: WorkflowBlock[]) {
+  /* Read before the write, because the write is what clears it. */
+  const wasPending = state.workflows.find((w) => w.id === id)?.pending;
+
   set({
     workflows: state.workflows.map((w) =>
       /* The first edit is what makes a blank workflow real — see `pending`.
@@ -359,6 +362,17 @@ export function setWorkflowBlocks(id: string, blocks: WorkflowBlock[]) {
       w.id === id ? { ...w, blocks, pending: undefined } : w,
     ),
   });
+
+  /* The moment it became a thing, which is the moment worth recording. A
+     workflow started from blank has no story until somebody puts something in
+     it, and the feed should say when that happened rather than when a button
+     was pressed. */
+  if (wasPending) {
+    const workflow = state.workflows.find((w) => w.id === id);
+    if (workflow) {
+      logActivity({ verb: "Started", what: `${workflow.name} from blank` });
+    }
+  }
 }
 
 /**
@@ -480,9 +494,39 @@ export function publishWorkflow(id: string) {
  * of what happened, and a history that edits itself to match the present is a
  * history you can't use to work out what went wrong.
  */
+/**
+ * Throw away a blank nobody put anything in.
+ *
+ * Separate from `deleteWorkflow` because nothing happened, and the history
+ * should say nothing. Deleting a real workflow is an event worth a line — work
+ * existed and now does not — but a blank started and abandoned is a press
+ * somebody took back, and a feed that narrates it is a feed reporting the
+ * product's own bookkeeping as though it were the account's news.
+ *
+ * Refuses anything that is not pending. A workflow with steps in it has to go
+ * through `deleteWorkflow`, where it is recorded, so this cannot become the
+ * quiet way to remove real work.
+ */
+export function discardWorkflow(id: string): boolean {
+  const workflow = state.workflows.find((w) => w.id === id);
+  if (!workflow?.pending) return false;
+
+  set({ workflows: state.workflows.filter((w) => w.id !== id) });
+  return true;
+}
+
 export function deleteWorkflow(id: string) {
   const workflow = state.workflows.find((w) => w.id === id);
   if (!workflow) return;
+
+  /* A blank nobody touched leaves silently, however it is asked to go. Belt
+     and braces with the editor's own branch: one of the two is a screen making
+     a judgement, and this is the store refusing to write history about a
+     workflow that never had any. */
+  if (workflow.pending) {
+    discardWorkflow(id);
+    return;
+  }
 
   set({ workflows: state.workflows.filter((w) => w.id !== id) });
   logActivity({
@@ -523,11 +567,21 @@ export function createBlankWorkflow(): ShowcaseWorkflow {
     pending: true,
   };
 
-  /* Not `addWorkflow` — that one logs "Drafted … from what you told me",
-     which is true of Craig's and a lie about this one. Nobody told anybody
-     anything; they pressed a button. */
+  /* Silent, and that is the point of `pending`.
+     
+     This used to log "Started New workflow from blank" here, which reported a
+     workflow into the account's history at the moment somebody pressed a
+     button — before there was anything in it, and whether or not they went on
+     to make one. Pressing the button and thinking better of it left a line in
+     the feed about a thing that never existed, and discarding then left a
+     second line saying it had been deleted: two entries for one cancelled
+     press.
+
+     The line is written when the workflow becomes real instead — the first
+     edit, in `setWorkflowBlocks`. Not `addWorkflow` either, which logs
+     "Drafted … from what you told me": true of Craig's, and a lie about this
+     one. Nobody told anybody anything. */
   set({ workflows: [...state.workflows, workflow] });
-  logActivity({ verb: "Started", what: `${workflow.name} from blank` });
 
   return workflow;
 }
