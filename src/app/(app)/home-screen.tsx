@@ -139,8 +139,11 @@ export function HomeScreen({
       nav={
         <ShowcaseNav>
           <div className="flex flex-col gap-1 px-1">
-            <NavStat label="Workflows" value={workflowCount} />
+            {/* Same order as the rows above them, which is People first — a
+                pair of counts that disagrees with the list they sit under is a
+                small thing read many times. */}
             <NavStat label="People" value={peopleCount} />
+            <NavStat label="Workflows" value={workflowCount} />
           </div>
           {/* Below the counts rather than above them: the counts say what the
               account is, and this says what you have been doing. */}

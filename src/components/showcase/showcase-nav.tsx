@@ -65,6 +65,20 @@ import { AltRoute, Groups, Home } from "@/components/ui/icons";
  * instead of one thing to do. So the first run gets the stepper and nothing
  * else, and the rooms appear, unlocked, the moment there is something in them.
  */
+/**
+ * Home, People, Workflows — in that order, and People before Workflows on
+ * purpose.
+ *
+ * It read the other way round for a while, which followed the order things get
+ * *built* in: Craig drafts a workflow, then somebody is given a seat on it. But
+ * a nav is not a history of how the account was assembled, it is a list of the
+ * places worth going, and after the first week the traffic reverses. A workflow
+ * is written once and edited rarely; people arrive continuously, and every
+ * question this product exists to answer — has their account been made, what is
+ * still waiting on me, has Irena got her visa yet — is a question about a
+ * person. Workflows is the machinery behind that, and machinery belongs below
+ * the thing it serves.
+ */
 const ITEMS = [
   {
     label: "Home",
@@ -73,16 +87,16 @@ const ITEMS = [
     shut: "There's nothing here until Craig has something to tell you about",
   },
   {
-    label: "Workflows",
-    href: "/workflows",
-    icon: <AltRoute />,
-    shut: "Craig drafts your first workflow from this conversation",
-  },
-  {
     label: "People",
     href: "/people",
     icon: <Groups />,
     shut: "You can give somebody a seat once there's a workflow to start them on",
+  },
+  {
+    label: "Workflows",
+    href: "/workflows",
+    icon: <AltRoute />,
+    shut: "Craig drafts your first workflow from this conversation",
   },
 ];
 
