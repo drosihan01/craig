@@ -1,8 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui";
+import { AuthSplit, Button } from "@/components/ui";
 import { JoinerLinkForm } from "@/components/craig/joiner-link-form";
-import { CraigMark } from "@/components/ui/craig-mark";
 import { JOIN_PATH, JOINER_HOME } from "@/lib/craig/contract";
 import { getJoiner, progressOf } from "@/lib/craig/joiners";
 import {
@@ -36,8 +35,13 @@ import {
  * corporate security gateways all fetch URLs out of email before any person
  * sees them; a GET that signs you in is a GET all three of them perform. A POST
  * behind a click is the only signal available here that the request came from a
- * human being, and it costs that human one tap on a screen that is already
- * telling them something they want to know.
+ * human being, and it costs that human one tap.
+ *
+ * That tap used to be paid for by a sentence saying what was waiting for them.
+ * It is not any more — the screen is now their name, their employer's name and
+ * the button, because Dzaky asked for this page on the sign-in layout with only
+ * the form and the button on it. The count they used to read here is the first
+ * thing on the screen the button opens, one tap later.
  */
 
 export const metadata = {
@@ -48,62 +52,27 @@ export const metadata = {
 };
 
 /**
- * What's actually waiting for them, in a sentence.
+ * The shell both outcomes share — the same two-panel layout as sign-in.
  *
- * Three cases rather than a count, because the count reads wrong in two of
- * them. "0 things to fill in" is a screen that looks broken, and telling
- * somebody who has already finished that they have things to do is worse than
- * saying nothing at all.
- */
-function waiting(company: string, count: number, finished: boolean) {
-  if (finished) {
-    return `You've already given ${company} everything they asked for. This takes you back to it, in case you want to change something.`;
-  }
-  if (count === 0) {
-    return `Nothing needs filling in by you just yet. This is where your onboarding lives, so you can see what's happening and what's still to come.`;
-  }
-  if (count === 1) {
-    return `There's one thing ${company} needs from you. It won't take long, and you can stop and come back to it.`;
-  }
-  return `There are ${count} things ${company} needs from you. None of them take long, and you can stop and come back whenever suits.`;
-}
-
-/**
- * The shell both outcomes share.
+ * This used to be a card of its own, on the argument that the admin's
+ * `AuthShell` opens with the Craig mark at four times the size and that leading
+ * with a logo they have no reason to recognise would undo an email written in
+ * their employer's voice. The argument was right and it is no longer about a
+ * screen that exists: sign-in moved to `AuthSplit`, which puts a small lockup in
+ * the top corner and nothing else. That is the same register this page was
+ * asking for, so the two can now be the one layout without the cost.
  *
- * Deliberately not the `AuthShell` the admin's sign-in uses. That screen opens
- * with the Craig mark at four times this size, and this is the first thing
- * somebody sees after an email that was signed by their new employer and
- * mentioned Craig once, in the corner, in grey. Leading with a logo they have no
- * reason to recognise would undo the whole point of writing that email in the
- * company's voice. So the credit here sits where it sat there.
+ * `aside` is an empty panel rather than the default. What lives there otherwise
+ * is `AuthMarketing` — claims aimed at somebody deciding whether to buy Craig,
+ * and this person is not buying anything. They were hired. The dot grid stays
+ * because it is the product's own texture; the pitch goes because they are not
+ * the audience for it.
  */
 function Screen({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-12">
-      <div className="flex w-full max-w-md flex-col gap-5">
-        <div className="flex flex-col gap-5 rounded-xl border border-border bg-surface p-7 shadow-e2">
-          {children}
-        </div>
-
-        {/* The same watermark as the email, in the same corner, saying the same
-            words — this screen is the next thing that happens after that
-            message, and a supplier who is a grey line in one and a header in
-            the other reads as two different products.
-
-            The real mark rather than the email's typographic stand-in, because
-            this is a browser: an SVG renders here, and it is only in the email
-            that Gmail and Word between them leave nothing but type. `size-5` is
-            `MARK_MIN_SIZE` — below it the drawing collapses into a smudge. */}
-        <p className="flex items-center justify-end gap-1.5 text-xs text-text-subtle">
-          <CraigMark className="size-5" />
-          <span>
-            Made with{" "}
-            <span className="font-semibold tracking-[-0.01em]">Craig</span>
-          </span>
-        </p>
-      </div>
-    </main>
+    <AuthSplit aside={<span aria-hidden />}>
+      <div className="flex flex-col gap-5">{children}</div>
+    </AuthSplit>
   );
 }
 
@@ -122,9 +91,10 @@ export default async function JoinPage(props: PageProps<"/join">) {
      the same fix and the person reading it did nothing wrong. A link that
      expired, a link that was retyped by hand with a character missing, and a
      link from before somebody reset the showcase are three different facts and
-     none of them are this person's to act on — the only useful sentence is the
-     one that tells them who can. No codes, no "invalid", nothing that reads as
-     an accusation about the link they were sent.
+     none of them are this person's to act on — so the screen offers the one
+     thing that fixes all three rather than explaining which happened. No codes,
+     no "invalid", nothing that reads as an accusation about the link they were
+     sent.
 
      It is also the only such screen in the product, and that is on purpose.
      `requireJoiner()` redirects here rather than rendering its own version of
@@ -139,23 +109,17 @@ export default async function JoinPage(props: PageProps<"/join">) {
         <h1 className="text-2xl font-semibold tracking-[-0.02em]">
           {raw ? "This link didn\u2019t work" : "Get your link"}
         </h1>
-        <p className="text-base leading-relaxed text-text-muted">
-          {raw
-            ? "Links like this one stop working after a while, and they only work for the person they were sent to. Put your email address in below and we\u2019ll send you a new one."
-            : "Enter the email address your invitation was sent to and we\u2019ll send you a link to your checklist."}
-        </p>
-
         {/* The form rather than "ask whoever invited you", which is what this
             screen used to say. It was true and it was a dead end: somebody's
             onboarding stopped until an admin read a message and remembered how
             to resend, on a product whose whole promise is that things keep
-            moving while nobody is watching. */}
-        <JoinerLinkForm />
+            moving while nobody is watching.
 
-        <p className="text-sm leading-relaxed text-text-subtle">
-          Nothing you&rsquo;ve already filled in is lost — a new link opens the
-          same checklist, where you left it.
-        </p>
+            It carries its own label — "Your email address" — and its own
+            button, which is why the two paragraphs that used to sit either side
+            of it are gone: they explained a field that explains itself, and the
+            heading already says which of the two situations this is. */}
+        <JoinerLinkForm />
       </Screen>
     );
   }
@@ -214,14 +178,6 @@ export default async function JoinPage(props: PageProps<"/join">) {
           Welcome, {firstName}
         </h1>
       </div>
-
-      <p className="text-base leading-relaxed text-text-muted">
-        {waiting(
-          joiner.company,
-          progress.total - progress.done,
-          progress.finished,
-        )}
-      </p>
 
       {/* No `useFormStatus` spinner and no client component to hold one. Without
           JavaScript this is still a form that submits, which is the state a
