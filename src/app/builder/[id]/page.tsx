@@ -3,36 +3,35 @@
 import * as React from "react";
 import {
   AppShell,
-  Badge,
   BlockInspector,
   BlockSetup,
   Button,
   Field,
   Input,
-  List,
-  ListItem,
-  Separator,
-  TestRun,
   isUnconfigured,
   setupWarning,
+  Separator,
   Textarea,
   WorkflowBuilder,
   WorkflowCanvas,
   type AppNotification,
   type WorkflowBlock,
 } from "@/components/ui";
-import { AutoAwesome, ChevronLeft, PlayArrow } from "@/components/ui/icons";
+import { ChevronLeft } from "@/components/ui/icons";
 import { useParams, useSearchParams } from "next/navigation";
-import { ACCOUNT, NEW_HIRE, PEOPLE } from "@/lib/demo";
+import { ACCOUNT, PEOPLE } from "@/lib/demo";
 import {
-  findWorkflow,
   stepCount,
   unconfiguredCount,
   type DemoWorkflow,
 } from "@/lib/demo-workflow";
+import { setBlocks as commitBlocks, useWorkflow } from "@/lib/workflow-store";
 import { blockFromPreset, type BlockPreset } from "@/lib/workflow/library";
 import { AdminNav, NavStat } from "@/components/app-nav";
-import { WorkflowAssistant } from "@/components/workflow-assistant";
+import {
+  WorkflowAssistant,
+  useCraigPanel,
+} from "@/components/workflow-assistant";
 
 /* Drafted from Ada's handbook, then built out of the block library. Each
    account is its own step — separate admin panels that fail independently,
@@ -82,10 +81,8 @@ const nextId = () => `b${Date.now()}-${seq++}`;
 
 export default function BuilderPage() {
   return (
-    /* useSearchParams needs a boundary. The fallback is the same page with
-       nothing selected, which is the correct thing to show if ?step never
-       resolves. */
-    <React.Suspense fallback={<Builder step={null} />}>
+    /* Nothing, not a second copy of the builder — see Home. */
+    <React.Suspense fallback={null}>
       <BuilderWithParams />
     </React.Suspense>
   );
@@ -101,14 +98,25 @@ function BuilderWithParams() {
 
 function Builder({ step }: { step: string | null }) {
   const params = useParams<{ id: string }>();
-  const workflow = findWorkflow(params.id);
+  const workflow = useWorkflow(params.id);
 
-  const [blocks, setBlocks] = React.useState<WorkflowBlock[]>(workflow.blocks);
+  /* Straight from the store rather than copied into local state. The builder
+     used to hold its own copy, which meant an edit here never reached Home and
+     an answer Craig took on Home never reached here. */
+  const blocks = workflow.blocks;
+  const setBlocks = React.useCallback(
+    (next: WorkflowBlock[] | ((prev: WorkflowBlock[]) => WorkflowBlock[])) =>
+      commitBlocks(
+        workflow.id,
+        typeof next === "function" ? next(workflow.blocks) : next,
+      ),
+    [workflow.id, workflow.blocks],
+  );
   /* Opens on the workflow rather than on a block — landing inside one step's
      settings before you've seen the shape of the thing is backwards — unless
      something linked here asking for a specific one. */
   const [selectedId, setSelectedId] = React.useState<string | null>(step);
-  const [testing, setTesting] = React.useState(false);
+  const chat = useCraigPanel(workflow.blocks);
 
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
 
@@ -127,7 +135,11 @@ function Builder({ step }: { step: string | null }) {
     setBlocks((prev) => {
       const i = prev.findIndex((b) => b.id === id);
       if (i === -1) return prev;
-      const copy = { ...prev[i], id: nextId(), title: `${prev[i].title} (copy)` };
+      const copy = {
+        ...prev[i],
+        id: nextId(),
+        title: `${prev[i].title} (copy)`,
+      };
       return [...prev.slice(0, i + 1), copy, ...prev.slice(i + 1)];
     });
   }
@@ -155,14 +167,21 @@ function Builder({ step }: { step: string | null }) {
 
   return (
     <AppShell
-      title="Workflows"
-      nav={<BuilderNav steps={steps} unconfigured={unconfigured} />}
-      /* The panel shows one thing at a time. Nothing selected and it's about
-         the workflow; a block selected and it's about that block and nothing
-         else. Showing both at once means the settings you want are always
-         under something you don't. */
-      asideTitle={selected ? "Step" : "Workflow"}
+      title={workflow.name}
+      nav={
+        <BuilderNav
+          workflow={workflow}
+          blocks={blocks}
+          steps={steps}
+          unconfigured={unconfigured}
+          onSelect={setSelectedId}
+        />
+      }
       aside={
+        /* One thing at a time, and no heading over it. With nothing selected
+           the panel is just Craig — he's the reason to look right, and the
+           workflow's own numbers are already in the left column. Select a
+           block and it becomes that block's fields. */
         selected ? (
           <div className="flex flex-col gap-4">
             <button
@@ -171,7 +190,7 @@ function Builder({ step }: { step: string | null }) {
               className="-ml-1 flex w-fit items-center gap-1 rounded-md px-1 py-0.5 text-xs text-text-subtle transition-colors hover:bg-surface-hover hover:text-text"
             >
               <ChevronLeft className="size-3.5" />
-              {workflow.name}
+              Back to Craig
             </button>
 
             <BlockInspector block={selected}>
@@ -183,129 +202,94 @@ function Builder({ step }: { step: string | null }) {
                   No configuration. This step is identical in every workflow.
                 </p>
               ) : (
-              <div className="flex flex-col gap-4">
-                <Separator />
-                <Field label="Title">
-                  <Input
-                    value={selected.title}
-                    onChange={(e) =>
-                      patch(selected.id, { title: e.target.value })
-                    }
-                  />
-                </Field>
+                <div className="flex flex-col gap-4">
+                  <Separator />
+                  <Field label="Title">
+                    <Input
+                      value={selected.title}
+                      onChange={(e) =>
+                        patch(selected.id, { title: e.target.value })
+                      }
+                    />
+                  </Field>
 
-                <Field label="Summary" hint="Shown on the block">
-                  <Textarea
-                    rows={2}
-                    value={selected.summary ?? ""}
-                    onChange={(e) =>
-                      patch(selected.id, { summary: e.target.value })
-                    }
-                  />
-                </Field>
+                  <Field label="Summary" hint="Shown on the block">
+                    <Textarea
+                      rows={2}
+                      value={selected.summary ?? ""}
+                      onChange={(e) =>
+                        patch(selected.id, { summary: e.target.value })
+                      }
+                    />
+                  </Field>
 
-                {/* What this particular block needs before it can run. The
+                  {/* What this particular block needs before it can run. The
                     fields come from the preset, so a GitHub block asks for an
                     org and a permission level and a contract block asks for a
                     document and a countersigner. */}
-                {selected.preset && (
-                  <>
-                    <Separator />
-                    <BlockSetup
-                      block={selected}
-                      people={ASSIGNEES}
-                      onChange={(fieldId, value) =>
-                        patch(selected.id, {
-                          config: { ...selected.config, [fieldId]: value },
-                        })
-                      }
-                    />
-                  </>
-                )}
+                  {selected.preset && (
+                    <>
+                      <Separator />
+                      <BlockSetup
+                        block={selected}
+                        people={ASSIGNEES}
+                        onChange={(fieldId, value) =>
+                          patch(selected.id, {
+                            config: { ...selected.config, [fieldId]: value },
+                          })
+                        }
+                      />
+                    </>
+                  )}
 
-                {selected.incomplete && (
-                  <>
-                    <Separator />
-                    <Field
-                      label="Flagged"
-                      hint="Left open rather than guessed at"
-                    >
-                      <div className="flex flex-col gap-2">
-                        <p className="text-sm text-text-muted">
-                          {selected.incomplete}
-                        </p>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="w-fit"
-                          onClick={() =>
-                            patch(selected.id, { incomplete: undefined })
-                          }
-                        >
-                          Resolved
-                        </Button>
-                      </div>
-                    </Field>
-                  </>
-                )}
-              </div>
+                  {selected.incomplete && (
+                    <>
+                      <Separator />
+                      <Field
+                        label="Flagged"
+                        hint="Left open rather than guessed at"
+                      >
+                        <div className="flex flex-col gap-2">
+                          <p className="text-sm text-text-muted">
+                            {selected.incomplete}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="w-fit"
+                            onClick={() =>
+                              patch(selected.id, { incomplete: undefined })
+                            }
+                          >
+                            Resolved
+                          </Button>
+                        </div>
+                      </Field>
+                    </>
+                  )}
+                </div>
               )}
             </BlockInspector>
           </div>
         ) : (
-          <div className="flex flex-col gap-5">
-            {/* Craig first. The canvas is a good editor and a bad
-                conversation — "katalis.slack.com" is four words, and doing it
-                by hand is select the block, find the field, type. */}
-            <WorkflowAssistant
-              blocks={blocks}
-              onPatch={patch}
-              onInsert={(b) => setBlocks((prev) => [...prev, b])}
-              onSelect={setSelectedId}
-            />
-
-            <Separator />
-
-            <WorkflowDetail
-              workflow={workflow}
-              blocks={blocks}
-              steps={steps}
-              unconfigured={unconfigured}
-              onSelect={setSelectedId}
-            />
-          </div>
+          <WorkflowAssistant
+            blocks={blocks}
+            chat={chat}
+            onPatch={patch}
+            onInsert={(b) => setBlocks((prev) => [...prev, b])}
+            onSelect={setSelectedId}
+          />
         )
       }
       notifications={NOTIFICATIONS}
       account={ACCOUNT}
       fill
       actions={
-        <>
-          <Badge tone="warning" size="sm">
-            Draft
-          </Badge>
-          <Button size="sm" variant="ghost">
-            <AutoAwesome />
-            Ask Craig
-          </Button>
-          {/* Sits before Publish deliberately. The order on screen is the
-              order you should do them in, and testing a draft you can't
-              publish yet is the whole point of having a test. */}
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={steps === 0}
-            onClick={() => setTesting(true)}
-          >
-            <PlayArrow />
-            Test run
-          </Button>
-          {/* A trigger on its own is valid but pointless, so an empty workflow
-              is unpublishable for a different reason to an unconfigured one. */}
-          <Button size="sm" disabled={unconfigured > 0 || steps === 0}>
-            Publish
-          </Button>
-        </>
+        /* A trigger on its own is valid but pointless, so an empty workflow is
+           unpublishable for a different reason to an unconfigured one. */
+        <Button size="sm" disabled={unconfigured > 0 || steps === 0}>
+          Publish
+        </Button>
       }
     >
       {/* Full bleed. The canvas is the page — a title and a paragraph above it
@@ -329,28 +313,24 @@ function Builder({ step }: { step: string | null }) {
           </div>
         </WorkflowCanvas>
       </div>
-
-      <TestRun
-        open={testing}
-        onClose={() => setTesting(false)}
-        workflowName={workflow.name}
-        blocks={blocks}
-        candidates={[NEW_HIRE.name, "Someone new", PEOPLE.matty.name]}
-        defaultCandidate={workflow.forWho ?? NEW_HIRE.name}
-      />
     </AppShell>
   );
 }
 
 /**
- * The workflow itself, shown when nothing is selected.
+ * The menu, then everything true about the workflow you're in.
  *
- * The useful thing here isn't the name — it's the list of what's still open.
- * Nine tidy steps and three unresolved ones is the actual state of the draft,
- * and each row jumps to the block, so the panel is a worklist rather than a
- * summary you read and then have to go hunting from.
+ * This lived in the right panel until Craig took that over, and the right
+ * panel was the wrong home for it anyway: it competed with the block you were
+ * editing for the same column, so the settings you wanted were always under
+ * something you didn't. Here it's beside the canvas rather than in front of
+ * it, and it stays put while you work.
+ *
+ * The list of open steps is the useful part. Two unresolved steps out of
+ * eleven is the actual state of the draft, and each row jumps to its block, so
+ * it's a worklist rather than a summary you read and then go hunting from.
  */
-function WorkflowDetail({
+function BuilderNav({
   workflow,
   blocks,
   steps,
@@ -366,118 +346,55 @@ function WorkflowDetail({
   const open = blocks.filter(isUnconfigured);
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-base font-medium">{workflow.name}</span>
-          <Badge tone="warning" size="sm">
-            Draft
-          </Badge>
-        </div>
-        <p className="text-sm leading-relaxed text-text-muted">
-          {steps === 0
-            ? "No steps yet. Add one from the line under the trigger."
-            : workflow.forWho
-              ? `For ${workflow.forWho}, starting in ${workflow.startsIn}.`
-              : "Not assigned to anyone yet."}
+    <AdminNav>
+      <div className="flex flex-col gap-3 px-2">
+        {/* No name and no "for whom" — the header carries the name, and the
+            trigger is the first block on the canvas. A column that repeats
+            what's already on screen twice over is a column you stop reading. */}
+        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+          Overview
         </p>
-      </div>
 
-      <Separator />
+        <div className="flex flex-col gap-2">
+          <NavStat label="Steps" value={steps} />
+          <NavStat
+            label="Unconfigured"
+            value={unconfigured}
+            tone={unconfigured > 0 ? "warning" : "neutral"}
+          />
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <DetailRow label="Trigger" value="A new seat is added" />
-        <DetailRow label="Steps" value={String(steps)} />
-        <DetailRow
-          label="Unconfigured"
-          value={String(unconfigured)}
-          tone={unconfigured > 0 ? "warning" : undefined}
-        />
-        <DetailRow label="Created by" value={workflow.createdBy} />
-        <DetailRow label="Updated" value={workflow.updated} />
+        <div className="flex flex-col gap-1 pt-1">
+          <NavFact label="Created by" value={workflow.createdBy} />
+          <NavFact label="Updated" value={workflow.updated} />
+        </div>
       </div>
 
       {open.length > 0 && (
         <>
           <Separator />
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5 px-2">
             <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
               Still open
             </p>
-            <List dense divided={false} bordered={false}>
-              {open.map((b) => (
-                <ListItem
-                  key={b.id}
-                  onClick={() => onSelect(b.id)}
-                  title={
-                    <span className="font-normal text-text-muted">
-                      {b.title}
-                    </span>
-                  }
-                  description={setupWarning(b)}
-                />
-              ))}
-            </List>
+            {open.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => onSelect(b.id)}
+                className="-mx-1.5 flex flex-col gap-0.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover"
+              >
+                <span className="text-sm leading-snug text-text-muted">
+                  {b.title}
+                </span>
+                <span className="text-2xs leading-relaxed text-text-subtle">
+                  {setupWarning(b)}
+                </span>
+              </button>
+            ))}
           </div>
         </>
       )}
-
-      <Separator />
-
-      <p className="text-xs leading-relaxed text-text-subtle">
-        Select a step to configure it. Click the canvas to return here.
-      </p>
-    </div>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "warning";
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="shrink-0 text-text-subtle">{label}</span>
-      {/* Wraps rather than truncates — "Craig, from your handbook" is the
-          answer to how this draft got here, and half of it is no answer. */}
-      <span
-        className={
-          tone === "warning"
-            ? "text-right text-warning"
-            : "text-right text-text-muted"
-        }
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function BuilderNav({
-  steps,
-  unconfigured,
-}: {
-  steps: number;
-  unconfigured: number;
-}) {
-  return (
-    <AdminNav>
-      <div className="flex flex-col gap-2 px-2">
-        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          This workflow
-        </p>
-        <NavStat label="Steps" value={steps} />
-        <NavStat
-          label="Unconfigured"
-          value={unconfigured}
-          tone={unconfigured > 0 ? "warning" : "neutral"}
-        />
-      </div>
 
       <Separator />
 
@@ -485,5 +402,24 @@ function BuilderNav({
         A workflow cannot be published while any step is unconfigured.
       </p>
     </AdminNav>
+  );
+}
+
+/** A label and a value on one line. Not a NavStat — these aren't counts, and
+    a badge around "Craig, from your handbook" is a badge around a sentence. */
+function NavFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 text-xs">
+      <span className="shrink-0 text-text-subtle">{label}</span>
+      {/* min-w-0 or truncate does nothing: a flex item's default min-width is
+          auto, which floors it at its content and pushes past the panel when
+          you drag it narrow. */}
+      <span
+        className="min-w-0 truncate text-right text-text-muted"
+        title={value}
+      >
+        {value}
+      </span>
+    </div>
   );
 }

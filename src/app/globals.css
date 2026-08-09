@@ -334,6 +334,34 @@
   }
 }
 
+/* Demo v3 — where the director just "clicked".
+   An auto-playing demo moves the screen on its own, and without this you see
+   the result of an interaction but never the interaction. The ring says which
+   control did it; the expanding shadow is the tap. Both fade, because a
+   highlight that lingers reads as a selected state rather than an event. */
+@keyframes v3-tap-ring {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--c-accent) 50%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+.v3-tap {
+  animation: v3-tap-ring 900ms cubic-bezier(0.25, 1, 0.5, 1);
+  outline: 2px solid var(--c-accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+  transition: outline-color 320ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v3-tap {
+    animation: none;
+  }
+}
+
 @keyframes caret-blink {
   50% {
     opacity: 0;

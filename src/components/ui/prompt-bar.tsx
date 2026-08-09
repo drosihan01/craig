@@ -16,6 +16,12 @@ export interface PromptBarProps {
   onSubmit: (text: string) => void;
   model?: ChatModel;
   onModelChange?: (model: ChatModel) => void;
+  /**
+   * The model picker. Off where the route behind the bar is fixed to one model
+   * — the choice is a data boundary rather than a preference, so a picker the
+   * server ignores is the one control in this system that must never ship.
+   */
+  modelPicker?: boolean;
   placeholder?: string;
   busy?: boolean;
   onStop?: () => void;
@@ -23,6 +29,15 @@ export interface PromptBarProps {
   dictation?: boolean;
   /** Enables the attach button. Fires with the full list after every change. */
   onAttach?: (files: File[]) => void;
+  /**
+   * The attach button. Off in narrow columns with nothing a file would answer.
+   *
+   * Separate from `onAttach` rather than derived from it, which is the obvious
+   * shape and the wrong one: most callers here don't pass a handler, so
+   * deriving it would strip the button off every composer in the product as a
+   * side effect of a panel that didn't want it.
+   */
+  attachments?: boolean;
   /** Passed straight to the file input. */
   accept?: string;
   /** Shows a numbered chip in the composer, continuing a list of quick replies
@@ -35,6 +50,9 @@ export interface PromptBarProps {
   size?: "sm" | "lg";
   /** Line under the bar — disclaimer, hint, character count. */
   footnote?: React.ReactNode;
+  /** Controlled text. Omit and the bar keeps its own. */
+  value?: string;
+  onValueChange?: (value: string) => void;
   autoFocus?: boolean;
   className?: string;
 }
@@ -43,20 +61,29 @@ export function PromptBar({
   onSubmit,
   model: controlledModel,
   onModelChange,
+  modelPicker = true,
   placeholder = "Type / for skills",
   busy,
   onStop,
   dictation = true,
+  attachments = true,
   numberHint,
   inputRef,
   onAttach,
   accept = ".pdf,.doc,.docx,.md,.txt,.rtf",
   size = "lg",
   footnote,
+  value: controlledValue,
+  onValueChange,
   autoFocus,
   className,
 }: PromptBarProps) {
-  const [value, setValue] = React.useState("");
+  /* Controllable, so something outside can put words in it — a scripted demo
+     typing a reply, a retry re-filling the last prompt. Uncontrolled stays the
+     default because that's what every current caller wants. */
+  const [internalValue, setInternalValue] = React.useState("");
+  const value = controlledValue ?? internalValue;
+  const setValue = onValueChange ?? setInternalValue;
   const [files, setFiles] = React.useState<File[]>([]);
   const [internalModel, setInternalModel] = React.useState(DEFAULT_MODEL);
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -66,12 +93,30 @@ export function PromptBar({
 
   const ref = React.useRef<HTMLTextAreaElement>(null);
 
-  React.useEffect(() => {
+  /* The resting height is the floor, and typing only ever grows from it.
+     A placeholder long enough to wrap makes the empty box two or three lines
+     tall; without a floor the first character you type collapses it to one,
+     which reads as the composer flinching away from you. Re-measured when the
+     placeholder or size changes, since either moves the resting height. */
+  const floorRef = React.useRef(0);
+
+  React.useLayoutEffect(() => {
+    floorRef.current = 0;
+  }, [placeholder, size]);
+
+  React.useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, size === "lg" ? 220 : 160)}px`;
-  }, [value, size]);
+    // Empty on this pass, so scrollHeight is the resting height.
+    if (!floorRef.current && !value) floorRef.current = el.scrollHeight;
+
+    el.style.height = `${Math.max(
+      floorRef.current,
+      Math.min(el.scrollHeight, size === "lg" ? 220 : 160),
+    )}px`;
+  }, [value, size, placeholder]);
 
   // Hand the node up so a parent can focus it.
   React.useEffect(() => {
@@ -99,6 +144,11 @@ export function PromptBar({
   }
 
   const lg = size === "lg";
+
+  /* No persistent controls at all, so the send button has to hold the row open
+     on its own. Only the showcase's editor panel asks for this today — a
+     ~300px column where an attach button answers nothing. */
+  const bare = !attachments && !modelPicker && !dictation;
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
@@ -173,33 +223,50 @@ export function PromptBar({
           </ul>
         )}
 
-        <div className={cn("flex items-center gap-1", lg ? "p-2.5" : "px-2 pb-2")}>
+        {/* The row is decided by the controls that are always there, never by
+            what you've typed. A bar that materialises on the first keystroke
+            shifts the composer under the cursor mid-word, which is the same
+            flinch the height floor above exists to stop.
+
+            So with every control off the send button becomes the row's
+            permanent occupant, disabled until there's something to send —
+            rather than the row vanishing and taking 36px with it. Before this
+            the opposite happened: attachments off left one lone plus floating
+            in a bar of its own, reading as a control that had lost its
+            neighbours. */}
+        <div
+          className={cn("flex items-center gap-1", lg ? "p-2.5" : "px-2 pb-2")}
+        >
           {/* A real file input, kept out of the layout and driven by the button
               — styling an <input type="file"> directly is not portable, and the
               button needs to look like the rest of the bar. */}
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            accept={accept}
-            onChange={(e) => {
-              addFiles(e.target.files);
-              // Reset so picking the same file twice still fires a change.
-              e.target.value = "";
-            }}
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden
-          />
-          <IconButton
-            label="Attach a file"
-            onClick={() => fileRef.current?.click()}
-          >
-            <Add className="size-4" />
-          </IconButton>
+          {attachments && (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept={accept}
+                onChange={(e) => {
+                  addFiles(e.target.files);
+                  // Reset so picking the same file twice still fires a change.
+                  e.target.value = "";
+                }}
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden
+              />
+              <IconButton
+                label="Attach a file"
+                onClick={() => fileRef.current?.click()}
+              >
+                <Add className="size-4" />
+              </IconButton>
+            </>
+          )}
 
           <div className="ml-auto flex items-center gap-0.5">
-            <ModelPicker value={model} onChange={setModel} />
+            {modelPicker && <ModelPicker value={model} onChange={setModel} />}
 
             {/* Dictation, i.e. speech to text in this field. Deliberately not a
                 live-voice mode — that's a different interaction with different
@@ -220,12 +287,18 @@ export function PromptBar({
                 <StopCircle className="size-4" />
               </button>
             ) : (
-              value.trim() && (
+              (value.trim() || bare) && (
                 <button
                   type="button"
                   onClick={submit}
+                  disabled={!value.trim()}
                   aria-label="Send"
-                  className="ml-0.5 inline-flex size-7 items-center justify-center rounded-md bg-accent text-accent-fg transition-colors hover:bg-accent-hover"
+                  className={cn(
+                    "ml-0.5 inline-flex size-7 items-center justify-center rounded-md transition-colors",
+                    value.trim()
+                      ? "bg-accent text-accent-fg hover:bg-accent-hover"
+                      : "bg-surface-sunken text-text-subtle",
+                  )}
                 >
                   <ArrowUpward className="size-4" />
                 </button>
@@ -235,9 +308,7 @@ export function PromptBar({
         </div>
       </div>
 
-      {footnote && (
-        <p className="px-1 text-2xs text-text-subtle">{footnote}</p>
-      )}
+      {footnote && <p className="px-1 text-2xs text-text-subtle">{footnote}</p>}
     </div>
   );
 }

@@ -20,6 +20,7 @@ import {
   Field,
   GoogleButton,
   Input,
+  NavTreeItem,
   PasswordInput,
   WorkflowBuilder,
   WorkflowCanvas,
@@ -97,8 +98,16 @@ export function DropdownDemo() {
           </span>
         }
         items={[
-          { id: "workflow", label: "Workflow", description: "A full onboarding journey" },
-          { id: "step", label: "Step", description: "One task inside a workflow" },
+          {
+            id: "workflow",
+            label: "Workflow",
+            description: "A full onboarding journey",
+          },
+          {
+            id: "step",
+            label: "Step",
+            description: "One task inside a workflow",
+          },
           { id: "template", label: "From template", icon: <Settings /> },
         ]}
         onSelect={setLast}
@@ -109,6 +118,38 @@ export function DropdownDemo() {
           selected: <span className="text-text">{last}</span>
         </span>
       )}
+    </div>
+  );
+}
+
+/* --- Nav item, button form ------------------------------------------------- */
+
+const NAV_VIEWS = [
+  { id: "email", label: "Email" },
+  { id: "blocks", label: "Blocks" },
+  { id: "run", label: "A run" },
+];
+
+/** How the sandbox uses it: sections are local state, so the rows are buttons. */
+export function NavItemButtonDemo() {
+  const [view, setView] = React.useState(NAV_VIEWS[0].id);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="w-56 rounded-lg border border-border bg-surface p-2">
+        {NAV_VIEWS.map((v) => (
+          <NavTreeItem
+            key={v.id}
+            label={v.label}
+            icon={<Description />}
+            current={view === v.id}
+            onClick={() => setView(v.id)}
+          />
+        ))}
+      </div>
+      <span className="text-xs text-text-subtle">
+        showing: <span className="text-text">{view}</span> — no navigation
+      </span>
     </div>
   );
 }
@@ -258,38 +299,56 @@ export function CanvasDemo() {
         </span>
       </CanvasPanel>
       <div className="px-8 py-10">
-    <WorkflowBuilder
-      className="w-full"
-      blocks={blocks}
-      selectedId={selected}
-      onSelect={setSelected}
-      onInsert={(preset, index) => {
-        const id = `d${n++}`;
-        setBlocks((prev) => [
-          ...prev.slice(0, index),
-          blockFromPreset(preset, id),
-          ...prev.slice(index),
-        ]);
-        setSelected(id);
-      }}
-      onRemove={(id) => setBlocks((p) => p.filter((b) => b.id !== id))}
-      onDuplicate={(id) =>
-        setBlocks((p) => {
-          const i = p.findIndex((b) => b.id === id);
-          return [...p.slice(0, i + 1), { ...p[i], id: `d${n++}` }, ...p.slice(i + 1)];
-        })
-      }
-      onMove={(id, dir) =>
-        setBlocks((p) => {
-          const i = p.findIndex((b) => b.id === id);
-          const j = i + dir;
-          if (i < 1 || j < 1 || j >= p.length) return p;
-          const next = [...p];
-          [next[i], next[j]] = [next[j], next[i]];
-          return next;
-        })
-      }
-    />
+        <WorkflowBuilder
+          className="w-full"
+          blocks={blocks}
+          selectedId={selected}
+          onSelect={setSelected}
+          onInsert={(preset, index) => {
+            const id = `d${n++}`;
+            setBlocks((prev) => [
+              ...prev.slice(0, index),
+              blockFromPreset(preset, id),
+              ...prev.slice(index),
+            ]);
+            setSelected(id);
+          }}
+          onRemove={(id) => setBlocks((p) => p.filter((b) => b.id !== id))}
+          onDuplicate={(id) =>
+            setBlocks((p) => {
+              const i = p.findIndex((b) => b.id === id);
+              return [
+                ...p.slice(0, i + 1),
+                { ...p[i], id: `d${n++}` },
+                ...p.slice(i + 1),
+              ];
+            })
+          }
+          onMove={(id, dir) =>
+            setBlocks((p) => {
+              const i = p.findIndex((b) => b.id === id);
+              const j = i + dir;
+              if (i < 1 || j < 1 || j >= p.length) return p;
+              const next = [...p];
+              [next[i], next[j]] = [next[j], next[i]];
+              return next;
+            })
+          }
+          /* Passing this is what arms the drag — without it the grip still
+             opens its menu and the cards simply aren't draggable. The demo
+             wants the real thing, so it takes the same index-1 floor the
+             editor does rather than trusting the builder to hold the line. */
+          onReorder={(id, to) =>
+            setBlocks((p) => {
+              const from = p.findIndex((b) => b.id === id);
+              if (from < 1 || to < 1 || to >= p.length) return p;
+              const next = [...p];
+              const [moved] = next.splice(from, 1);
+              next.splice(to, 0, moved);
+              return next;
+            })
+          }
+        />
       </div>
     </WorkflowCanvas>
   );

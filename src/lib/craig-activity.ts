@@ -21,7 +21,10 @@ export type ActivityKind =
   | "asked"
   | "sent"
   | "checked"
-  | "noticed";
+  | "noticed"
+  /* Craig writing a value into a workflow, which is the one he does on her
+     behalf rather than to somebody else. */
+  | "set";
 
 export interface Activity {
   id: string;
@@ -94,4 +97,5 @@ export const ACTIVITY_VERB: Record<ActivityKind, string> = {
   sent: "Sent",
   checked: "Checked",
   noticed: "Noticed",
+  set: "Set",
 };

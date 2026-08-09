@@ -2,6 +2,7 @@ import {
   AltRoute,
   Apps,
   Badge,
+  CalendarMonth,
   Description,
   Draw,
   EventAvailable,
@@ -13,6 +14,7 @@ import {
   LaptopMac,
   Lock,
   Mail,
+  Person,
   Quiz,
   RocketLaunch,
   School,
@@ -45,7 +47,7 @@ import type { BlockKind, WorkflowBlock } from "@/components/ui";
  * Three ideas, and they're separate on purpose.
  *
  * `BlockKind` (in workflow-builder) is the *mechanism*: what the engine does
- * with a block. There are seven and there should stay seven.
+ * with a block. There are six and there should stay six.
  *
  * A `BlockPreset` is a *named piece of onboarding* sitting on one of those
  * mechanisms. "Set up MFA" and "Invite to GitHub" are both tasks as far as the
@@ -67,13 +69,7 @@ import type { BlockKind, WorkflowBlock } from "@/components/ui";
  */
 
 export type FieldKind =
-  | "text"
-  | "url"
-  | "select"
-  | "multiselect"
-  | "person"
-  | "file"
-  | "when";
+  "text" | "url" | "select" | "multiselect" | "person" | "file" | "when";
 
 export interface SetupField {
   id: string;
@@ -177,6 +173,18 @@ const UNAVAILABLE: Record<string, string> = {
   dropbox: "Coming soon",
   "custom-app": "Coming soon",
 };
+
+/**
+ * The one preset wired to a real API, named rather than spelled out.
+ *
+ * Three places have to agree on this string: the preset itself, the set of
+ * blocks the showcase will actually run, and the block settings panel, which
+ * shows whether the customer's Google Workspace is connected only for this
+ * one. A literal in each is three chances to typo one and get silence — the
+ * panel would simply never appear, on the block where being told is the whole
+ * point.
+ */
+export const GOOGLE_WORKSPACE_PRESET = "google-workspace";
 
 /** An account on a third-party service. */
 function account(
@@ -292,6 +300,69 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
           WHO_PROVISIONS,
         ],
       },
+      /*
+       * Three blocks with nothing for the admin to fill in, and the empty
+       * `setup` is the decision rather than an omission.
+       *
+       * Every other preset here asks the admin something before it can run:
+       * which template, which channels, who countersigns. These three ask
+       * nobody anything at setup time, because doing the work *is* the answer.
+       * Only the new starter knows their middle name and only they can type
+       * their date of birth; the name tag is made by somebody at the company
+       * and then ticked off. A required `SetupField` on any of them would hold
+       * Publish shut — `missingRequired` is what that gate reads — until an
+       * admin had typed a stranger's birthday into the very step that exists
+       * to ask them for it. That's the question answered by the wrong person
+       * and the workflow unpublishable for having asked it. An optional field
+       * would be a control that changes nothing. So: no fields, Ready the
+       * moment the block lands, and the step is closed by whoever does the
+       * work.
+       *
+       * The ids are load-bearing beyond this file. `JOINER_FIELD_BY_PRESET`
+       * and `ADMIN_TICK_PRESETS` in the showcase contract key off these exact
+       * strings — one decides which form the new starter is shown, the other
+       * which steps the admin can tick. Rename one and the step still appears
+       * on somebody's screen, with nothing on it and no way to finish it.
+       *
+       * They sit next to each other because they are two halves of one idea:
+       * onboarding passes back and forth between the person arriving and the
+       * people expecting them. The titles carry which half, addressed to
+       * whoever acts — the new starter reads "provide your date of birth" on
+       * their own screen, the admin reads "make their name tag" on the canvas.
+       */
+      {
+        id: "middle-name",
+        label: "Provide middle name",
+        description:
+          "The new starter types it in themselves. Nothing for you to set up.",
+        kind: "document",
+        icon: Person,
+        title: "Provide your middle name",
+        summary: "They fill this in themselves",
+        setup: [],
+      },
+      {
+        id: "date-of-birth",
+        label: "Provide date of birth",
+        description:
+          "The new starter types it in themselves. Nothing for you to set up.",
+        kind: "document",
+        icon: CalendarMonth,
+        title: "Provide your date of birth",
+        summary: "They fill this in themselves",
+        setup: [],
+      },
+      {
+        id: "name-tag",
+        label: "Make a name tag",
+        description:
+          "Somebody here makes it and ticks it off. Nothing is asked of the new starter.",
+        kind: "task",
+        icon: Badge,
+        title: "Make their name tag",
+        summary: "Somebody here does this and ticks it off",
+        setup: [],
+      },
       {
         id: "verify-identity",
         label: "Verify employment eligibility",
@@ -309,7 +380,10 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             options: [
               { id: "uk-rtw", label: "UK right to work" },
               { id: "us-i9", label: "US Form I-9" },
-              { id: "de-aufenthalt", label: "Germany — residence and work permit" },
+              {
+                id: "de-aufenthalt",
+                label: "Germany — residence and work permit",
+              },
               { id: "au-vevo", label: "Australia — VEVO check" },
               { id: "other", label: "Something else" },
             ],
@@ -443,42 +517,43 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
     description:
       "One block per service. They're provisioned in different places by different people and they fail independently.",
     presets: [
-      account(
-        "google-workspace",
-        "Google Workspace",
-        "Company email and calendar. Almost everything else keys off this account existing.",
-        Google,
-        [
-          {
-            id: "domain",
-            label: "Email domain",
-            kind: "text",
-            hint: "katalis.ai",
-            required: true,
-          },
-          {
-            id: "groups",
-            label: "Groups to add them to",
-            kind: "multiselect",
-            options: [
-              { id: "everyone", label: "everyone@" },
-              { id: "eng", label: "engineering@" },
-              { id: "alerts", label: "alerts@" },
-            ],
-          },
-          {
-            id: "license",
-            label: "Licence",
-            kind: "select",
-            options: [
-              { id: "starter", label: "Business Starter" },
-              { id: "standard", label: "Business Standard" },
-              { id: "plus", label: "Business Plus" },
-            ],
-            required: true,
-          },
-        ],
-      ),
+      /**
+       * The one block that is wired to a real API, and therefore the one with
+       * nothing to configure.
+       *
+       * Written out rather than built by `account()`, because `account()`
+       * appends "who provisions it" and "when" to every service — the right
+       * default for thirty blocks nobody automates, and wrong for this one. All
+       * three fields it used to carry described decisions that have since been
+       * taken somewhere better:
+       *
+       * - **Email domain** comes from Google's `hd` claim on the Workspace that
+       *   was actually connected. That is deliberate and argued at length in
+       *   `google-connection.ts`: a domain somebody typed is a domain somebody
+       *   can typo, and the failure mode is silent — accounts appear on a
+       *   domain nobody asked for, weeks later, on a real person's first
+       *   morning.
+       * - **Who provisions it** is Craig, which is the entire point of the
+       *   block existing.
+       * - **When** is where it sits in the workflow; it runs when the step
+       *   above it completes.
+       *
+       * So the fields were three inputs with no effect, and the worst kind: not
+       * clutter, but a screen inviting somebody to configure something and then
+       * ignoring what they said. What takes their place in the panel is the
+       * connection state, which is the one thing about this block that is
+       * genuinely still a decision.
+       */
+      {
+        id: GOOGLE_WORKSPACE_PRESET,
+        label: "Google Workspace",
+        description:
+          "Company email and calendar. Almost everything else keys off this account existing.",
+        kind: "task",
+        icon: Google,
+        title: "Google Workspace",
+        setup: [],
+      },
       account(
         "slack",
         "Slack",
@@ -1152,7 +1227,12 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             hint: "Small enough to finish in the first week",
             required: true,
           },
-          { id: "owner", label: "Who assigns it", kind: "person", required: true },
+          {
+            id: "owner",
+            label: "Who assigns it",
+            kind: "person",
+            required: true,
+          },
         ],
       },
       {
@@ -1189,7 +1269,8 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       {
         id: "approval",
         label: "Approval",
-        description: "Hold everything after this until a named person signs off.",
+        description:
+          "Hold everything after this until a named person signs off.",
         kind: "approval",
         icon: HowToReg,
         title: "Approval",
@@ -1240,7 +1321,12 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         icon: TaskAlt,
         title: "New task",
         setup: [
-          { id: "what", label: "What has to happen", kind: "text", required: true },
+          {
+            id: "what",
+            label: "What has to happen",
+            kind: "text",
+            required: true,
+          },
           WHO_PROVISIONS,
           { id: "when", label: "When", kind: "when" },
         ],
@@ -1270,6 +1356,42 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
   },
 ];
 
+/**
+ * The blocks this showcase can actually carry out, end to end.
+ *
+ * Everything else in the library is a real onboarding step and stays in the
+ * library — the catalogue is the argument that Craig writes plans about how a
+ * company works rather than a list of integrations. What it is not, yet, is
+ * something that does anything when a new starter reaches it.
+ *
+ * Three of these the person answers themselves, one somebody here ticks off,
+ * and Google Workspace is the one being wired to a real API. A block that
+ * looks available and then sits there is worse than one that says it isn't
+ * ready: the first wastes somebody's first week waiting, the second is a
+ * roadmap.
+ *
+ * Gated here rather than by editing thirty presets, so turning one back on is
+ * one line and nothing about the block itself carries the state.
+ */
+export const SHOWCASE_PRESETS = new Set<string>([
+  "middle-name",
+  "name-tag",
+  "date-of-birth",
+  GOOGLE_WORKSPACE_PRESET,
+]);
+
+/* Applied after the library is built, so each preset keeps whatever reason it
+   already had. `unavailable` is a sentence shown to the person choosing, and a
+   specific one ("Notion's API can't manage workspace members") is worth more
+   than the general one. */
+for (const category of BLOCK_LIBRARY) {
+  for (const preset of category.presets) {
+    if (!SHOWCASE_PRESETS.has(preset.id) && !preset.unavailable) {
+      preset.unavailable = "Not wired up yet — coming later";
+    }
+  }
+}
+
 export const ALL_PRESETS: BlockPreset[] = BLOCK_LIBRARY.flatMap(
   (c) => c.presets,
 );
@@ -1291,6 +1413,27 @@ export function blockFromPreset(
   };
 }
 
+const hasValue = (v: string | string[] | undefined) =>
+  Array.isArray(v) ? v.length > 0 : Boolean(v && v.trim());
+
+/**
+ * The required fields this config hasn't answered.
+ *
+ * The rule behind "unconfigured", stated once. It lives here rather than in the
+ * builder because Craig drafts on the server, where a `"use client"` module's
+ * exports are references he can't call — and the alternative was a second copy
+ * of "required and empty", which is exactly the drift the derived badge exists
+ * to avoid. `missingSetup` in the builder is this, given a block.
+ */
+export function missingRequired(
+  presetId: string | undefined,
+  config: Record<string, string | string[]> | undefined,
+): SetupField[] {
+  const preset = presetId ? findPreset(presetId) : undefined;
+  if (!preset) return [];
+  return preset.setup.filter((f) => f.required && !hasValue(config?.[f.id]));
+}
+
 /**
  * A block's setup, resolved for reading rather than editing.
  *
@@ -1307,8 +1450,7 @@ export function describeSetup(
   if (!preset) return [];
 
   const labelFor = (f: SetupField, id: string) => {
-    const options =
-      f.options ?? (f.kind === "when" ? WHEN_OPTIONS : undefined);
+    const options = f.options ?? (f.kind === "when" ? WHEN_OPTIONS : undefined);
     // Free-list values and person names are already their own label.
     return options?.find((o) => o.id === id)?.label ?? id;
   };
@@ -1336,4 +1478,64 @@ export function timingOf(
   if (typeof raw !== "string" || !raw) return null;
   const options = field.options ?? WHEN_OPTIONS;
   return options.find((o) => o.id === raw)?.label ?? raw;
+}
+
+/* --- Due dates ------------------------------------------------------------ */
+
+/**
+ * When a step is due, offered as the handful of answers people actually give.
+ *
+ * Offsets in days from the person's first day, so a workflow stays a template:
+ * the same plan run for the next hire produces different dates without anybody
+ * editing it.
+ *
+ * A short list rather than a date field or a free number. Onboarding deadlines
+ * cluster — before they sign, the week before, the day before, day one, end of
+ * the first week, end of the first month — and a number box invites precision
+ * nobody has ("is the laptop due on day 3 or day 4?") while making the common
+ * answers slower to give than the rare ones.
+ *
+ * `-14` rather than "two weeks" as the stored value, because the storage has
+ * to survive this list changing. Relabelling an option or adding one between
+ * two others rewrites nothing; storing "two-weeks-before" would mean the day a
+ * label changes, every workflow holding it means something slightly different.
+ */
+export const DUE_OPTIONS: { days: number; label: string; short: string }[] = [
+  { days: -14, label: "Two weeks before they start", short: "2 weeks before" },
+  { days: -7, label: "A week before they start", short: "1 week before" },
+  { days: -1, label: "The day before they start", short: "Day before" },
+  { days: 0, label: "Their first day", short: "Day one" },
+  { days: 4, label: "End of their first week", short: "First week" },
+  { days: 30, label: "End of their first month", short: "First month" },
+];
+
+/** The short form for a stored offset, or null when nothing is set. */
+export function dueLabel(due: number | undefined): string | null {
+  if (due === undefined) return null;
+  const known = DUE_OPTIONS.find((o) => o.days === due);
+  if (known) return known.short;
+
+  /* An offset that isn't on the list is still readable — a workflow written
+     before an option was removed, or one edited by hand. Saying "day 3" is
+     better than saying nothing about a step that has a deadline. */
+  if (due === 0) return "Day one";
+  return due < 0 ? `${-due} days before` : `Day ${due + 1}`;
+}
+
+/**
+ * The real date, once there is a person to have one.
+ *
+ * `startDate` is `YYYY-MM-DD` and is parsed as local rather than through
+ * `new Date(string)`, which reads a bare date as UTC — that lands on the
+ * previous day for anyone west of Greenwich and turns a due date into an
+ * off-by-one nobody can reproduce in the office it was written in.
+ */
+export function dueDateFrom(
+  startDate: string,
+  due: number | undefined,
+): Date | null {
+  if (due === undefined) return null;
+  const [y, m, d] = startDate.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d + due);
 }

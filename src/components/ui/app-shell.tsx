@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ExpandLess,
   LeftPanelClose,
@@ -57,6 +57,14 @@ import { cn } from "@/lib/cn";
  */
 
 const DEFAULT_W = 224;
+
+/**
+ * The collapsed nav's width, when a screen has given it a rail.
+ *
+ * Wide enough for a 36px target with 8px either side. Not resizable and not
+ * persisted: it's the width of an icon, so there is nothing to prefer.
+ */
+const RAIL_W = 52;
 const MIN_W = 176;
 const MAX_W = 440;
 /** Arrow-key step for the resize handle. */
@@ -113,18 +121,18 @@ function usePersistedPanel(key: string) {
   return [open, toggle] as const;
 }
 
-function usePersistedWidth(key: string) {
+function usePersistedWidth(key: string, fallback = DEFAULT_W) {
   const width = React.useSyncExternalStore(
     subscribe,
     () => {
       try {
         const raw = localStorage.getItem(key);
-        return raw === null ? DEFAULT_W : clamp(Number(raw) || DEFAULT_W);
+        return raw === null ? fallback : clamp(Number(raw) || fallback);
       } catch {
-        return DEFAULT_W;
+        return fallback;
       }
     },
-    () => DEFAULT_W,
+    () => fallback,
   );
 
   const setWidth = React.useCallback(
@@ -134,7 +142,6 @@ function usePersistedWidth(key: string) {
 
   return [width, setWidth] as const;
 }
-
 
 /**
  * Whether the viewport is wide enough for the side columns.
@@ -164,8 +171,11 @@ function useIsDesktop() {
 export function AppShell({
   title,
   nav,
+  navRail,
   aside,
-  asideTitle = "Details",
+  asideTitle,
+  asideFlushTop,
+  asidePanel,
   account,
   actions,
   fill,
@@ -177,7 +187,48 @@ export function AppShell({
   title?: React.ReactNode;
   nav?: React.ReactNode;
   aside?: React.ReactNode;
+  /**
+   * The nav, collapsed to icons.
+   *
+   * Given it, the panel shuts to a strip instead of to nothing, and the header
+   * cell above shrinks to match — the two share a vertical rule and would part
+   * company if either moved alone. Omit it and collapsing behaves as it always
+   * has, which is why this is a prop and not a change to every screen at once:
+   * counts, prose and steppers don't survive being squeezed to 52px, so a
+   * screen has to say what its rail is.
+   */
+  navRail?: React.ReactNode;
+  /** Eyebrow above the aside. Omit when the panel's own content already says
+      what it is — a heading that repeats the thing under it is just a line of
+      shouting. The drawer still gets a name, since a sheet with no title is
+      unlabelled to a screen reader. */
   asideTitle?: string;
+  /**
+   * Drop the aside's top padding, keeping the bottom.
+   *
+   * For a panel whose content is a transcript. The bottom padding is holding a
+   * composer off the edge of the window and is wanted; the top is holding the
+   * oldest visible line off a rule it is about to scroll under anyway, which
+   * just reads as the column starting late.
+   *
+   * Per-state rather than per-page, since the editor's aside is a conversation
+   * until you select a block and a panel of settings after that — and settings
+   * want their margin.
+   */
+  asideFlushTop?: boolean;
+  /**
+   * A starting width for the right panel, and its own place to remember one.
+   *
+   * Both together, because either alone is broken. A wider default under the
+   * shared key lasts until somebody drags the panel on any other screen, and
+   * then the screen that needed the width silently loses it. A separate key
+   * with the shared default starts every builder at 224px again.
+   *
+   * The builder is the one screen where the panel is a conversation rather
+   * than a column of facts, and 224px is narrow enough that a placeholder
+   * wraps to two lines in it.
+   */
+  asidePanel?: { key: string; width: number };
   account?: AccountInfo;
   actions?: React.ReactNode;
   /** Omit entirely to hide the bell — an empty array still shows it, correctly
@@ -195,7 +246,10 @@ export function AppShell({
   const [navOpen, toggleNav] = usePersistedPanel("craig-nav");
   const [asideOpen, toggleAside] = usePersistedPanel("craig-aside");
   const [navW, setNavW] = usePersistedWidth("craig-nav-w");
-  const [asideW, setAsideW] = usePersistedWidth("craig-aside-w");
+  const [asideW, setAsideW] = usePersistedWidth(
+    asidePanel ? `craig-aside-w-${asidePanel.key}` : "craig-aside-w",
+    asidePanel?.width,
+  );
 
   const isDesktop = useIsDesktop();
   /* Not persisted, unlike the column state. A drawer is a thing you opened a
@@ -203,9 +257,27 @@ export function AppShell({
   const [drawer, setDrawer] = React.useState<"nav" | "aside" | null>(null);
   const closeDrawer = React.useCallback(() => setDrawer(null), []);
 
+  /* Collapsed, but still showing something. Everything that has to line up
+     with the nav column reads this rather than testing `navOpen` itself, so
+     the header cell, the column and the panel footer can't disagree. */
+  /**
+   * Showing the strip rather than the full column. Desktop only.
+   *
+   * A narrow screen gets no rail: 52px of permanent chrome is a bigger share
+   * of a phone than of a laptop, and the drawer already shows the whole nav
+   * for the same press. So the narrow layout is the page, plus one control to
+   * open the nav over it.
+   */
+  const railed = Boolean(nav && navRail && !navOpen && isDesktop);
+
   const vars = {
-    "--craig-nav-w": navOpen && nav ? `${navW}px` : "0px",
-    "--craig-nav-open-w": `${navW}px`,
+    "--craig-nav-w":
+      navOpen && nav ? `${navW}px` : railed ? `${RAIL_W}px` : "0px",
+    /* Panel contents normally track the *open* width so they don't reflow
+       mid-animation. A rail is different content at a different width, so
+       while it's showing this is the width it actually gets — otherwise the
+       account footer would lay itself out at 224px inside a 52px strip. */
+    "--craig-nav-open-w": railed ? `${RAIL_W}px` : `${navW}px`,
     "--craig-aside-w": asideOpen && aside ? `${asideW}px` : "0px",
     "--craig-aside-open-w": `${asideW}px`,
   } as React.CSSProperties;
@@ -217,29 +289,51 @@ export function AppShell({
           {/* Left cell — tracks the nav column's width, same rule. */}
           <div
             className={cn(
-              "flex shrink-0 items-center gap-1 pl-4 pr-2 lg:border-r lg:border-dotted lg:border-border",
-              navOpen && nav ? "craig-col-nav" : "lg:w-auto",
+              /* The rule is drawn at every width now. It used to be `lg:` only,
+                 which left the toggle on a narrow screen floating against the
+                 page with nothing marking it off from the title beside it. */
+              "flex shrink-0 items-center border-r border-dotted border-border",
+              /* Centred and unpadded whenever the cell is just the toggle —
+                 in the rail, and on any screen too narrow for a column. The
+                 wordmark is gone in both, so the control takes the cell rather
+                 than sitting at the end of one. */
+              railed || !isDesktop ? "justify-center px-2" : "gap-1 pl-4 pr-2",
+              /* Only ever as wide as the column it's tracking. Below `lg`
+                 there is no column, so the cell is as wide as its contents —
+                 without this it took the persisted 224px on a phone. */
+              (navOpen || railed) && nav && isDesktop
+                ? "craig-col-nav"
+                : "lg:w-auto",
             )}
           >
-            <CraigMark className="size-5" />
-            <span className="truncate text-base font-semibold tracking-[-0.01em]">
-              Craig.
-            </span>
-            {nav &&
-              (isDesktop ? (
-                <PanelToggle
-                  open={navOpen}
-                  onToggle={toggleNav}
-                  side="left"
-                  className="ml-auto"
-                />
-              ) : (
-                <DrawerToggle
-                  label="Open menu"
-                  onClick={() => setDrawer("nav")}
-                  className="ml-auto"
-                />
-              ))}
+            {/* The mark goes with the wordmark, and both go whenever the cell
+                is narrow — in the rail, and below `lg`. A brand cell holding
+                an icon and a toggle in that space reads as two controls, one
+                of which does nothing when you press it, and on a phone the
+                room is better spent on the page's own title. */}
+            {!railed && isDesktop && (
+              <>
+                <CraigMark className="size-5" />
+                <span className="truncate text-base font-semibold tracking-[-0.01em]">
+                  Craig.
+                </span>
+              </>
+            )}
+            {/* One control, whatever the width. On desktop it widens the
+                column; on a narrow screen there is nothing to widen into, so
+                the same control opens the nav as a drawer over the page.
+
+                No hamburger. It sat exactly where the expand toggle sits and
+                did a different thing, so the same corner of the same header
+                meant two things depending on how wide the window was. */}
+            {nav && (
+              <PanelToggle
+                open={isDesktop ? navOpen : false}
+                onToggle={isDesktop ? toggleNav : () => setDrawer("nav")}
+                side="left"
+                className={railed ? undefined : "ml-auto"}
+              />
+            )}
           </div>
 
           {/* Centre cell: everything belonging to the page. Title and actions
@@ -249,52 +343,61 @@ export function AppShell({
               and mixed two unrelated kinds of control. */}
           <div className="flex min-w-0 flex-1 items-center gap-3 px-4">
             {title && (
-              <span className="truncate text-base text-text-muted">{title}</span>
+              <span className="truncate text-base text-text-muted">
+                {title}
+              </span>
             )}
+            {/* Hard right. The title anchors the left of the cell and the
+                things you do to the page anchor its right, against the rule
+                that separates them from the app's own controls. */}
             {actions && (
-              <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
+              <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                {actions}
+              </div>
             )}
-            <ThemeToggle className="ml-auto shrink-0" />
           </div>
 
-          {/* Right cell — tracks the details column's width, same rule. The
-              panel's toggle sits hard left, against the rule it actually
-              moves, mirroring the nav toggle in the brand cell. Notifications
-              take the far corner.
+          {/* Right cell — the app's own controls, never the page's. Tracks the
+              details column's width, same rule. The panel's toggle sits hard
+              left, against the rule it actually moves, mirroring the nav
+              toggle in the brand cell; theme and notifications take the far
+              corner.
 
-              Omitted entirely when there's neither a panel nor a bell:
-              otherwise it renders as an empty stub with a divider hanging off
-              it, which reads as a rendering bug rather than as a frame. */}
-          {(aside || notifications) && (
-            <div
-              className={cn(
-                "flex shrink-0 items-center gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
-                asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
-              )}
-            >
-              {aside &&
-                (isDesktop ? (
-                  <PanelToggle
-                    open={asideOpen}
-                    onToggle={toggleAside}
-                    side="right"
-                  />
-                ) : (
-                  <DrawerToggle
-                    label="Open details"
-                    onClick={() => setDrawer("aside")}
-                  />
-                ))}
-              {notifications && (
-                <NotificationBell
-                  items={notifications}
-                  onSelect={onNotificationSelect}
-                  onMarkAllRead={onMarkAllRead}
-                  className="ml-auto shrink-0"
+              Theme lives here rather than in the centre because it belongs to
+              the app, not to the workflow you happen to be looking at — and
+              because with it out of the way the centre cell's actions can go
+              hard right, which is where you look for them. Collapse the panel
+              and it's three icons, which is a corner, not a toolbar. */}
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
+              asideOpen && aside ? "craig-col-aside" : "lg:w-auto",
+            )}
+          >
+            {aside &&
+              (isDesktop ? (
+                <PanelToggle
+                  open={asideOpen}
+                  onToggle={toggleAside}
+                  side="right"
                 />
-              )}
-            </div>
-          )}
+              ) : (
+                <DrawerToggle
+                  label="Open details"
+                  onClick={() => setDrawer("aside")}
+                />
+              ))}
+            <ThemeToggle className="ml-auto shrink-0" />
+
+            {notifications && (
+              <NotificationBell
+                items={notifications}
+                onSelect={onNotificationSelect}
+                onMarkAllRead={onMarkAllRead}
+                className="shrink-0"
+              />
+            )}
+          </div>
         </div>
       </header>
 
@@ -305,7 +408,12 @@ export function AppShell({
             open={navOpen}
             width={navW}
             onResize={setNavW}
-            footer={account ? <AccountMenu account={account} /> : undefined}
+            rail={navRail}
+            footer={
+              account ? (
+                <AccountMenu account={account} compact={railed} />
+              ) : undefined
+            }
           >
             <div className="craig-panel-nav px-4 py-6">{nav}</div>
           </Panel>
@@ -324,10 +432,34 @@ export function AppShell({
             width={asideW}
             onResize={setAsideW}
           >
-            <div className="craig-panel-aside p-4">
-              <p className="pb-3 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-                {asideTitle}
-              </p>
+            {/* Same py as the nav panel: the two columns read as one frame,
+                and 8px of difference at the top reads as a mistake.
+
+                `h-full`, not `min-h-full`. The intent was always that an aside
+                wanting the whole column could have it — but a minimum is a
+                floor, and it only held while the content was shorter than the
+                column. Past that the container grew, so a chat's `flex-1`
+                transcript resolved against unbounded space, never scrolled
+                itself, and scrolled the whole column instead: the header slid
+                out of view, the top of the transcript went under it, and the
+                composer trailed off after the last message — the exact failure
+                this was meant to prevent.
+
+                A ceiling fixes both shapes, and the scroll lives here so it
+                only has to be decided once. A chat sizes to the column exactly
+                and never scrolls this box; a panel of settings taller than the
+                column scrolls it. */}
+            <div
+              className={cn(
+                "craig-panel-aside scrollbar-thin flex h-full flex-col overflow-y-auto px-4 pb-6",
+                asideFlushTop ? "pt-0" : "pt-6",
+              )}
+            >
+              {asideTitle && (
+                <p className="shrink-0 pb-3 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+                  {asideTitle}
+                </p>
+              )}
               {aside}
             </div>
           </Panel>
@@ -355,7 +487,7 @@ export function AppShell({
           side="right"
           open={drawer === "aside"}
           onClose={closeDrawer}
-          title={asideTitle}
+          title={asideTitle ?? "Details"}
         >
           <div className="p-4">{aside}</div>
         </Drawer>
@@ -479,6 +611,7 @@ function Panel({
   open,
   width,
   onResize,
+  rail,
   footer,
   children,
 }: {
@@ -486,11 +619,14 @@ function Panel({
   open: boolean;
   width: number;
   onResize: (n: number) => void;
+  /** Shown instead of `children` while collapsed. Omit to collapse to nothing. */
+  rail?: React.ReactNode;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const isLeft = side === "left";
   const [dragging, setDragging] = React.useState(false);
+  const railed = Boolean(rail && !open);
 
   return (
     <aside
@@ -499,18 +635,20 @@ function Panel({
          is the one declaration a stray utility can't lose to. min-w-0 still
          matters: a flex item defaults to `min-width: auto`, which floors it at
          its content's min-content size and would stop it shrinking. */
-      style={{ width: open ? width : 0 }}
+      style={{ width: open ? width : railed ? RAIL_W : 0 }}
       className={cn(
         "hidden min-w-0 shrink-0 border-border lg:block",
         // Only animate the collapse — animating during a drag makes the panel
         // lag the cursor.
         !dragging && "transition-[width] duration-200 ease-out-quart",
-        open && (isLeft ? "border-r" : "border-l"),
+        /* The rule stays while the rail does. A strip of icons with no edge
+           on it reads as floating in the page rather than as a column. */
+        (open || railed) && (isLeft ? "border-r" : "border-l"),
       )}
     >
       <div className="sticky top-12 flex h-[calc(100vh-3rem)] flex-col overflow-x-hidden">
         <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-          {children}
+          {railed ? rail : children}
         </div>
 
         {footer && (
@@ -524,6 +662,8 @@ function Panel({
           </div>
         )}
 
+        {/* Not while it's a rail: its width is the width of an icon, so there
+            is nothing to prefer and nothing to drag. */}
         {open && (
           <ResizeHandle
             side={side}
@@ -680,8 +820,117 @@ function PanelToggle({
  * button. Making the whole row a target would imply the name itself does
  * something.
  */
-function AccountMenu({ account }: { account: AccountInfo }) {
+/**
+ * One definition of the account menu, for both widths.
+ *
+ * The rail and the full row are the same menu on two different triggers, and
+ * two copies of this list is two places to add the next item to — one of which
+ * somebody will miss, leaving Sign out reachable at one panel width and not
+ * the other.
+ */
+function accountItems(
+  account: AccountInfo,
+  router: ReturnType<typeof useRouter>,
+  /**
+   * Where the menu was opened from, so Settings knows what it is a detour
+   * out of.
+   *
+   * Settings has no parent in the nav — it is reached from this menu, from
+   * every screen — so the only honest answer to "what does its back arrow point
+   * at" is whichever area you were standing in when you opened it. That is
+   * knowable exactly here and nowhere else, so it travels in the URL rather
+   * than being guessed at the far end.
+   */
+  from: string,
+) {
+  return [
+    {
+      id: "profile",
+      label: account.name,
+      description: account.email,
+      icon: <Person />,
+    },
+    /* Somewhere at last. This row has been decorative since the shell was
+       written, and the one thing that has since needed a permanent address —
+       the Google Workspace connection — is exactly the kind of thing it was
+       always going to hold. Wired here rather than passed in per screen so
+       there is one destination: a `settingsHref` prop would be five call sites
+       to keep in step, and the screen that forgot it would be the screen where
+       Settings quietly stops working again.
+
+       The sandbox gets the same row, pointing at the same customer screen, and
+       that is the right answer rather than an oversight. A builder pressing
+       Settings there lands on a page that opens by naming which account they
+       are signed in as — which is precisely the check that was missing when a
+       real Workspace was attached to a throwaway test account. */
+    {
+      id: "settings",
+      label: "Settings",
+      icon: <Settings />,
+      onSelect: () =>
+        router.push(`/showcase/settings?from=${encodeURIComponent(from)}`),
+    },
+    /* The sandbox is a builder's tool, not an admin's — it doesn't belong in
+       the product nav, but it has to be reachable from every screen. */
+    {
+      id: "sandbox",
+      label: "Sandbox",
+      description: "Builder hub",
+      icon: <Science />,
+      separatorBefore: true,
+      onSelect: () => router.push("/sandbox"),
+    },
+    {
+      id: "signout",
+      label: "Sign out",
+      icon: <Logout />,
+      destructive: true,
+      separatorBefore: true,
+    },
+  ];
+}
+
+function AccountMenu({
+  account,
+  compact,
+}: {
+  account: AccountInfo;
+  /** Rail width: the avatar only, and it becomes the menu's own trigger. */
+  compact?: boolean;
+}) {
   const router = useRouter();
+  /* The area Settings will offer to send them back to. */
+  const pathname = usePathname();
+
+  /* At 52px there is no room for a name beside a chevron, and dropping the
+     name while keeping the chevron would leave the strip ending in a control
+     that looks like it belongs to nothing. So the avatar *is* the trigger —
+     which is what it already looks like, and what people press anyway. */
+  if (compact) {
+    return (
+      <div className="flex w-full justify-center">
+        <DropdownMenu
+          label="Account menu"
+          align="start"
+          side="top"
+          width="w-52"
+          /* A span, not a button — `DropdownMenu` wraps whatever it's given in
+             its own button, and nesting one inside it is invalid HTML that
+             React refuses to hydrate. The full-width trigger below is a span
+             for the same reason. */
+          trigger={
+            <span
+              title={account.name}
+              className="flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-surface-hover"
+            >
+              <Avatar name={account.name} size="md" />
+            </span>
+          }
+          items={accountItems(account, router, pathname)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full items-center gap-2.5 px-1.5 py-1">
@@ -708,32 +957,7 @@ function AccountMenu({ account }: { account: AccountInfo }) {
             <ExpandLess className="size-4" />
           </span>
         }
-        items={[
-          {
-            id: "profile",
-            label: account.name,
-            description: account.email,
-            icon: <Person />,
-          },
-          { id: "settings", label: "Settings", icon: <Settings /> },
-          /* The sandbox is a builder's tool, not an admin's — it doesn't belong
-             in the product nav, but it has to be reachable from every screen. */
-          {
-            id: "sandbox",
-            label: "Sandbox",
-            description: "Builder hub",
-            icon: <Science />,
-            separatorBefore: true,
-            onSelect: () => router.push("/sandbox"),
-          },
-          {
-            id: "signout",
-            label: "Sign out",
-            icon: <Logout />,
-            destructive: true,
-            separatorBefore: true,
-          },
-        ]}
+        items={accountItems(account, router, pathname)}
       />
     </div>
   );

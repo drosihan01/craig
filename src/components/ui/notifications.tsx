@@ -127,7 +127,15 @@ export function NotificationItem({
               <span aria-hidden>·</span>
             </>
           )}
+          {/* suppressHydrationWarning because every part of this is
+              time-dependent: the demo builds its timestamps from Date.now(),
+              so the server and the client are a second apart, and
+              toLocaleString formats to the machine's locale. React can't
+              patch up mismatched attributes — it warns and moves on, which
+              in dev is enough noise to bury a real error. The client value
+              is the correct one and wins on the next render. */}
           <time
+            suppressHydrationWarning
             dateTime={n.timestamp.toISOString()}
             title={n.timestamp.toLocaleString()}
           >

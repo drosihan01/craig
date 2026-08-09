@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AppShell,
   Avatar,
@@ -20,6 +21,8 @@ import {
   SelectMenu,
   MARK_MIN_SIZE,
   MARK_STROKE,
+  NavTreeGroup,
+  NavTreeItem,
   Button,
   Progress,
   Separator,
@@ -29,6 +32,7 @@ import {
   type TaskStatus,
 } from "@/components/ui";
 import {
+  CheckCircle,
   Database,
   Mail,
   MenuBook,
@@ -37,14 +41,29 @@ import {
   PersonAdd,
   PlayArrow,
   TaskAlt,
+  Warning,
 } from "@/components/ui/icons";
-import {
-  AUDIENCE,
-  TEMPLATES as EMAIL_TEMPLATES,
-} from "@/lib/email";
+import { AUDIENCE, SENDER, TEMPLATES as EMAIL_TEMPLATES } from "@/lib/email";
+import { renderEmail } from "@/lib/email/html";
 import { SECTIONS } from "@/app/design-system/sections";
 import { ACCOUNT, COMPANY, PEOPLE } from "@/lib/demo";
+import { ShowcaseReset } from "@/components/sandbox/showcase-reset";
+import { GoogleConnect } from "@/components/sandbox/google-connect";
 import { cn } from "@/lib/cn";
+
+/**
+ * Which section `?tab=` opens, and the one section that used to be somewhere
+ * else's business.
+ *
+ * These lived in `google-outcome.ts` while the Google connect flow ended up
+ * back in this hub, because the redirect had to name a tab. It doesn't any
+ * more — a customer connecting their own Workspace lands on `/showcase/settings`
+ * — so a file about what an OAuth callback says has no reason to know how the
+ * sandbox lays its sections out. Local constants, for the only page that has
+ * ever read them.
+ */
+const SANDBOX_TAB_PARAM = "tab";
+const SANDBOX_GOOGLE_TAB = "google";
 
 /**
  * The builder's hub — not part of the product. Everything else under /src/app
@@ -115,8 +134,15 @@ const TODOS: TodoGroup[] = [
       {
         id: "a4",
         title: "Adding a seat actually sends the first email",
-        note: "The dialog says what would happen and then nothing does. Needs the API route and Resend.",
+        note: "Done in the showcase — publishing opens the invite and it sends for real. The older demo's dialog still says what would happen and then nothing does.",
         where: "src/lib/onboarding.ts",
+      },
+      {
+        id: "a4b",
+        title: "Verify craig-ob.me so invites reach real people",
+        note: "Craig sends from onboarding@resend.dev, Resend's sandbox sender, which only delivers to the account owner — so an invite to an actual new starter is refused. Three DNS records fix it, and they have to go in at Squarespace: the domain came from Google Domains, which Squarespace bought in 2023, so the zone lives there even though the mailboxes are still Google Workspace. Edit the existing SPF rather than adding a second; two v=spf1 records invalidate each other and would break real email. Then NEXT_PUBLIC_CRAIG_MAIL_FROM=craig@craig-ob.me and nothing else changes.",
+        where: ".env.local · resend.com/domains · Squarespace DNS",
+        status: "blocked",
       },
       {
         id: "a5",
@@ -303,6 +329,42 @@ interface Run {
 }
 
 /**
+ * Demo v3 — Calder Diagnostics, and the only one that plays itself.
+ *
+ * A different company on purpose. Ada's problem was that nothing was written
+ * down; Theo's is that everything is, twice, in documents that disagree — so
+ * Craig's job is reconciliation rather than excavation, and the demo can be
+ * about a harder thing than "we made you a checklist".
+ */
+const FLOW_V3: Run[] = [
+  {
+    href: "/v3",
+    label: "Sign up",
+    body: "Start here, then press play, bottom right. It runs all eight scenes on its own — or click through it yourself, the button drives the same paths you would.",
+  },
+  {
+    href: "/v3/setup",
+    label: "Discovery",
+    body: "Theo hands over three documents. Craig reads all three and opens by naming the places they contradict each other, by clause.",
+  },
+  {
+    href: "/v3/workflows/qsa",
+    label: "The workflow",
+    body: "Ordered by lead time rather than convention, and gated on two questions Craig wouldn't guess at. Publish is disabled until they're answered.",
+  },
+  {
+    href: "/v3/people/priya",
+    label: "Watching it run",
+    body: "The new starter's week, compressed. Each completed step says how Craig knows — checked it himself, or somebody told him.",
+  },
+  {
+    href: "/v3/home",
+    label: "The end of it",
+    body: "The record is signed inside the deadline, and the second hire hits the seat limit.",
+  },
+];
+
+/**
  * Demo v1 — Ada, already inside, drafting a workflow from her handbook.
  * The original run-through. Starts mid-story.
  */
@@ -392,18 +454,70 @@ const NOTIFICATIONS: AppNotification[] = [
 
 /* -------------------------------------------------------------------------- */
 
-/** The five sections, switched from the left panel rather than a tab strip. */
+/** Switched from the left panel rather than a tab strip. */
 const SANDBOX_SECTIONS = [
   { value: "home", label: "Home" },
   { value: "design", label: "Design system" },
   { value: "docs", label: "Docs" },
   { value: "backend", label: "Backend" },
-  { value: "demo", label: "Demo" },
   { value: "mail", label: "Mail" },
+  { value: SANDBOX_GOOGLE_TAB, label: "Google" },
+  { value: "showcase", label: "Showcase" },
 ];
 
+/* Demo is a group rather than a section, because there are three of them now
+   and they aren't versions of one page — they're three different companies
+   with three different arguments. A flat "Demo" that silently meant the newest
+   one was going to keep being wrong. */
+const DEMO_RUNS = [
+  { value: "demo-v3", label: "Demo v3", note: "Calder — plays itself" },
+  { value: "demo-v2", label: "Demo v2", note: "Katalis — from signup" },
+  { value: "demo-v1", label: "Demo v1", note: "Katalis — mid-story" },
+];
+
+/** Every section the URL is allowed to open, so `?tab=` can't name one that
+    doesn't exist and leave the page rendering nothing at all. */
+const SECTION_VALUES = new Set([
+  ...SANDBOX_SECTIONS.map((s) => s.value),
+  ...DEMO_RUNS.map((d) => d.value),
+]);
+
 export default function SandboxPage() {
-  const [tab, setTab] = React.useState("home");
+  return (
+    /* useSearchParams needs a boundary, and the fallback is nothing rather
+       than a second copy of the page — see the note on the same pattern in
+       src/app/page.tsx, where rendering the page twice meant neither copy was
+       ever interactive. */
+    <React.Suspense fallback={null}>
+      <SandboxWithParams />
+    </React.Suspense>
+  );
+}
+
+/**
+ * `?tab=` chooses which section this opens on, so a link can point at one.
+ *
+ * It used to carry a Google connect outcome too, because the OAuth callback
+ * landed here. It doesn't now — connecting a Workspace is a customer's act and
+ * ends on `/showcase/settings` — so the only parameter left is which section to
+ * show.
+ */
+function SandboxWithParams() {
+  const params = useSearchParams();
+  const asked = params.get(SANDBOX_TAB_PARAM);
+
+  return (
+    <Sandbox
+      initialSection={asked && SECTION_VALUES.has(asked) ? asked : "home"}
+    />
+  );
+}
+
+function Sandbox({ initialSection }: { initialSection: string }) {
+  /* The URL only chooses where this opens. After that the section is ordinary
+     state, so switching tabs doesn't push history entries nobody wants to walk
+     back through. */
+  const [tab, setTab] = React.useState(initialSection);
   /* Ticking a box is front-end state and nothing else — the same gap this list
      is mostly about. Said out loud on the Home tab rather than hidden. */
   const [done, setDone] = React.useState<ReadonlySet<string>>(new Set());
@@ -422,9 +536,7 @@ export default function SandboxPage() {
   return (
     <AppShell
       title="Sandbox"
-      nav={
-        <SandboxNav section={tab} onSection={setTab} open={open} />
-      }
+      nav={<SandboxNav section={tab} onSection={setTab} open={open} />}
       asideTitle="Project"
       aside={<SandboxAside />}
       notifications={NOTIFICATIONS}
@@ -442,7 +554,8 @@ export default function SandboxPage() {
         <header className="mb-6 flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-[-0.02em]">
-              {SANDBOX_SECTIONS.find((t) => t.value === tab)?.label ?? "Sandbox"}
+              {SANDBOX_SECTIONS.find((t) => t.value === tab)?.label ??
+                "Sandbox"}
             </h1>
             <Badge tone="accent">Builder&apos;s hub</Badge>
           </div>
@@ -460,7 +573,9 @@ export default function SandboxPage() {
           {tab === "design" && <DesignTab />}
           {tab === "docs" && <DocsTab />}
           {tab === "backend" && <BackendTab />}
-          {tab === "demo" && <DemoTab />}
+          {tab.startsWith("demo") && <DemoTab run={tab} />}
+          {tab === "showcase" && <ShowcaseReset />}
+          {tab === SANDBOX_GOOGLE_TAB && <GoogleConnect />}
           {tab === "mail" && <MailTab />}
         </div>
       </div>
@@ -627,7 +742,8 @@ function DesignTab() {
         <CardHeader>
           <CardTitle>What&apos;s in it</CardTitle>
           <CardDescription>
-            Read from the same list that orders the page, so it can&apos;t drift.
+            Read from the same list that orders the page, so it can&apos;t
+            drift.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -688,8 +804,8 @@ function DocsTab() {
   return (
     <div className="flex flex-col gap-5">
       <Callout tone="accent" icon={<MenuBook />}>
-        The long version lives in the README — this is the set worth
-        remembering before touching anything.
+        The long version lives in the README — this is the set worth remembering
+        before touching anything.
       </Callout>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -726,10 +842,10 @@ function BackendTab() {
   return (
     <div className="flex flex-col gap-5">
       <Callout tone="warning" title="The model choice is a data boundary">
-        Craigopilot is in-house and the only model that sees company
-        data. Claude and GPT are hosted, so anything sent to them leaves the
-        tenancy. The composer says which regime you&apos;re in — that has to be
-        enforced in the API layer, because a label is not a control.
+        Craigopilot is in-house and the only model that sees company data.
+        Claude and GPT are hosted, so anything sent to them leaves the tenancy.
+        The composer says which regime you&apos;re in — that has to be enforced
+        in the API layer, because a label is not a control.
       </Callout>
 
       <Card>
@@ -784,55 +900,71 @@ function BackendTab() {
 
 /* --- Demo ------------------------------------------------------------------ */
 
-function DemoTab() {
+function DemoTab({ run }: { run: string }) {
   return (
     <div className="flex flex-col gap-5">
-      <Card>
-        <CardHeader className="flex-row items-start gap-3">
-          <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-text-muted">
-            <PlayArrow className="size-4" />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <CardTitle>{COMPANY.name}</CardTitle>
-            <CardDescription>{COMPANY.pitch}</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            {Object.values(PEOPLE).map((p) => (
-              <div key={p.email} className="flex items-center gap-2">
-                <Avatar name={p.name} size="sm" />
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{p.name}</span>
-                  <span className="text-2xs text-text-subtle">{p.role}</span>
+      {/* v3 is a different company, so the Katalis card would be describing
+          the wrong one. */}
+      {run !== "demo-v3" && (
+        <Card>
+          <CardHeader className="flex-row items-start gap-3">
+            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-text-muted">
+              <PlayArrow className="size-4" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <CardTitle>{COMPANY.name}</CardTitle>
+              <CardDescription>{COMPANY.pitch}</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
+              {Object.values(PEOPLE).map((p) => (
+                <div key={p.email} className="flex items-center gap-2">
+                  <Avatar name={p.name} size="sm" />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{p.name}</span>
+                    <span className="text-2xs text-text-subtle">{p.role}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          <Separator />
-          <p className="text-base leading-relaxed text-text-muted">
-            Three people, no written process, first non-founder hire starting in
-            two weeks. That&apos;s the whole argument: a 500-person company
-            already has an HR system, and Craig would be a worse version of it.
-            Ada has a Notion doc written at 11pm before a fundraise call, and
-            everything else lives in her head and Jason&apos;s. Making the
-            undocumented parts visible is the product — not inventing process a
-            three-person company doesn&apos;t want.
-          </p>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+            <Separator />
+            <p className="text-base leading-relaxed text-text-muted">
+              Three people, no written process, first non-founder hire starting
+              in two weeks. That&apos;s the whole argument: a 500-person company
+              already has an HR system, and Craig would be a worse version of
+              it. Ada has a Notion doc written at 11pm before a fundraise call,
+              and everything else lives in her head and Jason&apos;s. Making the
+              undocumented parts visible is the product — not inventing process
+              a three-person company doesn&apos;t want.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-      <RunThrough
-        title="Demo v2 — the whole thing"
-        note="Start here. Begins with nobody having heard of Craig."
-        steps={FLOW_V2}
-      />
+      {run === "demo-v3" && (
+        <RunThrough
+          title="Demo v3 — Calder Diagnostics, plays itself"
+          note="A different company on purpose. Theo's problem isn't that nothing is written down — it's that everything is, twice, in documents that disagree. Press play, bottom right."
+          steps={FLOW_V3}
+        />
+      )}
 
-      <RunThrough
-        title="Demo v1 — the workflow draft"
-        note="Starts mid-story, with Ada already inside."
-        steps={FLOW_V1}
-      />
+      {run === "demo-v2" && (
+        <RunThrough
+          title="Demo v2 — the whole thing"
+          note="Katalis, from nobody having heard of Craig. Click-through."
+          steps={FLOW_V2}
+        />
+      )}
+
+      {run === "demo-v1" && (
+        <RunThrough
+          title="Demo v1 — the workflow draft"
+          note="Starts mid-story, with Ada already inside."
+          steps={FLOW_V1}
+        />
+      )}
 
       <Callout tone="neutral">
         The gaps in the drafted workflow — a right-to-work check nobody has
@@ -900,20 +1032,69 @@ function RunThrough({
  *
  * The address comes from an env var, never the source. This repo is public.
  */
+
+/** What POST /api/email/test answers with. Narrowed here rather than shared
+    with the route: a client component that imports from a route handler is one
+    careless edit away from importing the provider key with it. */
+type SendResponse =
+  | { ok: true; id: string; to: string; from: string; subject: string }
+  | { ok: false; error?: string };
+
 function MailTab() {
   const [templateId, setTemplateId] = React.useState(EMAIL_TEMPLATES[0].id);
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState<Extract<
+    SendResponse,
+    { ok: true }
+  > | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [showSource, setShowSource] = React.useState(false);
+
   const template =
     EMAIL_TEMPLATES.find((t) => t.id === templateId) ?? EMAIL_TEMPLATES[0];
 
   const inbox = process.env.NEXT_PUBLIC_CRAIG_TEST_INBOX;
 
+  /* The same function the route calls, so what's shown here is the markup that
+     went out rather than a second rendering of the same intent. */
+  const wire = renderEmail(template);
+
+  async function send() {
+    setSending(true);
+    setSent(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/email/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId }),
+      });
+      const payload = (await response.json()) as SendResponse;
+
+      if (!response.ok || !payload.ok) {
+        setError(
+          (!payload.ok && payload.error) || `Send failed (${response.status}).`,
+        );
+        return;
+      }
+      setSent(payload);
+    } catch {
+      /* The route reports every provider failure as JSON, so reaching here
+         means the request itself didn't complete — the dev server restarting
+         mid-click is the usual one. */
+      setError("The request never completed. Is the dev server still up?");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      <Callout tone="warning" title="Nothing can send yet">
-        Craig has no server. Every screen in this repo is front-end state, and
-        real mail needs an API route plus a provider key — the first backend
-        this project would have. The button below is real and disabled, rather
-        than fake and satisfying.
+      <Callout tone="neutral" title="This sends real email">
+        <Code>POST /api/email/test</Code> hands the template to Resend over
+        plain <Code>fetch</Code> — no SDK, no new dependency. It needs a
+        showcase session, so sign in first if the button comes back with{" "}
+        <em>Not signed in</em>. Every send is a real one against a real key.
       </Callout>
 
       <Card>
@@ -959,15 +1140,45 @@ function MailTab() {
             />
           </Field>
 
-          <div className="flex items-center gap-3">
-            <Button size="sm" disabled>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              size="sm"
+              onClick={send}
+              loading={sending}
+              disabled={sending || !inbox}
+            >
               <Mail />
-              Send test
+              {sending ? "Sending" : "Send test"}
             </Button>
             <span className="text-xs text-text-subtle">
-              Needs an API route and a provider.
+              {inbox
+                ? `From ${SENDER.address}.`
+                : "Nowhere to send until the inbox is set."}
             </span>
           </div>
+
+          {/* The id, because it's the only part of this that's checkable. A
+              button that says "Sent" and nothing else is a button asking to be
+              believed; this one hands over the thing you can look up. */}
+          {sent && (
+            <Callout tone="success" title="Sent" icon={<CheckCircle />}>
+              <div className="mt-1 flex flex-col gap-1 text-xs">
+                <span>
+                  Resend id <Code>{sent.id}</Code>
+                </span>
+                <span className="text-text-muted">
+                  {sent.from} → {sent.to}
+                </span>
+                <span className="text-text-muted">Subject: {sent.subject}</span>
+              </div>
+            </Callout>
+          )}
+
+          {error && (
+            <Callout tone="danger" title="Didn't send" icon={<Warning />}>
+              {error}
+            </Callout>
+          )}
         </CardContent>
       </Card>
 
@@ -986,21 +1197,43 @@ function MailTab() {
         <EmailPreview template={template} />
       </div>
 
-      <Callout tone="neutral" title="What wiring it up needs">
+      {/* The same bytes the preview above is showing — it renders this string
+          in an iframe rather than drawing its own version of the design, so
+          there is nothing here that can disagree with what arrives. Tables and
+          inline styles, because Outlook renders through Word, and that is worth
+          being able to look at without going to find the file. */}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => setShowSource((v) => !v)}
+          className="flex items-center gap-1 self-start text-xs text-accent underline-offset-4 hover:underline"
+        >
+          {showSource ? "Hide" : "Show"} what actually goes on the wire
+        </button>
+        {showSource && (
+          <pre className="max-h-80 overflow-auto rounded-md border border-border bg-surface-sunken p-3 font-mono text-2xs leading-relaxed text-text-muted">
+            {wire.html}
+          </pre>
+        )}
+      </div>
+
+      <Callout tone="warning" title="Still on the sandbox sender">
         <ul className="mt-1 flex list-disc flex-col gap-1 pl-4">
           <li>
-            A route handler at <Code>src/app/api/email/test/route.ts</Code>.
+            <Code>{SENDER.address}</Code> is Resend&rsquo;s shared address. It
+            works without any DNS, and it only delivers to the address that owns
+            the Resend account — fine for this, useless for a customer.
           </li>
           <li>
-            A provider. Resend is the least friction — one dependency, one key.
+            <Code>mail.craig-ob.me</Code> is the real one and is refused with a
+            403 until its records exist. Add them, set{" "}
+            <Code>NEXT_PUBLIC_CRAIG_MAIL_FROM</Code>, and every send and preview
+            moves across with no code change.
           </li>
           <li>
-            <Code>RESEND_API_KEY</Code> in <Code>.env.local</Code>, and never in
-            a commit. Server-side only, so no <Code>NEXT_PUBLIC_</Code> prefix.
-          </li>
-          <li>
-            A verified sending domain, or everything lands in spam and the test
-            tells you nothing.
+            Until then deliverability tells you nothing: the sandbox domain
+            isn&rsquo;t ours, so its reputation isn&rsquo;t a signal about
+            Craig&rsquo;s.
           </li>
         </ul>
       </Callout>
@@ -1044,30 +1277,37 @@ function SandboxNav({
         <p className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Sandbox
         </p>
-        {SANDBOX_SECTIONS.map((t) => {
-          const current = t.value === section;
-          return (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => onSection(t.value)}
-              aria-current={current ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
-                current
-                  ? "bg-accent-subtle font-medium text-accent-subtle-fg"
-                  : "text-text-muted hover:bg-surface-hover hover:text-text",
-              )}
-            >
-              {t.label}
-              {t.value === "home" && open > 0 && (
-                <Badge size="sm" tone="warning" className="ml-auto">
+        {SANDBOX_SECTIONS.map((t) => (
+          <NavTreeItem
+            key={t.value}
+            label={t.label}
+            current={t.value === section}
+            onClick={() => onSection(t.value)}
+            trailing={
+              t.value === "home" && open > 0 ? (
+                <Badge size="sm" tone="warning">
                   {open}
                 </Badge>
-              )}
-            </button>
-          );
-        })}
+              ) : undefined
+            }
+          />
+        ))}
+
+        <NavTreeGroup
+          label="Demo"
+          defaultOpen
+          className="pt-0.5"
+          icon={<PlayArrow />}
+        >
+          {DEMO_RUNS.map((d) => (
+            <NavTreeItem
+              key={d.value}
+              label={d.label}
+              current={section === d.value}
+              onClick={() => onSection(d.value)}
+            />
+          ))}
+        </NavTreeGroup>
       </div>
 
       <Separator />
@@ -1077,13 +1317,7 @@ function SandboxNav({
           Craig
         </p>
         {ROUTES.map((r) => (
-          <Link
-            key={r.href}
-            href={r.href}
-            className="rounded-md px-2 py-1 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            {r.label}
-          </Link>
+          <NavTreeItem key={r.href} href={r.href} label={r.label} />
         ))}
       </div>
 

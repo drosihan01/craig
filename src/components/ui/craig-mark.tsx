@@ -99,3 +99,46 @@ export function CraigLockup({
     </span>
   );
 }
+
+/**
+ * The mark as an AI affordance — "Talk to Craig", "Ask Craig".
+ *
+ * Exists because putting the mark in a `Button` gives you 16px: the button
+ * sizes every icon it contains with `[&_svg]:size-4`, and 16px is below the
+ * mark's own floor. It renders, it just stops being the drawing — the hair,
+ * the brow and the nose collapse into a smudge and it reads as a different
+ * logo depending on where you saw it last.
+ *
+ * So this overrides back up to the floor rather than letting the button win.
+ * A 20px icon next to 14px text is slightly larger than the system's default
+ * pairing, and that is the correct trade: the alternative is a wordmark that
+ * degrades, which is worse than one that is a little big.
+ *
+ * Use it wherever the product offers to think for somebody. It is the one
+ * place the mark carries meaning rather than branding — a sparkle says "AI",
+ * and this says "Craig", which is more specific and more honest.
+ */
+export function TalkToCraig({
+  children = "Talk to Craig",
+  className,
+  ...props
+}: React.ComponentProps<"button">) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5",
+        "text-sm text-text-muted shadow-e1 transition-colors",
+        "hover:border-border-strong hover:text-text",
+        "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent-ring/25",
+        /* Wins over Button's own icon sizing, and over any parent that sets it. */
+        "[&_svg]:size-5",
+        className,
+      )}
+      {...props}
+    >
+      <CraigMark className="text-accent" />
+      {children}
+    </button>
+  );
+}

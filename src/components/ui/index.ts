@@ -15,6 +15,16 @@ export {
   type TaskStatus,
   type BadgeProps,
 } from "./badge";
+export { CERTAINTY, CertaintyPill, type Certainty } from "./certainty";
+export {
+  AgentPhase,
+  AgentQuestion,
+  PersonTurn,
+  useAgentWork,
+  type AgentWork,
+  type AgentWorkOptions,
+} from "./agent";
+export { ActivityFeed, type ActivityEntry } from "./activity";
 export {
   Card,
   CardHeader,
@@ -42,12 +52,7 @@ export {
   type SortState,
 } from "./filters";
 export { Tabs, SegmentedControl } from "./tabs";
-export {
-  Progress,
-  Stepper,
-  type Step,
-  type StepState,
-} from "./progress";
+export { Progress, Stepper, type Step, type StepState } from "./progress";
 export { Callout, EmptyState, Tooltip, Skeleton } from "./feedback";
 export {
   WorkflowProgress,
@@ -75,6 +80,9 @@ export {
   AuthShell,
   GoogleButton,
   AuthDivider,
+  AuthMarketing,
+  AuthSplit,
+  MARKETING_LINES,
   PasswordInput,
   ContinueAs,
   type LastAccount,
@@ -92,11 +100,13 @@ export { PromptBar, type PromptBarProps } from "./prompt-bar";
 export {
   ChatModal,
   ChatTranscript,
+  MessageBody,
   type ChatMessage,
   type AgentStep,
 } from "./chat";
 export {
   WorkflowBuilder,
+  revealDuration,
   BlockInspector,
   BLOCK_TYPES,
   INSERTABLE,
@@ -110,11 +120,20 @@ export {
 } from "./workflow-builder";
 export { BlockPicker } from "./block-picker";
 export { BlockSetup } from "./block-setup";
+export {
+  NavRail,
+  NavRailItem,
+  NavTree,
+  NavTreeGroup,
+  NavTreeItem,
+  type NavTreeItemProps,
+} from "./nav-tree";
 export { TestRun } from "./test-run";
 export { EmailPreview } from "./email-preview";
 export { WorkflowCanvas, CanvasPanel } from "./workflow-canvas";
 export {
   CraigMark,
+  TalkToCraig,
   CraigLockup,
   MARK_STROKE,
   MARK_MIN_SIZE,

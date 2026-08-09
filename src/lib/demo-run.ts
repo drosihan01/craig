@@ -1,4 +1,4 @@
-import type { TaskStatus, WorkflowStep } from "@/components/ui";
+import type { Certainty, TaskStatus, WorkflowStep } from "@/components/ui";
 import { NEW_HIRE, PEOPLE } from "@/lib/demo";
 
 /**
@@ -17,43 +17,6 @@ import { NEW_HIRE, PEOPLE } from "@/lib/demo";
  *
  * Fixture data. Goes when WorkflowInstance is a real type.
  */
-
-/**
- * How much Craig actually knows about a completed step.
- *
- * The difference between a checklist and an agent is whether "done" means
- * somebody said so or somebody checked. Showing which is which is more honest
- * than a column of identical ticks, and it's the thing that tells Ada where
- * her risk actually is.
- */
-export type Certainty =
-  /** Craig checked the service and can see it. */
-  | "verified"
-  /** A person said so. Craig has no way to look. */
-  | "confirmed"
-  /** Nobody has said anything either way. */
-  | "assumed";
-
-export const CERTAINTY: Record<
-  Certainty,
-  { label: string; note: string; tone: "success" | "neutral" | "warning" }
-> = {
-  verified: {
-    label: "Verified",
-    note: "I checked this one myself",
-    tone: "success",
-  },
-  confirmed: {
-    label: "Confirmed",
-    note: "Somebody told me. I can't check it",
-    tone: "neutral",
-  },
-  assumed: {
-    label: "Not checked",
-    note: "Nobody has said either way",
-    tone: "warning",
-  },
-};
 
 export interface RunStep extends WorkflowStep {
   /** Who has to do it. The new starter's own steps say so. */
@@ -197,9 +160,7 @@ export const RUN_STEPS: RunStep[] = [
 
 export const runSummary = (steps: RunStep[]) => {
   const done = steps.filter((s) => s.status === "complete").length;
-  const mine = steps.filter(
-    (s) => s.mine && s.status !== "complete",
-  );
+  const mine = steps.filter((s) => s.mine && s.status !== "complete");
   const waiting = steps.filter((s) => s.waitingOn);
   return { done, total: steps.length, mine, waiting };
 };

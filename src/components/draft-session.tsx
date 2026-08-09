@@ -15,7 +15,7 @@ import {
   PromptBar,
   type ChatMessage,
 } from "@/components/ui";
-import { AutoAwesome, Code, Groups } from "@/components/ui/icons";
+import { Add, AutoAwesome, Code, Groups } from "@/components/ui/icons";
 import { NEW_HIRE } from "@/lib/demo";
 import { SESSION, type SessionTurn } from "@/lib/demo-session";
 import { WORKFLOW, stepCount, unconfiguredCount } from "@/lib/demo-workflow";
@@ -45,49 +45,57 @@ const DRAFT_UNCONFIGURED = unconfiguredCount([...WORKFLOW.blocks]);
  * the better path and stays primary, but it's a blank box, and a blank box is
  * where most people stop.
  *
- * Four cards, because they're a 2x2 rather than a list: engineering or not,
- * employed or contracted. Those are the two questions that actually change the
- * shape of an onboarding. The icon says which kind of person and repeats down
- * each column on purpose — that repetition is what makes the grid read as a
- * matrix instead of four unrelated options.
+ * Three, because there are only three answers: the person is employed, the
+ * person is contracted, or you already know the shape and want the canvas.
+ * The engineering split was a fourth card that made the same steps look like a
+ * different product — an engineer needs different *values* in the accounts
+ * step, not a different workflow.
  */
 const TEMPLATES = [
-  {
-    id: "engineer",
-    icon: Code,
-    title: "Engineer",
-    description:
-      "One step per account, a quiz instead of “read the handbook”, and a 1:1 with whoever owns the system.",
-    steps: DRAFT_STEPS,
-    tag: { label: "Most used", tone: "accent" as const },
-  },
   {
     id: "general",
     icon: Groups,
     title: "General hire",
     description:
-      "Anyone outside engineering. Fewer consoles, more context — most of what they need isn’t written down anywhere yet.",
-    steps: 9,
+      "Someone employed. Contract, payroll, the accounts they need, and the context that isn\u2019t written down anywhere yet.",
+    steps: DRAFT_STEPS,
+    tag: { label: "Most used", tone: "accent" as const },
   },
   {
-    id: "engineer-contract",
+    id: "contractor",
     icon: Code,
-    title: "Engineer, contract",
+    title: "Contractor",
     description:
-      "The same access, scoped and dated. Read-only where it can be, and an offboarding step that actually fires.",
-    steps: 10,
-    tag: { label: "Contract", tone: "neutral" as const },
-  },
-  {
-    id: "general-contract",
-    icon: Groups,
-    title: "General contractor",
-    description:
-      "Same shape, less kit. A contract, a way to invoice, and the two or three tools they’ll actually open.",
+      "The same shape, scoped and dated. Less kit, a way to invoice, and an offboarding step that actually fires.",
     steps: 6,
     tag: { label: "Contract", tone: "neutral" as const },
   },
+  {
+    id: "blank",
+    icon: Add,
+    title: "Start blank",
+    description:
+      "A trigger and nothing else. Goes straight to the builder if you already know the shape.",
+    href: "/builder/blank",
+  },
 ];
+
+/** A link when there's somewhere to go, and nothing when there isn't. */
+function Wrap({
+  href,
+  children,
+}: {
+  href?: string;
+  children: React.ReactNode;
+}) {
+  return href ? (
+    <Link href={href} className="block h-full">
+      {children}
+    </Link>
+  ) : (
+    <>{children}</>
+  );
+}
 
 /* The reply Craig gives once the scripted session runs out, so a demo that
    goes off-script degrades honestly instead of repeating itself. */
@@ -235,12 +243,19 @@ export function DraftSession({
       /* Pinned to the viewport so only the transcript scrolls. A composer that
          scrolls away is the single most annoying thing a chat can do. */
       <div className="flex h-[calc(100vh-3rem)] flex-col">
-        <ChatTranscript messages={messages} className="-mx-4 flex-1 px-4 py-8" />
+        <ChatTranscript
+          messages={messages}
+          className="-mx-4 flex-1 px-4 py-8"
+        />
 
         <div className="shrink-0 pb-6">
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
             {offerDraft &&
-              (onFinish ? <BuildPrompt onBuild={onFinish} /> : <DraftHandoff />)}
+              (onFinish ? (
+                <BuildPrompt onBuild={onFinish} />
+              ) : (
+                <DraftHandoff />
+              ))}
 
             {replies.length > 0 && (
               <ReplyOptions
@@ -283,53 +298,66 @@ export function DraftSession({
       </div>
 
       {showTemplates && (
-      <div className="flex flex-col gap-3 pt-8">
-        <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-          Or start from a template
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {TEMPLATES.map((t) => (
-            <Card
-              key={t.id}
-              interactive
-              role="button"
-              tabIndex={0}
-              onClick={() => send(`Start from the ${t.title} template`)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  send(`Start from the ${t.title} template`);
-                }
-              }}
-              className="flex flex-col gap-2 p-4"
-            >
-              <div className="flex items-start gap-2.5">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-subtle-fg">
-                  <t.icon className="size-4" />
-                </span>
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="truncate text-base font-medium">
-                    {t.title}
+        <div className="flex flex-col gap-3 pt-8">
+          <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            Or start from a template
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {TEMPLATES.map((t) => (
+              /* Start blank navigates; the other two send Craig a message.
+                 Card is a div, so the link goes around it rather than through
+                 it — an href on a div is an attribute nobody can click. */
+              <Wrap key={t.id} href={t.href}>
+                <Card
+                  interactive
+                  {...(t.href
+                    ? {}
+                    : {
+                        role: "button",
+                        tabIndex: 0,
+                        onClick: () =>
+                          send(`Start from the ${t.title} template`),
+                        onKeyDown: (e: React.KeyboardEvent) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            send(`Start from the ${t.title} template`);
+                          }
+                        },
+                      })}
+                  className="flex h-full flex-col gap-2 p-4"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent-subtle-fg">
+                      <t.icon className="size-4" />
+                    </span>
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <span className="truncate text-base font-medium">
+                        {t.title}
+                      </span>
+                      {t.tag && (
+                        <Badge tone={t.tag.tone} size="sm" className="shrink-0">
+                          {t.tag.label}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-sm leading-relaxed text-text-muted">
+                    {t.description}
+                  </p>
+
+                  {/* The blank one has no count to give, and "0 steps" would
+                    read as a broken template rather than an empty canvas. */}
+                  <span className="mt-auto pt-1 text-2xs text-text-subtle">
+                    {t.steps
+                      ? `${t.steps} steps · you edit before anything goes live`
+                      : "Nothing pre-filled"}
                   </span>
-                  {t.tag && (
-                    <Badge tone={t.tag.tone} size="sm" className="shrink-0">
-                      {t.tag.label}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              <p className="text-sm leading-relaxed text-text-muted">
-                {t.description}
-              </p>
-
-              <span className="mt-auto pt-1 text-2xs text-text-subtle">
-                {t.steps} steps · you edit before anything goes live
-              </span>
-            </Card>
-          ))}
+                </Card>
+              </Wrap>
+            ))}
+          </div>
         </div>
-      </div>
       )}
     </div>
   );
@@ -446,8 +474,8 @@ function BuildPrompt({ onBuild }: { onBuild: () => void }) {
         <p className="text-base font-medium">Shall I build it?</p>
         <p className="text-sm leading-relaxed text-text-muted">
           You can change every step afterwards, and nothing runs until you put
-          somebody through it. Or keep going below — I&apos;ll add whatever
-          else you think of.
+          somebody through it. Or keep going below — I&apos;ll add whatever else
+          you think of.
         </p>
       </div>
       <Button size="sm" className="w-fit" onClick={onBuild}>

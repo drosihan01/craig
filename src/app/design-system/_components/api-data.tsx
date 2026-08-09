@@ -40,7 +40,8 @@ export const DROPDOWN_PROPS: PropDoc[] = [
     name: "side",
     type: '"top" | "bottom"',
     default: '"bottom"',
-    description: "Which way the menu opens. Use top when it sits near the page bottom.",
+    description:
+      "Which way the menu opens. Use top when it sits near the page bottom.",
   },
   {
     name: "align",
@@ -129,7 +130,8 @@ export const DIALOG_PROPS: PropDoc[] = [
   {
     name: "title",
     type: "ReactNode",
-    description: "Also becomes the dialog's accessible name via aria-labelledby.",
+    description:
+      "Also becomes the dialog's accessible name via aria-labelledby.",
   },
   {
     name: "description",
@@ -191,7 +193,8 @@ export const CHAT_PROPS: PropDoc[] = [
   {
     name: "suggestions",
     type: "string[]",
-    description: "Starter prompts shown on the empty state; clicking one sends it.",
+    description:
+      "Starter prompts shown on the empty state; clicking one sends it.",
   },
 ];
 
@@ -203,10 +206,17 @@ export const PROMPTBAR_PROPS: PropDoc[] = [
     description: "Enter sends and clears; Shift+Enter breaks the line.",
   },
   {
+    name: "value / onValueChange",
+    type: "string · (value: string) => void",
+    description:
+      "Controlled text. Omit both and the bar keeps its own — that's what every product caller wants. Pass them when something outside has to put words in the box: a scripted demo typing a reply, a retry re-filling the last prompt.",
+  },
+  {
     name: "size",
     type: '"sm" | "lg"',
     default: '"lg"',
-    description: "lg for a page-level prompt, sm inside the chat modal.",
+    description:
+      "lg is page level — two rows at rest, because a single-line box reads as a search field and this is asking for a paragraph. sm is for a composer inside a ~300px panel, and inside ChatModal.",
   },
   {
     name: "model / onModelChange",
@@ -227,15 +237,35 @@ export const PROMPTBAR_PROPS: PropDoc[] = [
       "Speech-to-text into this field. Not a live-voice mode — that's a different interaction with different expectations.",
   },
   {
+    name: "onAttach / accept",
+    type: "(files: File[]) => void · string",
+    description:
+      "Enables the attach button. onAttach fires with the full list after every change, not just the new files, so the caller never has to reconcile two lists.",
+  },
+  {
     name: "footnote",
     type: "ReactNode",
-    description: "Line under the bar — disclaimer, hint, character count.",
+    description:
+      "Line under the bar — disclaimer, hint, character count. Outside the box, so it never competes with the placeholder.",
+  },
+  {
+    name: "numberHint",
+    type: "number",
+    description:
+      "Shows a numbered chip in the composer, continuing a list of quick replies above it — so “type your own” reads as the last option rather than a separate mechanism.",
+  },
+  {
+    name: "inputRef",
+    type: "RefObject<HTMLTextAreaElement | null>",
+    description:
+      "Lets a parent focus the textarea, e.g. when its number is pressed.",
   },
   {
     name: "placeholder",
     type: "string",
     default: '"Type / for skills"',
-    description: "Composer placeholder.",
+    description:
+      "Composer placeholder. Changing it re-measures the height floor, since a longer one changes the resting height.",
   },
 ];
 
@@ -284,6 +314,30 @@ export const APPSHELL_PROPS: PropDoc[] = [
   },
 ];
 
+export const STEPPER_PROPS: PropDoc[] = [
+  {
+    name: "steps",
+    type: "Step[]",
+    required: true,
+    description:
+      "id, title, state (complete | current | upcoming), and an optional description the compact variant ignores.",
+  },
+  {
+    name: "orientation",
+    type: '"vertical" | "horizontal"',
+    default: '"vertical"',
+    description:
+      "Horizontal is for a compact header, where the connector stretches to fill the row.",
+  },
+  {
+    name: "compact",
+    type: "boolean",
+    default: "false",
+    description:
+      "Dots instead of numbered discs, one line of copy, no descriptions. Vertical only — orientation is checked first, so passing both gives you the horizontal one.",
+  },
+];
+
 export const WORKFLOW_PROPS: PropDoc[] = [
   {
     name: "steps",
@@ -327,7 +381,7 @@ export const AUTH_PROPS: PropDoc[] = [
     name: "ContinueAs",
     type: "account, onContinue, onUseAnother",
     description:
-      "\"Continue as …\" for a device that has signed in before. A hint about who was here last, never proof of who they are — clicking it starts a real sign-in. Always pair it with a way to use another account.",
+      '"Continue as …" for a device that has signed in before. A hint about who was here last, never proof of who they are — clicking it starts a real sign-in. Always pair it with a way to use another account.',
   },
 ];
 
@@ -355,7 +409,13 @@ export const BUILDER_PROPS: PropDoc[] = [
     name: "onMove",
     type: "(id, -1 | 1) => void",
     description:
-      "Swap with the neighbour. The trigger is excluded and index 0 is never a valid destination.",
+      "Swap with the neighbour. The trigger is excluded and index 0 is never a valid destination. This is the keyboard path, and it stays whether or not the drag is armed.",
+  },
+  {
+    name: "onReorder",
+    type: "(id, to: number) => void",
+    description:
+      "Move a block to an index outright, for the drag. Separate from onMove because a drag crosses several places at once and there is no honest way to say that as a direction. Passing it is also what makes the cards draggable — leave it off and the grip is a menu button and nothing else.",
   },
   {
     name: "onRemove / onDuplicate",
@@ -429,7 +489,8 @@ export const SELECTMENU_PROPS: PropDoc[] = [
     name: "options",
     type: "DropdownItem[]",
     required: true,
-    description: "Same shape as DropdownMenu — descriptions and icons included.",
+    description:
+      "Same shape as DropdownMenu — descriptions and icons included.",
   },
   {
     name: "label",
@@ -507,8 +568,7 @@ export const TOAST_PROPS: PropDoc[] = [
   {
     name: "action",
     type: "{ label, onClick }",
-    description:
-      "One action, e.g. Undo. Dismisses the toast after firing.",
+    description: "One action, e.g. Undo. Dismisses the toast after firing.",
   },
 ];
 
@@ -530,6 +590,115 @@ export const NOTIFICATION_PROPS: PropDoc[] = [
     name: "onMarkAllRead",
     type: "() => void",
     description: "Omit it and the button doesn't render.",
+  },
+];
+
+export const NAV_TREE_PROPS: PropDoc[] = [
+  {
+    name: "label",
+    type: "string",
+    required: true,
+    description: "The group's own row.",
+  },
+  {
+    name: "icon",
+    type: "ReactNode",
+    description:
+      "Sits in the column the dotted rule descends from, which is what makes the rule read as belonging to this group.",
+  },
+  {
+    name: "open / onOpenChange",
+    type: "boolean / (open) => void",
+    description:
+      "Controlled mode. Omit both and it keeps its own state — a nav that forgets which section you opened is worse than one that never collapsed.",
+  },
+  {
+    name: "defaultOpen",
+    type: "boolean",
+    description: "Uncontrolled starting state. Defaults to open.",
+  },
+];
+
+export const NAV_TREE_ITEM_PROPS: PropDoc[] = [
+  {
+    name: "label",
+    type: "string",
+    required: true,
+    description: "The row.",
+  },
+  {
+    name: "href",
+    type: "string",
+    description:
+      "Renders a Link. Without it you get a button — use that for rows that change what's on screen rather than where you are.",
+  },
+  {
+    name: "icon",
+    type: "ReactNode",
+    description:
+      "Drawn plain, at a fixed width so a column of them lines up. No colour of its own — it takes the row's, so it lifts on hover and on the row you're on.",
+  },
+  {
+    name: "current",
+    type: "boolean",
+    description:
+      "Marks the page you're on. Sets aria-current and fills the whole row, not just the icon — a mark confined to one square loses to the hover fill beside it.",
+  },
+  {
+    name: "disabled",
+    type: "boolean",
+    description:
+      "A room that exists but isn't open yet. Renders a span rather than a link or a button: there is no href to middle-click, nothing to tab to, and no press that could do nothing. Takes no fill, so the three states read as three.",
+  },
+  {
+    name: "reason",
+    type: "string",
+    description:
+      "Why it's shut, shown on hover and to assistive tech. Only read when disabled, and worth passing every time — a row that just declines to be pressed is a bug from the outside.",
+  },
+  {
+    name: "trailing",
+    type: "ReactNode",
+    description: "A count or a badge, hard right.",
+  },
+];
+
+export const AGENT_WORK_PROPS: PropDoc[] = [
+  {
+    name: "beat",
+    type: "number",
+    default: "620",
+    description: "How long each phase holds before the next one replaces it.",
+  },
+  {
+    name: "hold",
+    type: "number",
+    description:
+      "Extra pause after the last phase, before the change lands. Use it when the final act is the consequential one and you want a beat of anticipation.",
+  },
+  {
+    name: "onPhase",
+    type: "(label) => void",
+    description:
+      "Report the label outwards instead of keeping it in the hook. The v3 demo uses this to put the phase in its store, so the scripted director and a person clicking drive the same state.",
+  },
+  {
+    name: "run",
+    type: "(phases, done?) => void",
+    description:
+      "Walks the labels, then runs done. Cancels anything already in flight — a second run replaces the first rather than racing it.",
+  },
+  {
+    name: "cancel",
+    type: "() => void",
+    description:
+      "Clears pending timers and the current phase. Called on unmount for you.",
+  },
+  {
+    name: "after",
+    type: "(fn, ms) => void",
+    description:
+      "Puts an unrelated timer on the same cancel list, so a component with one teardown path can't leak a second one.",
   },
 ];
 
@@ -614,7 +783,8 @@ export const SORT_PROPS: PropDoc[] = [
     name: "value",
     type: "SortState",
     required: true,
-    description: "{ field, direction }. Both live in one object so a page holds one piece of sort state, not two.",
+    description:
+      "{ field, direction }. Both live in one object so a page holds one piece of sort state, not two.",
   },
   {
     name: "options",
@@ -649,5 +819,154 @@ export const FILTER_BAR_PROPS: PropDoc[] = [
     type: "() => void",
     description:
       "Renders “Clear filters”, but only while something is actually filtered.",
+  },
+];
+
+export const BLOCK_PICKER_PROPS: PropDoc[] = [
+  {
+    name: "open / onClose",
+    type: "boolean · () => void",
+    required: true,
+    description:
+      "Controlled, like every other Dialog. The search box clears on the way out rather than the way in, so reopening never inherits the last query and no effect has to watch open.",
+  },
+  {
+    name: "onPick",
+    type: "(preset: BlockPreset) => void",
+    required: true,
+    description:
+      "Fires with the whole preset, not an id — the caller needs its kind, title, icon and setup fields to build the block. Pair it with blockFromPreset(). Closing is handled here; the caller only inserts.",
+  },
+];
+
+export const BLOCK_PRESET_PROPS: PropDoc[] = [
+  {
+    name: "kind",
+    type: "BlockKind",
+    required: true,
+    description:
+      "Which mechanism the engine runs. Presets are data; kinds are engine changes, so a new preset always sits on an existing one.",
+  },
+  {
+    name: "setup",
+    type: "SetupField[]",
+    required: true,
+    description:
+      "What the block needs before it can run. The card counts the required ones and says “3 to set up”, so nobody adds a block expecting it to be finished.",
+  },
+  {
+    name: "unavailable",
+    type: "string",
+    description:
+      "Why this one can't be picked yet. Greys the card, replaces the description and swaps the setup count for a “Soon” chip. Presence of the string is the disable — there is no separate boolean to contradict it.",
+  },
+  {
+    name: "note",
+    type: "string",
+    description:
+      "Something the block always does that the admin can't change. Shown in the inspector above the fields they can. Fixed behaviour is still behaviour.",
+  },
+];
+
+export const BLOCK_SETUP_PROPS: PropDoc[] = [
+  {
+    name: "block",
+    type: "WorkflowBlock",
+    required: true,
+    description:
+      "The fields come from block.preset and the answers from block.config. A block with no preset, or a preset with no setup, renders nothing at all rather than an empty heading.",
+  },
+  {
+    name: "people",
+    type: "string[]",
+    required: true,
+    description:
+      'What the person kind offers, and what a multiselect with from: "people" offers. Names, not ids — a person\'s name is already its own label.',
+  },
+  {
+    name: "onChange",
+    type: "(fieldId, value: string | string[]) => void",
+    required: true,
+    description:
+      "One value at a time, keyed by field id. The caller owns config, which is what lets the canvas badge and this form read the same state.",
+  },
+];
+
+export const SETUP_FIELD_PROPS: PropDoc[] = [
+  {
+    name: "kind",
+    type: '"text" | "url" | "select" | "multiselect" | "person" | "file" | "when"',
+    required: true,
+    description:
+      "text and url are inputs; select, person and when are a SelectMenu; multiselect is toggle chips; file is an upload well that keeps the name.",
+  },
+  {
+    name: "required",
+    type: "boolean",
+    description:
+      "The block counts as unconfigured until this has a value. Nothing else marks a block incomplete — this flag is the definition.",
+  },
+  {
+    name: "options",
+    type: "{ id, label }[]",
+    description:
+      "The listed choices. A when field with none falls back to WHEN_OPTIONS, so a stored value still resolves to a label instead of showing “Not set” over something that is very much set.",
+  },
+  {
+    name: "from",
+    type: '"people"',
+    description:
+      "Where a multiselect's choices come from when they aren't listed. Anything else is a free list the admin types into — Craig can't know which Okta groups exist, and guessing is worse than asking.",
+  },
+  {
+    name: "hint",
+    type: "string",
+    description:
+      "An example of a good answer. Stays visible after the field is filled rather than appearing only as an error, because these are decisions someone re-reads six months later.",
+  },
+];
+
+export const TEST_RUN_PROPS: PropDoc[] = [
+  {
+    name: "blocks",
+    type: "WorkflowBlock[]",
+    required: true,
+    description:
+      "The whole workflow, trigger included — it's filtered out here. Steps are walked in array order, which is the order the engine runs them.",
+  },
+  {
+    name: "candidates",
+    type: "string[]",
+    required: true,
+    description:
+      "Who the dry run is written against. Named, because a step owned by “The new hire” should say the person's name back to you.",
+  },
+  {
+    name: "defaultCandidate",
+    type: "string",
+    default: "candidates[0]",
+    description: "Which one is selected on open.",
+  },
+  {
+    name: "workflowName",
+    type: "string",
+    required: true,
+    description: "Titles the dialog.",
+  },
+];
+
+export const EMAIL_PREVIEW_PROPS: PropDoc[] = [
+  {
+    name: "template",
+    type: "EmailTemplate",
+    required: true,
+    description:
+      "subject, preheader, body and an optional cta. Blank lines in the body become paragraphs; there is no rich text, because the emails don't have any.",
+  },
+  {
+    name: "values",
+    type: "Record<string, string>",
+    description:
+      "Overrides for the merge fields. Anything absent falls back to that field's example, and an unknown token stays visible as {{whatever}} rather than being blanked — a preview that silently drops a typo is a preview that lies.",
   },
 ];

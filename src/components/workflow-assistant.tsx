@@ -1,224 +1,442 @@
 "use client";
 
 import * as React from "react";
-import { Badge, CraigMark, PromptBar, type WorkflowBlock } from "@/components/ui";
-import { Check } from "@/components/ui/icons";
+import {
+  AgentPhase,
+  Button,
+  CraigMark,
+  PersonTurn,
+  PromptBar,
+  useAgentWork,
+  type WorkflowBlock,
+} from "@/components/ui";
 import {
   ALL_PRESETS,
   blockFromPreset,
   findPreset,
 } from "@/lib/workflow/library";
+import { NEW_HIRE, PEOPLE } from "@/lib/demo";
+import { cn } from "@/lib/cn";
 
 /**
  * Craig, inside the builder.
  *
  * The canvas is a good editor and a bad conversation. Filling in a Slack
- * workspace URL means selecting the block, finding the field, and typing —
- * three deliberate acts for something Ada could have said in four words. So
- * the right panel takes what she says, works out which step it belongs to,
- * and makes the change.
+ * workspace URL means selecting the block, finding the field and typing —
+ * three deliberate acts for something Ada could say in four words. So this
+ * takes what she says, works out which step it belongs to, and makes the
+ * change. She never has to know that "katalis.slack.com" is the `workspace`
+ * field of the block called Slack.
  *
- * This is the agentic version of editing: she states an intention, Craig
- * decides where it lands. She never has to know that "katalis.slack.com" is
- * the `workspace` field of the block called Slack.
+ * It opens with Craig having already noticed a gap and proposing a way to
+ * close it himself. That's the agentic shape: he doesn't wait to be asked,
+ * and he doesn't act on something this consequential without a yes.
  *
- * Front-end only, and deliberately narrow. It handles pasted links, channel
- * names and "add a <thing>", and says plainly when it can't help rather than
- * guessing — a workflow editor that quietly does the wrong thing is worse
- * than one that does nothing.
+ * Front-end only, and deliberately narrow. Links, channel names and "add a
+ * <thing>". Anything else it says plainly it can't do — an editor that
+ * quietly does the wrong thing is worse than one that does nothing.
  */
 
-export interface Change {
+interface Line {
   id: string;
-  /** What Craig says he did. */
-  said: string;
-  /** The block it landed on, for the caller to highlight. */
+  from: "craig" | "ada";
+  text: string;
+  /** The block it changed, so the line can jump back to it. */
   blockId?: string;
 }
+
+const JASON = PEOPLE.jason.name.split(" ")[0];
+const NILS = NEW_HIRE.name.split(" ")[0];
+
+/* The multiselect stores option ids ("eng"), not what they're called
+   ("#engineering"), so both the write and the readback go through the field
+   rather than through a guess about what the ids look like. */
+const CHANNEL_FIELD = findPreset("slack")?.setup.find(
+  (f) => f.id === "channels",
+);
+
+const channelNames = (ids: string[]) =>
+  ids
+    .map(
+      (id) =>
+        CHANNEL_FIELD?.options?.find((o) => o.id === id)?.label ?? `#${id}`,
+    )
+    .join(", ");
+
+/** What someone typed, mapped onto option ids where one exists. Anything the
+    workspace has that we don't know about is kept as-is — the field takes
+    custom values, and refusing an unfamiliar channel name would be worse. */
+const channelIds = (names: string[]) =>
+  names.map(
+    (n) =>
+      CHANNEL_FIELD?.options?.find(
+        (o) => o.label.replace(/^#/, "").toLowerCase() === n.toLowerCase(),
+      )?.id ?? n,
+  );
+
+/**
+ * What Craig noticed before the panel was opened.
+ *
+ * Read off the workflow rather than written down, because the same panel opens
+ * on an empty draft and on a finished one. An assistant that greets a blank
+ * canvas by naming a Slack step that isn't there has told you exactly how much
+ * attention it was paying.
+ */
+function opening(blocks: WorkflowBlock[], gaps: WorkflowBlock[]): Line[] {
+  const slackGap = gaps.find((b) => b.preset === "slack");
+  const line = (text: string) => [{ id: "l1", from: "craig" as const, text }];
+
+  if (slackGap)
+    return line(
+      `${count(gaps.length, "step")} still ${gaps.length === 1 ? "needs" : "need"} you, and one of them I can probably work out myself. Nobody has said which Slack channels ${NILS} should be in — I could just copy whichever ones ${JASON} is in, since he's the closest match. Want me to?`,
+    );
+
+  if (gaps.length > 0)
+    return line(
+      `${count(gaps.length, "step")} won't run yet — ${list(gaps.map((b) => b.title))}. Paste me the link or tell me the answer and I'll put it where it goes.`,
+    );
+
+  if (blocks.length <= 1)
+    return line(
+      "Nothing in here but the trigger. Tell me what a new starter needs — \u201cadd a sign contract\u201d, or paste a link to something they'll need access to — and I'll build it out.",
+    );
+
+  return line(
+    "Everything here has what it needs, so this one is ready to publish. Paste a link or name a step and I'll keep going.",
+  );
+}
+
+/** Craig counts things out loud a lot; this keeps him grammatical. */
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+const list = (items: string[]) =>
+  items.length < 2
+    ? items.join("")
+    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+
+/* Option ids. What Jason is in, which is the whole point of the offer. */
+const SUGGESTED_CHANNELS = ["general", "eng", "incidents", "deploys"];
 
 /** Which service a pasted URL belongs to, and which field it fills. */
 const LINKS: { match: RegExp; preset: string; field: string; label: string }[] =
   [
-    { match: /slack\.com/i, preset: "slack", field: "workspace", label: "Slack" },
+    {
+      match: /slack\.com/i,
+      preset: "slack",
+      field: "workspace",
+      label: "Slack",
+    },
     { match: /github\.com/i, preset: "github", field: "org", label: "GitHub" },
-    { match: /linear\.app/i, preset: "linear", field: "workspace", label: "Linear" },
-    { match: /notion\.so/i, preset: "notion", field: "workspace", label: "Notion" },
+    {
+      match: /linear\.app/i,
+      preset: "linear",
+      field: "workspace",
+      label: "Linear",
+    },
+    {
+      match: /notion\.so/i,
+      preset: "notion",
+      field: "workspace",
+      label: "Notion",
+    },
     { match: /atlassian\.net/i, preset: "jira", field: "site", label: "Jira" },
     { match: /figma\.com/i, preset: "figma", field: "team", label: "Figma" },
   ];
 
+/**
+ * The conversation, held above the panel.
+ *
+ * Craig selects the block he just changed, and selecting swaps the panel to
+ * that block's fields — which would unmount him and throw away everything he
+ * just said. So the transcript lives in the page and the panel only renders
+ * it. Leaving and coming back finds the thread where it was.
+ */
+export function useCraigPanel(blocks: WorkflowBlock[]) {
+  const gaps = blocks.filter((b) => {
+    const preset = b.preset ? findPreset(b.preset) : undefined;
+    return preset?.setup.some((f) => f.required && !hasValue(b.config?.[f.id]));
+  });
+
+  /* Seeded once. The greeting describes the workflow as it was when she
+     arrived, and rewriting it as she fixes things would be Craig editing what
+     he already said. */
+  const [lines, setLines] = React.useState<Line[]>(() => opening(blocks, gaps));
+  /* The offer only exists when there's a Slack gap to offer against. */
+  const [offerOpen, setOfferOpen] = React.useState(() =>
+    gaps.some((b) => b.preset === "slack"),
+  );
+  /* What he's doing right now, and the timers that get him there. An agent
+     that answers instantly is a lookup table; showing the work is most of what
+     makes the difference legible. */
+  const work = useAgentWork();
+
+  return { lines, setLines, offerOpen, setOfferOpen, work };
+}
+
+export type CraigPanel = ReturnType<typeof useCraigPanel>;
+
 export function WorkflowAssistant({
   blocks,
+  chat,
   onPatch,
   onInsert,
   onSelect,
 }: {
   blocks: WorkflowBlock[];
+  chat: CraigPanel;
   onPatch: (id: string, changes: Partial<WorkflowBlock>) => void;
   onInsert: (block: WorkflowBlock) => void;
   onSelect: (id: string) => void;
 }) {
-  const [log, setLog] = React.useState<Change[]>([]);
+  const { lines, setLines, offerOpen, setOfferOpen, work } = chat;
+  const thinking = work.phase;
 
-  function say(said: string, blockId?: string) {
-    setLog((prev) => [{ id: crypto.randomUUID(), said, blockId }, ...prev]);
+  const gaps = blocks.filter((b) => {
+    const preset = b.preset ? findPreset(b.preset) : undefined;
+    return preset?.setup.some((f) => f.required && !hasValue(b.config?.[f.id]));
+  });
+
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  /* Remounting after a trip to the block inspector lands at the top of a
+     transcript that may already be long. Jump to the end on mount, not just
+     on change. */
+  React.useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  /* Craig's answers arrive below the fold once the transcript is taller than
+     the panel. Scrolling on every change rather than on a length check keeps
+     it right when a line is replaced rather than appended. */
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lines, thinking]);
+
+  const add = (from: Line["from"], text: string, blockId?: string) =>
+    setLines((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), from, text, blockId },
+    ]);
+
+  const blockFor = (preset: string) => blocks.find((b) => b.preset === preset);
+
+  function acceptSuggestion() {
+    setOfferOpen(false);
+    add("ada", `Yes — copy ${JASON}'s.`);
+
+    const slack = blockFor("slack");
+    if (!slack) {
+      add("craig", "There's no Slack step in this workflow any more.");
+      return;
+    }
+    work.run(
+      [
+        `Looking at ${JASON}'s channels`,
+        "Checking which ones a new engineer needs",
+        "Adding them to the Slack step",
+      ],
+      () => {
+        onPatch(slack.id, {
+          config: { ...slack.config, channels: SUGGESTED_CHANNELS },
+        });
+        onSelect(slack.id);
+        add(
+          "craig",
+          `Done — ${channelNames(SUGGESTED_CHANNELS)}. That was the last thing Slack needed, so it'll run now. I've left the right-to-work check alone; that one I'd only be guessing at.`,
+          slack.id,
+        );
+      },
+    );
+  }
+
+  function declineSuggestion() {
+    setOfferOpen(false);
+    add("ada", "I'll tell you.");
+    work.run(["Standing down"], () =>
+      add(
+        "craig",
+        "Go on then — type them below with the hashes and I'll put them in.",
+      ),
+    );
   }
 
   function handle(text: string) {
     const input = text.trim();
     if (!input) return;
+    setOfferOpen(false);
+    add("ada", input);
 
-    const blockFor = (preset: string) =>
-      blocks.find((b) => b.preset === preset);
-
-    /* 1. A pasted link. The most common thing Ada has in her clipboard, and
-          the one where working out where it goes is pure tedium. */
+    /* 1. A pasted link — the most common thing in her clipboard, and the one
+          where working out where it goes is pure tedium. */
     const url = input.match(/\b[\w.-]+\.[a-z]{2,}(?:\/\S*)?/i)?.[0];
     if (url) {
       const link = LINKS.find((l) => l.match.test(url));
-      if (link) {
-        const block = blockFor(link.preset);
-        if (block) {
-          onPatch(block.id, {
-            config: { ...block.config, [link.field]: url },
-          });
-          onSelect(block.id);
-          say(`Put that on ${link.label} — ${url}.`, block.id);
-          return;
-        }
-        say(
-          `That's a ${link.label} link, but there's no ${link.label} step in this workflow yet. Add one and paste it again.`,
+      if (!link) {
+        work.run(["Reading the link"], () =>
+          add("craig", `I don't know which step ${url} belongs to. Which one?`),
         );
         return;
       }
-      say(`I don't know which step ${url} belongs to. Which one is it for?`);
-      return;
-    }
-
-    /* 2. Channel names. Only ever means one thing. */
-    const channels = [...input.matchAll(/#([\w-]+)/g)].map((m) => m[1]);
-    if (channels.length > 0) {
-      const block = blockFor("slack");
+      const block = blockFor(link.preset);
       if (!block) {
-        say("There's no Slack step in this workflow yet.");
+        add(
+          "craig",
+          `That's a ${link.label} link, but there's no ${link.label} step here yet. Add one and paste it again.`,
+        );
         return;
       }
-      onPatch(block.id, {
-        config: { ...block.config, channels },
-      });
-      onSelect(block.id);
-      say(
-        `Set Slack to ${channels.map((c) => `#${c}`).join(", ")}. That was the last thing it needed.`,
-        block.id,
+      work.run(
+        [`Reading the ${link.label} link`, `Filling in the ${link.label} step`],
+        () => {
+          onPatch(block.id, { config: { ...block.config, [link.field]: url } });
+          onSelect(block.id);
+          add("craig", `Put that on ${link.label}.`, block.id);
+        },
       );
       return;
     }
 
-    /* 3. "add a background check", "add linear". Matched against the library
-          rather than a keyword list, so it stays true as presets change. */
-    const wantsAdd = /^(add|include|also)\b/i.test(input);
-    if (wantsAdd) {
+    /* 2. Channel names only ever mean one thing. */
+    const typed = [...input.matchAll(/#([\w-]+)/g)].map((m) => m[1]);
+    if (typed.length > 0) {
+      const channels = channelIds(typed);
+      const slack = blockFor("slack");
+      if (!slack) {
+        add("craig", "There's no Slack step in this workflow.");
+        return;
+      }
+      work.run(["Setting the Slack channels"], () => {
+        onPatch(slack.id, { config: { ...slack.config, channels } });
+        onSelect(slack.id);
+        add(
+          "craig",
+          `Set Slack to ${channelNames(channels)}. That was the last thing it needed.`,
+          slack.id,
+        );
+      });
+      return;
+    }
+
+    /* 3. "add a reference check" — matched against the library rather than a
+          keyword list, so it stays true as presets change. */
+    if (/^(add|include|also)\b/i.test(input)) {
       const rest = input.replace(/^(add|include|also)\s+(a|an|the)?\s*/i, "");
       const preset = ALL_PRESETS.find(
         (p) =>
           rest.toLowerCase().includes(p.label.toLowerCase()) ||
           p.label.toLowerCase().includes(rest.toLowerCase()),
       );
-      if (preset) {
-        if (preset.unavailable) {
-          say(`I can't do ${preset.label} yet — ${preset.unavailable}.`);
-          return;
-        }
-        const block = blockFromPreset(preset, `b${Date.now()}`);
-        onInsert(block);
-        onSelect(block.id);
-        const needs = preset.setup.filter((f) => f.required).length;
-        say(
-          `Added ${preset.label} at the end. It needs ${needs} thing${needs === 1 ? "" : "s"} set up — I've opened it.`,
-          block.id,
+      if (!preset) {
+        add(
+          "craig",
+          `I don't have a block for that. Closest thing is a plain task — say "add a task" and I'll put one in.`,
         );
         return;
       }
-      say(
-        `I don't have a block for that. The closest thing is a plain task — say "add a task" and I'll put one in.`,
+      if (preset.unavailable) {
+        add("craig", `I can't do ${preset.label} yet — ${preset.unavailable}.`);
+        return;
+      }
+      work.run(
+        [`Looking up ${preset.label}`, "Adding it to the end of the workflow"],
+        () => {
+          const block = blockFromPreset(preset, `b${Date.now()}`);
+          onInsert(block);
+          onSelect(block.id);
+          /* A preset can now have nothing to configure — the steps the new
+             starter answers themselves have no required fields at all — and
+             "It needs 0 things from you" was what this said when it met one.
+             Unreachable until those existed, which is why it read as safe. */
+          const needs = preset.setup.filter((f) => f.required).length;
+          add(
+            "craig",
+            needs === 0
+              ? `Added ${preset.label} at the end. Nothing to set up on it — I've opened it so you can see.`
+              : `Added ${preset.label} at the end. It needs ${count(needs, "thing")} from you — I've opened it.`,
+            block.id,
+          );
+        },
       );
       return;
     }
 
-    /* 4. Anything else. Honest rather than helpful-sounding. */
-    say(
-      "I can take a link, a list of channels, or “add a background check”. Anything more than that and I'd be guessing at your workflow, which I'd rather not do.",
+    add(
+      "craig",
+      "I can take a link, a list of channels, or “add a reference check”. More than that and I'd be guessing at your workflow, which I'd rather not do.",
     );
   }
 
-  const gaps = blocks.filter((b) => {
-    const preset = b.preset ? findPreset(b.preset) : undefined;
-    if (!preset) return false;
-    return preset.setup.some(
-      (f) => f.required && !hasValue(b.config?.[f.id]),
-    );
-  });
-
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-2.5">
-        <CraigMark className="mt-0.5 size-5 shrink-0 text-accent" />
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-sm font-medium">Tell me what to change</p>
-          <p className="text-xs leading-relaxed text-text-subtle">
-            {gaps.length > 0 ? (
-              <>
-                {gaps.length} step{gaps.length === 1 ? "" : "s"} still
-                {gaps.length === 1 ? " needs" : " need"} something. Paste a link
-                or tell me the answer and I&apos;ll put it in the right place.
-              </>
-            ) : (
-              <>
-                Nothing is missing. Paste a link or say &ldquo;add a background
-                check&rdquo; if you want to change something.
-              </>
-            )}
-          </p>
-        </div>
+    /* A column, not a stack. The transcript takes whatever height is left and
+       scrolls inside itself, so the composer stays on the bottom edge of the
+       panel however long the conversation gets — a chat whose input drifts
+       down the page as it fills is a chat you have to chase. */
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div
+        ref={scrollRef}
+        className="scrollbar-thin -mr-2 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2"
+      >
+        {lines.map((l) =>
+          l.from === "craig" ? (
+            /* Mark above the copy, not beside it — the same shape the main
+               chat uses, so his turns read as an agent's rather than as a
+               second kind of speech bubble. */
+            <div key={l.id} className="flex flex-col gap-1.5">
+              <CraigMark className="size-5 shrink-0 text-accent" />
+              <button
+                type="button"
+                onClick={() => l.blockId && onSelect(l.blockId)}
+                disabled={!l.blockId}
+                className={cn(
+                  "min-w-0 rounded-md text-left text-sm leading-relaxed text-text-muted",
+                  l.blockId && "hover:text-text",
+                )}
+              >
+                {l.text}
+              </button>
+            </div>
+          ) : (
+            <PersonTurn key={l.id} size="sm">
+              {l.text}
+            </PersonTurn>
+          ),
+        )}
+
+        {/* The pending turn: mark in place, phase beside it. */}
+        <AgentPhase label={thinking} mark />
       </div>
 
-      <PromptBar
-        placeholder="katalis.slack.com, #general #engineering, add a reference check…"
-        onSubmit={handle}
-      />
-
-      {log.length > 0 && (
-        <div className="flex flex-col gap-2 border-t border-border pt-3">
-          {log.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => c.blockId && onSelect(c.blockId)}
-              disabled={!c.blockId}
-              className="flex items-start gap-2 rounded-md px-1 py-0.5 text-left text-xs leading-relaxed text-text-muted transition-colors enabled:hover:bg-surface-hover enabled:hover:text-text"
-            >
-              <Check className="mt-0.5 size-3.5 shrink-0 text-success" />
-              <span className="min-w-0 flex-1">{c.said}</span>
-            </button>
-          ))}
+      {offerOpen && !thinking && (
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button size="sm" onClick={acceptSuggestion}>
+            Yes, copy {JASON}&apos;s
+          </Button>
+          <Button size="sm" variant="secondary" onClick={declineSuggestion}>
+            I&apos;ll tell you
+          </Button>
         </div>
       )}
 
-      {gaps.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {gaps.map((b) => (
-            <Badge
-              key={b.id}
-              tone="warning"
-              size="sm"
-              className="cursor-pointer"
-              onClick={() => onSelect(b.id)}
-            >
-              {b.title}
-            </Badge>
-          ))}
-        </div>
-      )}
+      {/* sm, and no dictation: this is a ~300px column, and the panel was
+          already the crowded part of the screen. */}
+      <div className="shrink-0">
+        <PromptBar
+          size="sm"
+          busy={Boolean(thinking)}
+          dictation={false}
+          placeholder="Paste a link, or name a step…"
+          onSubmit={handle}
+          footnote={
+            gaps.length > 0
+              ? `${count(gaps.length, "step")} still ${gaps.length === 1 ? "needs" : "need"} something.`
+              : blocks.length <= 1
+                ? "No steps yet."
+                : "Nothing is missing."
+          }
+        />
+      </div>
     </div>
   );
 }

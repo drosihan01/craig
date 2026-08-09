@@ -49,3 +49,11 @@ next-env.d.ts
 /public/fonts/*.otf
 /public/fonts/*.ttf
 !/public/fonts/GoogleSansFlex-*.woff2
+
+# Agent scratch space. Never committed — these read .env.local at runtime,
+# and a throwaway script in the tree is one `git add -A` from being permanent.
+.probe-tmp/
+.scratch/
+
+# Showcase data, written at runtime. Accounts live here between restarts.
+/.data/
