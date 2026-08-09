@@ -46,6 +46,11 @@ import {
   type WorkspaceAccount,
 } from "@/components/craig/google-workspace";
 import type { Session } from "@/lib/craig/contract";
+import {
+  blockFor,
+  unmetPrerequisites,
+  type ConnectionProvider,
+} from "@/lib/craig/blocks";
 import { outOfSeats, type SeatEntitlement } from "@/lib/craig/seats";
 import {
   deleteWorkflow,
@@ -378,11 +383,29 @@ function Editor({
 
   /* Given the workflow's id, so his turns carry it and his editing tools have
      something to edit. Held here, above the panel that renders him. */
-  /* A workflow that will try to create an account, on an account that can't.
+  /* A workflow that will try to do something this account is not set up to do.
      Read by the attention list, the canvas badge and the Publish gate, so all
-     three answer from one derivation. */
-  const needsGoogle = blocks.some((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
-  const googleBlocked = needsGoogle && !googleConnected;
+     three answer from one derivation.
+
+     Asked of `blocks.ts` rather than of Google by name. The question — which of
+     this workflow's steps need a connection nobody has made — is the same one
+     for every block, and it used to be four separate mentions of one preset id
+     that nothing kept in agreement. `blocked` is now a list of sentences, so a
+     workflow needing two different connections says both instead of the first
+     one that happened to be checked. */
+  const connectedProviders = React.useMemo(
+    () =>
+      new Set<ConnectionProvider>(
+        googleConnected ? ["google-workspace"] : [],
+      ),
+    [googleConnected],
+  );
+
+  const blocked = React.useMemo(
+    () => unmetPrerequisites(blocks, connectedProviders),
+    [blocks, connectedProviders],
+  );
+  const isBlocked = blocked.length > 0;
 
   /**
    * Everything standing between this workflow and a seat being given.
@@ -402,16 +425,21 @@ function Editor({
       .filter(isUnconfigured)
       .map((b) => ({ id: b.id, label: `${b.title} — ${setupWarning(b)}` }));
 
-    if (googleBlocked) {
-      const step = blocks.find((b) => b.preset === GOOGLE_WORKSPACE_PRESET);
-      items.push({
-        id: step?.id ?? null,
-        label: "Connect Google Workspace",
+    /* One item per missing connection, each pointing at a step that needs it so
+       the canvas can scroll to something rather than just refusing. */
+    for (const reason of blocked) {
+      const step = blocks.find((b) => {
+        const definition = blockFor(b.preset);
+        return (
+          definition?.provider != null &&
+          definition.blockedReason === reason
+        );
       });
+      items.push({ id: step?.id ?? null, label: reason });
     }
 
     return items;
-  }, [blocks, googleBlocked]);
+  }, [blocks, blocked]);
 
   /* This workflow's own conversation, and the same one every time. A workflow
      thread is scoped to a thing rather than to a moment, so coming back after a
@@ -741,7 +769,7 @@ function Editor({
              is unpublishable for a different reason to an unconfigured one. */
           <Button
             size="sm"
-            disabled={unconfigured > 0 || steps === 0 || googleBlocked}
+            disabled={unconfigured > 0 || steps === 0 || isBlocked}
             onClick={publish}
           >
             Publish
@@ -951,11 +979,15 @@ function Editor({
                    while still being the reason the workflow can't publish, so
                    the one screen that knows about connections says so on the
                    block itself rather than only in the column beside it. */
-                warningFor={(block) =>
-                  block.preset === GOOGLE_WORKSPACE_PRESET && !googleConnected
+                warningFor={(block) => {
+                  /* The badge asks the registry the same question the gate
+                     does, so a block can never be publishable-looking on the
+                     canvas and refused by the button. */
+                  const provider = blockFor(block.preset)?.provider;
+                  return provider && !connectedProviders.has(provider)
                     ? "Needs Google Workspace connected"
-                    : null
-                }
+                    : null;
+                }}
                 reveal={revealing}
                 selectedId={selectedId}
                 onSelect={select}
