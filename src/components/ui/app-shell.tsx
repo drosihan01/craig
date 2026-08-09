@@ -10,7 +10,6 @@ import {
   Menu,
   Person,
   RightPanelClose,
-  Science,
   RightPanelOpen,
   Settings,
 } from "./icons";
@@ -475,7 +474,20 @@ export function AppShell({
           side="left"
           open={drawer === "nav"}
           onClose={closeDrawer}
-          title="Menu"
+          /* "Craig", not "Menu". Below `lg` this drawer is the whole left
+             column, so it is the only place the product's name appears at all
+             — the brand cell it normally lives in is one of the things that
+             collapsed. Labelling it "Menu" named the furniture instead of the
+             thing, on the one width where nothing else was saying it. */
+          title="Craig"
+          heading={
+            <span className="flex flex-1 items-center gap-2 truncate">
+              <CraigMark className="size-5" />
+              <span className="truncate text-base font-semibold tracking-[-0.01em]">
+                Craig.
+              </span>
+            </span>
+          }
           footer={account ? <AccountMenu account={account} /> : undefined}
         >
           <div className="px-4 py-6">{nav}</div>
@@ -511,13 +523,28 @@ function Drawer({
   open,
   onClose,
   title,
+  heading,
   footer,
   children,
 }: {
   side: "left" | "right";
   open: boolean;
   onClose: () => void;
+  /**
+   * The drawer's accessible name, and its heading unless `heading` overrides
+   * the drawn version. A string rather than a node because it is what
+   * `aria-label` gets, and a screen reader cannot read an icon.
+   */
   title?: string;
+  /**
+   * What the header actually draws, when a word is not enough.
+   *
+   * Separate from `title` rather than widening it, because the two have
+   * different jobs: one names the panel for somebody who cannot see it, the
+   * other is what somebody looking at it reads. Collapsing them would mean
+   * either the mark has no accessible name or the heading cannot hold a mark.
+   */
+  heading?: React.ReactNode;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -562,9 +589,11 @@ function Drawer({
         )}
       >
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border pl-4 pr-2">
-          <span className="flex-1 truncate text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
-            {title}
-          </span>
+          {heading ?? (
+            <span className="flex-1 truncate text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+              {title}
+            </span>
+          )}
           <DialogClose onClose={onClose} />
         </div>
 
@@ -858,11 +887,11 @@ function accountItems(
        to keep in step, and the screen that forgot it would be the screen where
        Settings quietly stops working again.
 
-       The sandbox gets the same row, pointing at the same customer screen, and
-       that is the right answer rather than an oversight. A builder pressing
-       Settings there lands on a page that opens by naming which account they
-       are signed in as — which is precisely the check that was missing when a
-       real Workspace was attached to a throwaway test account. */
+       The sandbox used to get a row here too. It has gone: it is a builder's
+       tool that moved to `/archive/sandbox` when the product took over the
+       root, so the row was pointing at a path that no longer exists — and a
+       dead link in the account menu of a product somebody is being asked to
+       trust with their Google Workspace is worse than no link. */
     {
       id: "settings",
       label: "Settings",
@@ -870,22 +899,41 @@ function accountItems(
       onSelect: () =>
         router.push(`/settings?from=${encodeURIComponent(from)}`),
     },
-    /* The sandbox is a builder's tool, not an admin's — it doesn't belong in
-       the product nav, but it has to be reachable from every screen. */
-    {
-      id: "sandbox",
-      label: "Sandbox",
-      description: "Builder hub",
-      icon: <Science />,
-      separatorBefore: true,
-      onSelect: () => router.push("/sandbox"),
-    },
     {
       id: "signout",
       label: "Sign out",
       icon: <Logout />,
       destructive: true,
       separatorBefore: true,
+      /* This row has been decorative since the shell was written — a Sign out
+         that looked exactly like a working one and did nothing at all, which is
+         the worst way for this particular control to fail: somebody presses it,
+         sees the menu close, and walks away from a browser that is still signed
+         in.
+
+         Awaited before navigating, or the browser can tear the request down
+         mid-flight and leave the session cookie exactly where it was.
+
+         `replace` rather than `push`, so the back button doesn't offer to
+         return to the screen they just left — it would render, briefly, from a
+         cache that still believes in them. `refresh` alongside it for the same
+         reason, since the router holds server-rendered payloads that were built
+         for somebody who is no longer here.
+
+         The in-memory store needs no explicit clearing: the layout renders
+         `AccountScope` with a null email once the session is gone, and
+         `claimAccount(null)` resets it. */
+      onSelect: async () => {
+        try {
+          await fetch("/api/auth/sign-out", { method: "POST" });
+        } catch {
+          /* Offline, or the route is unreachable. Going to sign-in anyway is
+             the honest move: the cookie may well still be valid, and the page
+             they land on will say so rather than pretending. */
+        }
+        router.replace("/sign-in");
+        router.refresh();
+      },
     },
   ];
 }
