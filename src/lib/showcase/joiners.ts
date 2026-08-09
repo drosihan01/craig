@@ -6,9 +6,11 @@ import {
   AUTOMATION_BY_PRESET,
   JOINER_FIELD_BY_PRESET,
   type Joiner,
+  type JoinerField,
   type JoinerStep,
   type RunState,
   type StepActor,
+  type StepAutomation,
   type StepRun,
 } from "./contract";
 
@@ -16,35 +18,79 @@ import {
  * Everyone who has been given a seat, and how far through they are.
  *
  * Server-side, and it has to be: progress is written by the new starter and
- * read by the admin who invited them, who is somebody else entirely,
- * elsewhere. It lived in a JSON file; it lives in Supabase now, because a
- * deployment whose filesystem is discarded between invocations is a deployment
- * where somebody's half-finished onboarding evaporates mid-week.
+ * read by the admin who invited them, who is somebody else entirely, elsewhere.
  *
- * The steps stay a JSONB *snapshot* on the row — deliberately not normalised
- * into step rows. They are a copy taken when the invitation went out, and
- * editing the workflow afterwards must not rewrite the half somebody hasn't
- * done yet, nor lose the record of what they already did. A join table is the
- * obvious instinct here and it would silently break exactly that.
+ * The steps are rows now — one per step, in `joiner_steps` — and it is worth
+ * being precise about what changed and what deliberately did not.
  *
- * Concurrency changed shape in the move and it is worth being precise about
- * it. The file store's double-run guard was "no `await` between read and
- * write, one process, one event loop" — an argument that was true and that a
- * second server instance would quietly demolish. Every mutation now goes
- * read → transform (in TS, where all the documented rules live) → compare-and-
- * swap, where the CAS is `replace_joiner_steps` in Postgres: the write lands
- * only if the steps are still byte-for-byte what we read, otherwise nothing
- * happens and we re-read. Two processes can race; one wins; the loser
- * re-evaluates against what the winner wrote. That is the same guarantee the
- * event-loop argument made, held somewhere that scales past one process.
+ * **Still a snapshot.** The old JSONB blob's argument was that steps are a copy
+ * taken when the invitation went out: editing the workflow afterwards must not
+ * rewrite the half somebody hasn't done yet, nor lose the record of what they
+ * already did. That argument was about *when the copy is taken*, not about how
+ * it is stored, and it holds unchanged: these rows are created once, by
+ * `createJoiner`, and nothing ever re-derives them from the workflow. A join
+ * against live blocks — the thing the old comment rightly feared — still does
+ * not exist.
+ *
+ * **What the blob actually cost** was two things the snapshot argument never
+ * required. Queryability: the acceptance webhook asks "which steps in this
+ * tenant are waiting on somebody to accept", and had to load every joiner and
+ * parse JSON to find out; that is now one indexed read of `run_state`, a
+ * *generated* column that cannot drift from the run document it summarises.
+ * And write contention: every mutation — a joiner answering their own form, an
+ * admin ticking a box, Craig claiming a run — serialised through one
+ * whole-document compare-and-swap, so two people touching two different steps
+ * of the same onboarding contended on the same write. Each step is its own row
+ * with its own concurrency now.
+ *
+ * **Where the CAS went.** It didn't dissolve; it moved to where each rule
+ * actually needed it. The claim — the one mutation whose correctness the
+ * double-run guarantee rests on — is `claim_joiner_step` in Postgres: a single
+ * UPDATE whose WHERE clause is the whole rule (right actor, claimable state,
+ * every actionable predecessor complete), evaluated in one snapshot. Run
+ * updates are a row-level version CAS, because their merge semantics live in
+ * TypeScript and must stay there — see `updateRun`. A joiner's answer and an
+ * admin's tick are plain conditional updates, because overwriting your own
+ * previous answer is the documented behaviour, not a race to lose.
  */
 
 type JoinerRow = Tables<"joiners">;
+type StepRow = Tables<"joiner_steps">;
 
 const db = () => supabaseAdmin();
 
-/** How a row becomes the shape everything else already speaks. */
-function toJoiner(row: JoinerRow): Joiner {
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A step row, as the shape everything else already speaks.
+ *
+ * Nulls become absent fields rather than travelling: `JoinerStep` predates the
+ * database and every reader tests presence (`step.field`, `step.run`), so a
+ * `null` leaking through would be the one falsy value those tests weren't
+ * written against.
+ */
+function toStep(row: StepRow): JoinerStep {
+  return {
+    id: row.step_id,
+    title: row.title,
+    actor: (row.actor as StepActor | null) ?? undefined,
+    field: (row.field as JoinerField | null) ?? undefined,
+    automation: (row.automation as StepAutomation | null) ?? undefined,
+    run: (row.run as StepRun | null) ?? undefined,
+    due: row.due ?? undefined,
+    value: row.value ?? undefined,
+    /* Normalised to the `toISOString` shape the run documents inside `run`
+       already use, so a date written by this layer and a date written by an
+       attempt compare the same way. */
+    completedAt: row.completed_at
+      ? new Date(row.completed_at).toISOString()
+      : undefined,
+  };
+}
+
+/** How a row and its steps become the shape everything else already speaks. */
+function toJoiner(row: JoinerRow, steps: StepRow[]): Joiner {
   return {
     id: row.id,
     email: row.email,
@@ -55,80 +101,32 @@ function toJoiner(row: JoinerRow): Joiner {
     company: row.company,
     workflowId: row.workflow_id,
     workflowName: row.workflow_name,
-    steps: row.steps as unknown as JoinerStep[],
-    /* Normalised to the same `toISOString` shape the file store wrote, because
-       `listJoiners` sorts these with `localeCompare` and Postgres's `+00:00`
-       suffix would sort against a `Z` one day. One format, everywhere. */
+    steps: [...steps]
+      .sort((a, b) => a.position - b.position)
+      .map(toStep),
     invitedAt: new Date(row.invited_at).toISOString(),
   };
 }
 
-async function fetchRow(id: string): Promise<JoinerRow | null> {
+type JoinerWithSteps = JoinerRow & { joiner_steps: StepRow[] };
+
+async function fetchJoiner(id: string): Promise<Joiner | null> {
   /* The id arrives from a signed token, but "signed" and "well-formed UUID"
      are different claims, and Postgres rejects a malformed UUID loudly. A
      token minted before the move to UUID keys — or a hand-built one — should
      read as "no such person", not as a 500. */
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    return null;
-  }
+  if (!UUID.test(id)) return null;
+
   const { data, error } = await db()
     .from("joiners")
-    .select()
+    .select("*, joiner_steps(*)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`Reading joiner failed: ${error.message}`);
-  return data;
-}
+  if (!data) return null;
 
-/**
- * The compare-and-swap every step mutation goes through.
- *
- * `expected` is the steps array exactly as the row read came back — jsonb
- * equality in Postgres is structural, so a JS round trip is safe. `true`
- * means the write landed; `false` means somebody else wrote first and the
- * caller should re-read and re-decide.
- */
-async function casSteps(
-  id: string,
-  expected: Json,
-  next: JoinerStep[],
-): Promise<boolean> {
-  const { data, error } = await db().rpc("replace_joiner_steps", {
-    p_id: id,
-    p_expected: expected,
-    p_next: next as unknown as Json,
-  });
-  if (error) throw new Error(`Writing steps failed: ${error.message}`);
-  return data === true;
-}
-
-/**
- * Read → transform → CAS, with the retry the CAS makes necessary.
- *
- * The transform returns the new steps, or `null` to refuse — and it is re-run
- * from fresh state on every attempt, so a refusal that becomes true after a
- * race (the step got completed under us) is decided on what is actually
- * written, not on what we first saw. Three attempts is not tuning: two
- * concurrent writers resolve in two, and a store contended harder than that
- * has a caller in a loop somewhere that should fail rather than spin.
- */
-async function mutateSteps(
-  joinerId: string,
-  transform: (joiner: Joiner) => JoinerStep[] | null,
-): Promise<Joiner | null> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const row = await fetchRow(joinerId);
-    if (!row) return null;
-
-    const joiner = toJoiner(row);
-    const next = transform(joiner);
-    if (!next) return null;
-
-    if (await casSteps(row.id, row.steps, next)) {
-      return { ...joiner, steps: next };
-    }
-  }
-  return null;
+  const row = data as unknown as JoinerWithSteps;
+  return toJoiner(row, row.joiner_steps);
 }
 
 /**
@@ -232,29 +230,59 @@ export async function createJoiner(
       company: input.company,
       workflow_id: input.workflowId,
       workflow_name: input.workflowName,
-      steps: input.steps as unknown as Json,
     })
     .select()
     .single();
 
   if (error) throw new Error(`Creating the invitation failed: ${error.message}`);
-  return toJoiner(row);
+
+  /* The snapshot, taken exactly once. Two inserts rather than one because the
+     rows carry the joiner's id, and the gap between them is closed the same
+     way the invite route closes its own: a failure writing the steps deletes
+     the joiner rather than leaving somebody who exists but has nothing to do.
+     If the compensating delete also fails we throw anyway — the caller reports
+     the invitation as not created, and a row with no steps renders as exactly
+     that rather than as somebody half-onboarded. */
+  const { error: stepsError } = await db()
+    .from("joiner_steps")
+    .insert(
+      input.steps.map((s, position) => ({
+        joiner_id: row.id,
+        step_id: s.id,
+        position,
+        title: s.title,
+        actor: s.actor ?? null,
+        field: s.field ?? null,
+        automation: s.automation ?? null,
+        due: s.due ?? null,
+        value: s.value ?? null,
+        completed_at: s.completedAt ?? null,
+        run: (s.run ?? null) as Json,
+      })),
+    );
+  if (stepsError) {
+    await db().from("joiners").delete().eq("id", row.id);
+    throw new Error(`Creating the invitation failed: ${stepsError.message}`);
+  }
+
+  return { ...toJoiner(row, []), steps: input.steps };
 }
 
 export async function getJoiner(id: string): Promise<Joiner | null> {
-  const row = await fetchRow(id);
-  return row ? toJoiner(row) : null;
+  return fetchJoiner(id);
 }
 
 /** Everyone one account has invited, newest last. */
 export async function listJoiners(accountEmail: string): Promise<Joiner[]> {
   const { data, error } = await db()
     .from("joiners")
-    .select()
+    .select("*, joiner_steps(*)")
     .eq("account_email", accountEmail.trim().toLowerCase())
     .order("invited_at", { ascending: true });
   if (error) throw new Error(`Listing joiners failed: ${error.message}`);
-  return data.map(toJoiner);
+  return (data as unknown as JoinerWithSteps[]).map((row) =>
+    toJoiner(row, row.joiner_steps),
+  );
 }
 
 /**
@@ -264,7 +292,14 @@ export async function listJoiners(accountEmail: string): Promise<Joiner[]> {
  * nobody wrote a form for cannot be completed by submitting one. Answering
  * twice is allowed and overwrites: correcting a typo in your own date of
  * birth is a thing people do, and there is nothing downstream that has
- * already consumed it.
+ * already consumed it. That is also why this needs no version check — the
+ * only thing two racing submissions can disagree about is which of their own
+ * answers survives, and "the later one" is the documented behaviour.
+ *
+ * The refusal and the write are one conditional UPDATE: the `eq`/`not`
+ * filters are the old transform's checks, moved into the statement, so a step
+ * that isn't theirs matches zero rows rather than being read, judged, and
+ * raced against.
  */
 export async function completeStep(
   joinerId: string,
@@ -272,21 +307,20 @@ export async function completeStep(
   value: string,
 ): Promise<Joiner | null> {
   const trimmed = value.trim();
-  if (!trimmed) return null;
+  if (!trimmed || !UUID.test(joinerId)) return null;
 
-  return mutateSteps(joinerId, (joiner) => {
-    const step = joiner.steps.find((s) => s.id === stepId);
-    /* Their own steps only. An admin step has no form and no value, so a
-       submission naming one is either a mistake or somebody trying to complete
-       work on a screen that never asked them for it. */
-    if (step?.actor !== "joiner" || !step.field) return null;
+  const { data, error } = await db()
+    .from("joiner_steps")
+    .update({ value: trimmed, completed_at: new Date().toISOString() })
+    .eq("joiner_id", joinerId)
+    .eq("step_id", stepId)
+    .eq("actor", "joiner")
+    .not("field", "is", null)
+    .select("joiner_id");
+  if (error) throw new Error(`Writing steps failed: ${error.message}`);
+  if (data.length === 0) return null;
 
-    return joiner.steps.map((s) =>
-      s.id === stepId
-        ? { ...s, value: trimmed, completedAt: new Date().toISOString() }
-        : s,
-    );
-  });
+  return fetchJoiner(joinerId);
 }
 
 /**
@@ -303,16 +337,19 @@ export async function tickStep(
   stepId: string,
   done: boolean,
 ): Promise<Joiner | null> {
-  return mutateSteps(joinerId, (joiner) => {
-    const step = joiner.steps.find((s) => s.id === stepId);
-    if (step?.actor !== "admin") return null;
+  if (!UUID.test(joinerId)) return null;
 
-    return joiner.steps.map((s) =>
-      s.id === stepId
-        ? { ...s, completedAt: done ? new Date().toISOString() : undefined }
-        : s,
-    );
-  });
+  const { data, error } = await db()
+    .from("joiner_steps")
+    .update({ completed_at: done ? new Date().toISOString() : null })
+    .eq("joiner_id", joinerId)
+    .eq("step_id", stepId)
+    .eq("actor", "admin")
+    .select("joiner_id");
+  if (error) throw new Error(`Writing steps failed: ${error.message}`);
+  if (data.length === 0) return null;
+
+  return fetchJoiner(joinerId);
 }
 
 /* --- The steps Craig runs -------------------------------------------------- */
@@ -366,6 +403,10 @@ export function isRunInterrupted(step: JoinerStep, now = Date.now()): boolean {
  * work that neither of these screens completes, so they never get a
  * `completedAt` — and a due test that required them would put an automated
  * step behind a condition that can never become true.
+ *
+ * Also stated in SQL, inside `claim_joiner_step`, where it participates in the
+ * claim's own atomicity — this copy is the one screens and pre-checks read,
+ * that one is the one the guarantee rests on. Change them together.
  */
 export function isStepDue(joiner: Joiner, stepId: string): boolean {
   const index = joiner.steps.findIndex((s) => s.id === stepId);
@@ -417,18 +458,25 @@ export type ClaimResult =
  * rests on.
  *
  * **Never creates two Google accounts, and this function is why.** Every path
- * that could run an automated step goes through here first, and here is a
- * compare-and-set against what is written down rather than a check on what
- * the caller believes.
+ * that could run an automated step goes through here first.
  *
- * The atomicity used to be an argument about Node's event loop — no `await`
- * between read and write, one process — which held for one process and was
- * stated, at the time, to stop holding for two. It is now the database's:
- * the claim lands only if the steps are still exactly what this process read,
- * so two processes claiming at once resolve to one winner and one loser, and
- * the loser re-reads, sees `running`, and stands down. The old backstop still
- * stands behind it — the seat address is deterministic, so Google's own
- * `duplicate` refusal catches anything that slips past.
+ * The atomicity has moved twice and each move made it stronger. It began as an
+ * argument about Node's event loop — no `await` between read and write, one
+ * process — which a second server instance would have demolished. It became a
+ * whole-document compare-and-swap in Postgres. It is now `claim_joiner_step`:
+ * one UPDATE whose WHERE clause *is* the rule — Craig's step, claimable state,
+ * every actionable predecessor complete — so the read, the judgement and the
+ * write are a single statement and there is no interleaving to reason about.
+ * Two processes claiming at once resolve to one winner inside Postgres; the
+ * loser gets zero rows back and stands down. The old backstop still stands
+ * behind it — the seat address is deterministic, so Google's own `duplicate`
+ * refusal catches anything that slips past.
+ *
+ * The snapshot checks before the call exist to *name* a refusal, not to make
+ * one: the RPC refuses with an empty result, which is airtight and mute, and
+ * "why won't this run" deserves better than a shrug. They are best-effort
+ * readings of a moment that may have passed by the time the claim lands, which
+ * is fine — the claim itself never relies on them.
  *
  * Claimable from `waiting` and from `failed`, and from nothing else. `failed`
  * is a state a run can be retried out of because of an invariant
@@ -441,45 +489,46 @@ export async function claimAutomatedStep(
   joinerId: string,
   stepId: string,
 ): Promise<ClaimResult> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const row = await fetchRow(joinerId);
-    if (!row) return { ok: false, why: "no-such-person" };
+  const joiner = await fetchJoiner(joinerId);
+  if (!joiner) return { ok: false, why: "no-such-person" };
 
-    const joiner = toJoiner(row);
-    const step = joiner.steps.find((s) => s.id === stepId);
-    if (!step || step.actor !== "craig" || !step.automation) {
-      return { ok: false, why: "not-automated" };
-    }
-
-    const state = runStateOf(step);
-    if (state !== "waiting" && state !== "failed") {
-      return { ok: false, why: "already-running" };
-    }
-
-    if (!isStepDue(joiner, stepId)) return { ok: false, why: "not-due" };
-
-    /* Everything the previous attempt learned is dropped except what it made.
-       A stale "Google Workspace isn't connected" sitting under a run that is
-       currently in flight is a screen contradicting itself, and `seatEmail`
-       is the one field that outlives an attempt — it is how a lost run is
-       found again. */
-    const claimed: StepRun = {
-      state: "running",
-      startedAt: new Date().toISOString(),
-      seatEmail: step.run?.seatEmail,
-      seatCreatedAt: step.run?.seatCreatedAt,
-    };
-
-    const held: JoinerStep = { ...step, run: claimed };
-    const next = joiner.steps.map((s) => (s.id === stepId ? held : s));
-
-    if (await casSteps(row.id, row.steps, next)) {
-      return { ok: true, joiner: { ...joiner, steps: next }, step: held };
-    }
-    /* Lost the race. Loop: the re-read sees what the winner wrote — usually
-       `running`, which the state check above turns into the honest refusal. */
+  const step = joiner.steps.find((s) => s.id === stepId);
+  if (!step || step.actor !== "craig" || !step.automation) {
+    return { ok: false, why: "not-automated" };
   }
-  return { ok: false, why: "already-running" };
+
+  const state = runStateOf(step);
+  if (state !== "waiting" && state !== "failed") {
+    return { ok: false, why: "already-running" };
+  }
+
+  if (!isStepDue(joiner, stepId)) return { ok: false, why: "not-due" };
+
+  const { data, error } = await db().rpc("claim_joiner_step", {
+    p_joiner: joinerId,
+    p_step: stepId,
+    p_started: new Date().toISOString(),
+  });
+  if (error) throw new Error(`Claiming the step failed: ${error.message}`);
+
+  const won = data?.[0];
+  if (!won) {
+    /* The statement refused after the snapshot allowed: somebody else claimed
+       in the gap, or a predecessor came un-done. Either way the step is not
+       ours, and "already-running" is what the loser of a race has always been
+       told here. */
+    return { ok: false, why: "already-running" };
+  }
+
+  const held = toStep(won as StepRow);
+  return {
+    ok: true,
+    joiner: {
+      ...joiner,
+      steps: joiner.steps.map((s) => (s.id === stepId ? held : s)),
+    },
+    step: held,
+  };
 }
 
 /**
@@ -490,48 +539,84 @@ export async function claimAutomatedStep(
  * about — a check for acceptance knows nothing about `seatCreatedAt` and
  * should not be able to erase it by not saying so.
  *
+ * The merge lives here, in TypeScript, and that is a decision rather than an
+ * omission from the SQL: a patch key set to `undefined` means *clear this
+ * field* — object spread keeps the key, serialisation drops it — and
+ * `automation.ts` leans on that everywhere it retires a stale message. A jsonb
+ * `||` cannot say "remove", so moving the merge into the database would have
+ * quietly changed what every existing patch means.
+ *
+ * What the database contributes is the version: read at N, merge, write back
+ * only if still N, retry on a miss. The whole-document CAS this store used to
+ * run every mutation through, shrunk to the one mutation that actually merges
+ * and the one row it merges into. Two racing updates serialise; the loser
+ * re-reads and re-merges against what the winner wrote.
+ *
  * The one thing this does beyond merging is keep `state: "done"` and the
  * step's own `completedAt` in step with each other, in both directions. Every
  * count on both screens reads `completedAt` and none of them know what a run
  * is; a run that reached `done` without setting it would be a finished step
- * that reported itself outstanding for ever.
+ * that reported itself outstanding for ever. `completed_at` is written
+ * explicitly on both branches, because in an UPDATE an absent column means
+ * "leave it alone" — the old blob write got the clearing for free from JSON
+ * serialisation, and this is where that behaviour has to be said out loud.
  */
 export async function updateRun(
   joinerId: string,
   stepId: string,
   patch: Partial<StepRun> & { state: RunState },
 ): Promise<Joiner | null> {
-  return mutateSteps(joinerId, (joiner) => {
-    const step = joiner.steps.find((s) => s.id === stepId);
-    if (!step || step.actor !== "craig") return null;
+  if (!UUID.test(joinerId)) return null;
 
-    const run: StepRun = { ...step.run, ...patch };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data: row, error } = await db()
+      .from("joiner_steps")
+      .select("actor, run, completed_at, version")
+      .eq("joiner_id", joinerId)
+      .eq("step_id", stepId)
+      .maybeSingle();
+    if (error) throw new Error(`Reading the step failed: ${error.message}`);
+    if (!row || row.actor !== "craig") return null;
+
+    const run: StepRun = { ...(row.run as StepRun | null), ...patch };
     const done = run.state === "done";
 
-    return joiner.steps.map((s) =>
-      s.id === stepId
-        ? {
-            ...s,
-            run,
-            /* Kept, not re-stamped, when it is already there. This is the
-               record of when the person accepted their seat, and a poll that
-               ran again would otherwise move that date forward every minute. */
-            completedAt: done
-              ? (s.completedAt ?? run.endedAt ?? new Date().toISOString())
-              : undefined,
-          }
-        : s,
-    );
-  });
+    const { data: written, error: writeError } = await db()
+      .from("joiner_steps")
+      .update({
+        run: JSON.parse(JSON.stringify(run)) as Json,
+        /* Kept, not re-stamped, when it is already there. This is the record
+           of when the person accepted their seat, and a poll that ran again
+           would otherwise move that date forward every minute. */
+        completed_at: done
+          ? (row.completed_at ??
+            run.endedAt ??
+            new Date().toISOString())
+          : null,
+        version: row.version + 1,
+      })
+      .eq("joiner_id", joinerId)
+      .eq("step_id", stepId)
+      .eq("version", row.version)
+      .select("joiner_id");
+    if (writeError) {
+      throw new Error(`Writing steps failed: ${writeError.message}`);
+    }
+
+    if (written.length > 0) return fetchJoiner(joinerId);
+    /* Lost the race. Loop: the re-read merges against what the winner wrote. */
+  }
+  return null;
 }
 
 /**
  * Take somebody's seat away.
  *
- * Their answers go with them, which is the point: a seat you removed that
- * left a date of birth on the server is a deletion that didn't delete
- * anything. The invitation is not recalled, because it can't be — it is
- * already in their inbox, and the link in it is what stops working.
+ * Their answers go with them — the step rows cascade with the joiner — which
+ * is the point: a seat you removed that left a date of birth on the server is
+ * a deletion that didn't delete anything. The invitation is not recalled,
+ * because it can't be — it is already in their inbox, and the link in it is
+ * what stops working.
  */
 export async function deleteJoiner(id: string): Promise<boolean> {
   const { data, error } = await db()

@@ -42,6 +42,20 @@ export interface StoredMessage {
   sources?: { url: string; title: string }[];
 }
 
+/**
+ * Something Craig wrote down mid-conversation — a gap or a fact.
+ *
+ * Durable because the conversation is: these are what the strength meter
+ * measures and what travels back to him each turn as "what you already know",
+ * and while they lived only in the browser a reload silently lobotomised him.
+ * They ride the thread row, so graduation carries them into the workflow's
+ * conversation for free and deleting a thread deletes what it learned.
+ */
+export interface StoredNote {
+  kind: "gap" | "fact";
+  text: string;
+}
+
 export interface StoredThread {
   id: string;
   kind: ThreadKind;
@@ -130,7 +144,11 @@ export async function listThreads(
 export async function readThread(
   accountEmail: string,
   threadId: string,
-): Promise<{ thread: StoredThread; messages: StoredMessage[] } | null> {
+): Promise<{
+  thread: StoredThread;
+  messages: StoredMessage[];
+  notes: StoredNote[];
+} | null> {
   const accountId = await accountIdFor(accountEmail);
   if (!accountId) return null;
 
@@ -152,7 +170,76 @@ export async function readThread(
   if (turnsError)
     throw new Error(`Reading the transcript failed: ${turnsError.message}`);
 
-  return { thread: toThread(row), messages: turns.map(toMessage) };
+  const { data: noted, error: notesError } = await db()
+    .from("thread_notes")
+    .select("kind, text")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true });
+  if (notesError)
+    throw new Error(`Reading the notes failed: ${notesError.message}`);
+
+  return {
+    thread: toThread(row),
+    messages: turns.map(toMessage),
+    notes: noted.map((n) => ({
+      kind: n.kind === "gap" ? ("gap" as const) : ("fact" as const),
+      text: n.text,
+    })),
+  };
+}
+
+/**
+ * Write the conversation's notes, keeping only what is new.
+ *
+ * The client re-sends its whole note list on every flush — the list is small
+ * and append-only, and "send what changed" bookkeeping on the client is how a
+ * note recorded during a dropped sync never arrives. So the diff happens here,
+ * against what the thread already has, and the unique index stands behind it:
+ * two flushes racing on the same new note resolve to one row and one harmless
+ * duplicate-key error, which is swallowed because the note *is* stored, which
+ * is all the caller ever asked.
+ *
+ * Scoped through the account like every other write in this file: a caller
+ * holding somebody else's thread id writes nothing.
+ */
+export async function saveNotes(
+  accountEmail: string,
+  threadId: string,
+  notes: StoredNote[],
+): Promise<void> {
+  if (notes.length === 0) return;
+  const accountId = await accountIdFor(accountEmail);
+  if (!accountId) return;
+
+  const { data: owned } = await db()
+    .from("threads")
+    .select("id")
+    .eq("id", threadId)
+    .eq("account_id", accountId)
+    .maybeSingle();
+  if (!owned) return;
+
+  const { data: existing, error: readError } = await db()
+    .from("thread_notes")
+    .select("kind, text")
+    .eq("thread_id", threadId);
+  if (readError)
+    throw new Error(`Reading the notes failed: ${readError.message}`);
+
+  const seen = new Set(existing.map((n) => `${n.kind}\u0000${n.text}`));
+  const fresh = notes.filter((n) => !seen.has(`${n.kind}\u0000${n.text}`));
+  if (fresh.length === 0) return;
+
+  const { error } = await db()
+    .from("thread_notes")
+    .insert(
+      fresh.map((n) => ({ thread_id: threadId, kind: n.kind, text: n.text })),
+    );
+  /* 23505 is the unique index catching a racing flush that inserted the same
+     note first. The note exists; that is success wearing an error code. */
+  if (error && error.code !== "23505") {
+    throw new Error(`Saving the notes failed: ${error.message}`);
+  }
 }
 
 /**

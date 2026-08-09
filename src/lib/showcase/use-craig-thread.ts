@@ -69,7 +69,7 @@ export function useCraigThread(
       /* `openThread` returns the *server's* answer, which for these two kinds
          may be a thread that already existed rather than the id just minted. */
       if (result.id === open) return;
-      setThread(result.id, result.messages);
+      setThread(result.id, result.messages, result.notes);
     })();
 
     return () => {
@@ -85,6 +85,6 @@ export function useCraigThread(
  * happens when a row is clicked, not when a screen mounts.
  */
 export async function showThread(threadId: string) {
-  const messages = await readThread(threadId);
-  setThread(threadId, messages);
+  const { messages, notes } = await readThread(threadId);
+  setThread(threadId, messages, notes);
 }

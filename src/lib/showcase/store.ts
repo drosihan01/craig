@@ -286,8 +286,15 @@ function set(next: Partial<ShowcaseState>) {
   /* Same hook, same reason: every write to the transcript reaches the sync
      without each of the four writers below having to remember to call it. The
      sync itself skips turns that are still streaming, so a `set` per delta
-     costs a string compare rather than a request. */
-  if (next.messages) scheduleThreadSync(state.threadId, state.messages);
+     costs a string compare rather than a request. Notes ride the same flush —
+     they are conversation artefacts, and a gap recorded mid-turn belongs to
+     the thread the turn is in. */
+  if (next.messages || next.gaps || next.facts) {
+    scheduleThreadSync(state.threadId, state.messages, [
+      ...state.gaps.map((g) => ({ kind: "gap" as const, text: g.text })),
+      ...state.facts.map((f) => ({ kind: "fact" as const, text: f.text })),
+    ]);
+  }
   listeners.forEach((l) => l());
 }
 
@@ -591,13 +598,30 @@ export function claimAccount(email: string | null) {
  * the new one's heading, and the sync — which is keyed on the id — would push
  * them into the wrong thread.
  */
-export function setThread(threadId: string, messages: CraigMessage[]) {
+export function setThread(
+  threadId: string,
+  messages: CraigMessage[],
+  /* The thread's own notes, read back beside its turns. What Craig knew in
+     this conversation survives a reload now — the strength meter reopens
+     where it was, and `known` travels back to him — instead of resetting to
+     an amnesia the screen never admitted to. */
+  notes: { kind: "gap" | "fact"; text: string }[] = [],
+) {
   if (state.threadId === threadId && messages === state.messages) return;
   /* What the server has been told belongs to the thread that has just been
      closed. Left in place, the first write to this one would send only the
      turns that happen to differ from the previous conversation's. */
   forgetThreadSync();
-  set({ threadId, messages, ...clearedNotes() });
+  set({
+    threadId,
+    messages,
+    gaps: notes
+      .filter((n) => n.kind === "gap")
+      .map((n) => ({ id: crypto.randomUUID(), text: n.text })),
+    facts: notes
+      .filter((n) => n.kind === "fact")
+      .map((n) => ({ id: crypto.randomUUID(), text: n.text })),
+  });
 }
 
 /**
@@ -611,10 +635,9 @@ export function setThread(threadId: string, messages: CraigMessage[]) {
  * know", so he was handed another conversation's facts about another workflow
  * and answered as though he had been told them here.
  *
- * Cleared on every deliberate change of thread. Not restored, because they are
- * not stored per thread yet — that is a real gap and the honest state of it is
- * an empty meter that fills as you talk, rather than a full one describing a
- * conversation you are not having.
+ * So `setThread` seeds them from the thread being opened — they are stored
+ * beside its messages now — and starting fresh empties them. A conversation
+ * that has said nothing has learned nothing.
  */
 const clearedNotes = () => ({ gaps: [], facts: [] });
 

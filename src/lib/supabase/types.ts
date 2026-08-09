@@ -150,6 +150,60 @@ export type Database = {
         }
         Relationships: []
       }
+      joiner_steps: {
+        Row: {
+          actor: string | null
+          automation: string | null
+          completed_at: string | null
+          due: number | null
+          field: string | null
+          joiner_id: string
+          position: number
+          run: Json | null
+          run_state: string | null
+          step_id: string
+          title: string
+          value: string | null
+          version: number
+        }
+        Insert: {
+          actor?: string | null
+          automation?: string | null
+          completed_at?: string | null
+          due?: number | null
+          field?: string | null
+          joiner_id: string
+          position: number
+          run?: Json | null
+          step_id: string
+          title: string
+          value?: string | null
+          version?: number
+        }
+        Update: {
+          actor?: string | null
+          automation?: string | null
+          completed_at?: string | null
+          due?: number | null
+          field?: string | null
+          joiner_id?: string
+          position?: number
+          run?: Json | null
+          step_id?: string
+          title?: string
+          value?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "joiner_steps_joiner_id_fkey"
+            columns: ["joiner_id"]
+            isOneToOne: false
+            referencedRelation: "joiners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       joiners: {
         Row: {
           account_email: string
@@ -175,7 +229,7 @@ export type Database = {
           name: string
           role?: string
           start_date: string
-          steps: Json
+          steps?: Json
           workflow_id: string
           workflow_name: string
         }
@@ -281,6 +335,38 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: true
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      thread_notes: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          text: string
+          thread_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          text: string
+          thread_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          text?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_notes_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
             referencedColumns: ["id"]
           },
         ]
@@ -392,6 +478,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_joiner_step: {
+        Args: { p_joiner: string; p_started: string; p_step: string }
+        Returns: {
+          actor: string | null
+          automation: string | null
+          completed_at: string | null
+          due: number | null
+          field: string | null
+          joiner_id: string
+          position: number
+          run: Json | null
+          run_state: string | null
+          step_id: string
+          title: string
+          value: string | null
+          version: number
+        }[]
+      }
       replace_joiner_steps: {
         Args: { p_expected: Json; p_id: string; p_next: Json }
         Returns: boolean
