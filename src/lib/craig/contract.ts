@@ -430,14 +430,37 @@ export const DRAFT_REQUEST =
  * answered with a structured payload that is sealed before it touches the
  * database. See `PersonalDetails` and `PayrollDetails` below, and
  * `sealed-answer.ts` for the one envelope they share.
+ *
+ * `contract` is odder still, and worth stating plainly because everything else
+ * on this list is a *form*. This one is not answered on `/me` at all: the step
+ * carries a link to a room of its own where the document is read page by page
+ * and then signed, and what it produces is not a value on a step — it is a row
+ * in `contract_signings` and a stamped PDF in a bucket. `JoinerStep.value` is
+ * empty for it, exactly as it is for the two sealed forms, and for the same
+ * reason: the answer is too big and too sensitive to travel on a record that
+ * every screen renders. `contract-signing.ts` is the only door to it.
  */
 export type JoinerField =
   | "middle-name"
   | "date-of-birth"
   | "personal-details"
-  | "payroll-details";
+  | "payroll-details"
+  | "contract";
 
-/** Preset ids that produce a step the new starter can actually answer. */
+/**
+ * Preset ids that produce a step the new starter can actually answer.
+ *
+ * **`sign-contract` is deliberately absent**, and its absence is a rule rather
+ * than an oversight. Every entry here is a preset whose identity decides what
+ * the joiner is asked; the contract block's does not — an admin picks a signing
+ * method, and only "In Craig" is a step this product can put in front of
+ * anybody. DocuSign is somebody else's envelope, "Email a PDF back" is a person
+ * with an inbox, and Dropbox Sign is a label with nothing behind it. So the
+ * contract field is resolved from the block's *config* in `stepsFromBlocks`,
+ * which is the one place that can see it, and this map stays a map of
+ * identities. `blocks.ts` splits `provider` and `providerWhen` for the same
+ * block for exactly the same reason, and says so at length.
+ */
 export const JOINER_FIELD_BY_PRESET: Record<string, JoinerField> = {
   "middle-name": "middle-name",
   "date-of-birth": "date-of-birth",
@@ -1368,6 +1391,25 @@ export interface JoinerStep {
    */
   askSuperFund?: boolean;
   askTaxFileNumber?: boolean;
+  /**
+   * Only on `field: "contract"`. Which document this person is being asked to
+   * sign, as a row id in `documents`.
+   *
+   * Snapshotted off the block when the invitation went out, for the reason the
+   * flags above it are and then one more that is specific to this field. The
+   * ordinary reason: an admin can change the template on the workflow
+   * afterwards, and a person half-way through reading a contract must not have
+   * a different one appear under them. The specific one: a signature is
+   * evidence about a *particular* document, so "which contract was this" can
+   * never be a live lookup — the day it is disputed, the workflow will have
+   * moved on, and the record has to be able to answer without it.
+   *
+   * A copy of the id and not the document. The bytes stay in storage, their
+   * hash is taken when the person first opens it, and `contract_signings` holds
+   * the name and the hash alongside this id precisely so the evidence survives
+   * the template being deleted out of Resources.
+   */
+  contractDocumentId?: string;
   /** Only on `actor: "craig"` steps. Which job it is Craig goes and does. */
   automation?: StepAutomation;
   /**
@@ -1486,6 +1528,48 @@ export const JOINER_HOME = "/me";
  * which a panel managed.
  */
 export const JOINER_ASK_PATH = "/me/ask";
+
+/**
+ * Where a new starter reads and signs their contract.
+ *
+ * Its own room rather than a form on `/me`, and for once that is not an
+ * aesthetic call. The other four fields are a box, or twelve boxes, and they
+ * belong beside the step they answer. This one is a document — it needs the
+ * width of the screen, it is read a page at a time, and the act at the end of
+ * it is not "save and carry on". Putting it inline would mean a PDF viewer
+ * inside a list item, and a plan that scrolls past somebody's employment
+ * agreement.
+ *
+ * The address is also the thing that makes reading it *provable*: the pages are
+ * fetched from the server one at a time, so how far somebody got is a fact this
+ * server holds rather than a claim their browser made.
+ */
+export const joinerContractPath = (stepId: string) =>
+  `/me/contract/${encodeURIComponent(stepId)}`;
+
+/**
+ * What somebody agrees to, word for word, before they can sign.
+ *
+ * Here rather than in either the screen or the route because **both ends have
+ * to use the same string and only one of them may be believed**. The screen
+ * renders it above the tick box; the signing route writes this constant into
+ * `contract_signings.consent_text` and ignores anything the request said the
+ * wording was. A browser that could supply its own consent text would be a
+ * browser that could record somebody agreeing to something they never read.
+ *
+ * Stored on the row verbatim rather than as a version number, because six
+ * months and three copy edits later the question is what *this* person agreed
+ * to, and a pointer into this file answers a different question.
+ *
+ * The wording is the Electronic Transactions Act 1999's requirements said
+ * plainly rather than quoted: that they consent to signing electronically
+ * (s10(1)(c)), and that they intend this to be their signature (s10(1)(a)).
+ * `contract-signing.ts` sets out which obligations this design discharges and
+ * which it does not. Nothing here is legal advice and nothing here should
+ * become any: it is the sentence somebody reads before they sign.
+ */
+export const CONTRACT_CONSENT =
+  "I have read this document, I agree to sign it electronically, and I intend my signature below to be as binding as one made on paper.";
 
 /** Separate from the admin's cookie: they are different people, possibly at once. */
 export const JOINER_COOKIE = "craig_joiner";

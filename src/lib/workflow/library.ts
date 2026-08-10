@@ -80,7 +80,36 @@ import {
  */
 
 export type FieldKind =
-  "text" | "url" | "select" | "multiselect" | "person" | "file" | "when";
+  | "text"
+  | "url"
+  | "select"
+  | "multiselect"
+  | "person"
+  | "file"
+  /**
+   * A document the account has already uploaded to Resources, held by **id**.
+   *
+   * Distinct from `file`, and the distinction is the whole reason this kind
+   * exists. A `file` field stores the *name* of a file somebody chose in a
+   * picker — nothing is uploaded, nothing is stored, and the block's own hint
+   * has always said so. That is harmless for "Photo for the pass" and it was
+   * quietly fatal for "Contract template", because the moment Craig had to
+   * *show* somebody the contract there was nothing behind the string to show:
+   * a filename is a claim that a document exists, not a document.
+   *
+   * So this one points at a row in `documents`, which means the bytes exist,
+   * the account owns them, and the joiner-side resolver can prove both. The
+   * stored value is a uuid rather than a name because names collide, get
+   * renamed, and are user input; ids are the thing a signature has to be
+   * evidence *about*.
+   *
+   * The cost is that the value is unreadable on its own — `describeSetup` can
+   * only print the id, because it is a pure function with no database — and
+   * that cost is paid where it belongs: the setup control resolves the name for
+   * the one screen anybody edits this on.
+   */
+  | "document"
+  | "when";
 
 export interface SetupField {
   id: string;
@@ -241,6 +270,35 @@ export const SIGNING_METHOD_FIELD = "provider";
  */
 export const DOCUSIGN_SIGNING_METHOD = "docusign";
 
+/**
+ * Signing in Craig, which is now a thing that happens rather than a label.
+ *
+ * Named for the same reason `DOCUSIGN_SIGNING_METHOD` is, and it has become the
+ * more load-bearing of the two. This one string is what turns a contract block
+ * into a step the new starter can actually answer — `stepsFromBlocks` reads it
+ * to decide whether the step gets `field: "contract"` and an actor — so a typo
+ * here is a contract step that belongs to nobody, sits on somebody's plan
+ * saying "nobody's waiting on you", and is never signed.
+ *
+ * DocuSign is the alternative for anyone who wants a third party's seal on it,
+ * and it is gated on a commercial agreement nobody in this repository controls
+ * (`src/lib/docusign/config.ts`). This is the path that ships.
+ */
+export const CRAIG_SIGNING_METHOD = "craig";
+
+/**
+ * The setup field on `sign-contract` holding the document to be signed.
+ *
+ * A fourth string in this file that two other modules have to agree on, for the
+ * reason the three above it are named: the invite route copies this key off the
+ * block, `stepsFromBlocks` freezes its value onto the step, and
+ * `contract-signing.ts` resolves it against the account's documents. A literal
+ * in each place fails in the safe-looking direction — the value simply never
+ * arrives, and the first person to notice is a new starter looking at a
+ * contract step with no contract behind it.
+ */
+export const CONTRACT_TEMPLATE_FIELD = "template";
+
 /** An account on a third-party service. */
 function account(
   id: string,
@@ -278,10 +336,14 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         summary: "Employment agreement and required acknowledgements",
         setup: [
           {
-            id: "template",
+            id: CONTRACT_TEMPLATE_FIELD,
             label: "Contract template",
-            kind: "file",
-            hint: "The document they'll be sent",
+            /* Was `file`, which stored a filename and nothing else — see
+               `FieldKind`. The hint changed with it, because "the document
+               they'll be sent" described a thing that never happened and this
+               one describes where the document has to come from. */
+            kind: "document",
+            hint: "Upload it in Resources first — this is the PDF they'll read and sign",
             required: true,
           },
           {
@@ -296,7 +358,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             kind: "select",
             hint: "Signing in Craig is also how they get their account",
             options: [
-              { id: "craig", label: "In Craig" },
+              { id: CRAIG_SIGNING_METHOD, label: "In Craig" },
               { id: DOCUSIGN_SIGNING_METHOD, label: "DocuSign" },
               { id: "dropbox-sign", label: "Dropbox Sign" },
               { id: "email", label: "Email a PDF back" },
@@ -1703,6 +1765,13 @@ export function describeSetup(
   if (!preset) return [];
 
   const labelFor = (f: SetupField, id: string) => {
+    /* A `document` field holds a row id, and this function has no database to
+       turn one into a name. Printing the uuid would put a line of hex in front
+       of somebody reading a dry run of their own workflow, which is worse than
+       saying less: what they need to know here is that a document is attached,
+       and the screen where they *change* it resolves the real name. */
+    if (f.kind === "document") return "An uploaded document";
+
     const options = f.options ?? (f.kind === "when" ? WHEN_OPTIONS : undefined);
     // Free-list values and person names are already their own label.
     return options?.find((o) => o.id === id)?.label ?? id;

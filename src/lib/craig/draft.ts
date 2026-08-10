@@ -97,6 +97,15 @@ function fieldSpec(f: SetupField): string {
       return `${f.id} (a name)`;
     case "file":
       return `${f.id} (a filename)`;
+    /* Deliberately told he cannot fill this one in. The value is the id of a
+       row in the account's documents, so anything Craig invents is either a
+       uuid pointing at nothing or — worse, if he echoes one he saw — a
+       document somebody else's step is about. Leaving it empty is the honest
+       answer and it has a visible consequence: the block stays "1 left" until
+       whoever owns the contract picks it, which is exactly the state it is
+       in. */
+    case "document":
+      return `${f.id} (leave this out — the admin picks an uploaded document)`;
     case "url":
       return `${f.id} (a URL)`;
     case "multiselect":

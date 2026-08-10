@@ -12,7 +12,13 @@ import type {
 import { maskDetails, readPersonalDetails } from "@/lib/craig/personal-details";
 import { maskPayroll, readPayrollDetails } from "@/lib/craig/payroll-details";
 import { sealingProblem } from "@/lib/craig/sealed-answer";
-import { NoPerson, PersonProgress } from "./person-progress";
+import { signingsForJoiner, verifySeals } from "@/lib/craig/contract-signing";
+import { readableHash } from "@/lib/craig/contract-pdf";
+import {
+  NoPerson,
+  PersonProgress,
+  type ContractAuditView,
+} from "./person-progress";
 
 /**
  * One person's onboarding, fetched on the server because it has to be.
@@ -167,6 +173,62 @@ export default async function ShowcasePersonPage(
     }
   }
 
+  /**
+   * The signing records, opened and their seals recomputed.
+   *
+   * Only asked for when the plan has a contract step, like the two sealed reads
+   * above — and unlike them, what comes back is not masked, because none of it
+   * is a secret. It is a hash, a timestamp, an address and a user agent: the
+   * record exists to be read by exactly this person, and hiding half of it
+   * behind a button would be security theatre on a page whose whole job is to
+   * be the evidence.
+   *
+   * `verifySeals` runs here, on every view, rather than being a stored boolean.
+   * A seal checked once at write time and remembered is a seal that proves
+   * nothing about the row you are looking at now.
+   */
+  const contracts: ContractAuditView[] = [];
+  if (joiner.steps.some((step) => step.field === "contract")) {
+    for (const row of await signingsForJoiner(joiner.id)) {
+      if (!row.signed_at) continue;
+      const seals = await verifySeals(row);
+      contracts.push({
+        id: row.id,
+        stepId: row.step_id,
+        stepTitle:
+          joiner.steps.find((step) => step.id === row.step_id)?.title ??
+          "Sign contract",
+        documentName: row.document_name,
+        /* Grouped exactly as the certificate inside the PDF groups it, so the
+           two can be held side by side and compared without losing your place.
+           Two different renderings of one hash would make the comparison this
+           whole feature rests on harder than it needs to be. */
+        documentSha256: readableHash(row.document_sha256),
+        signedSha256: readableHash(row.signed_sha256 ?? ""),
+        pages: `${row.pages_seen} of ${row.page_count} served`,
+        signerName: row.signer_name,
+        signerEmail: row.signer_email,
+        /* ISO 8601 in UTC, not localised — see `ContractAuditView`. The rest of
+           this page turns instants into "7 August" because they are status; a
+           signature is evidence, and it has to read the same here as it does on
+           the certificate. */
+        openedAt: new Date(row.opened_at).toISOString(),
+        signedAt: new Date(row.signed_at).toISOString(),
+        consentText: row.consent_text ?? "",
+        consentedAt: row.consented_at
+          ? new Date(row.consented_at).toISOString()
+          : "",
+        typedName: row.typed_name,
+        drewSignature: row.drew_signature,
+        openIp: row.open_ip,
+        openUserAgent: row.open_user_agent,
+        signIp: row.sign_ip,
+        signUserAgent: row.sign_user_agent,
+        sealsHold: seals.record && seals.artefact,
+      });
+    }
+  }
+
   return (
     <PersonProgress
       user={user}
@@ -184,6 +246,7 @@ export default async function ShowcasePersonPage(
         details,
         payroll,
         sealingProblem: sealingProblem(),
+        contracts,
       }}
       progress={{
         done: progress.overall.done,

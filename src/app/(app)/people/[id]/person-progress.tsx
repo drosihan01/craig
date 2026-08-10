@@ -31,6 +31,7 @@ import {
   Cloud,
   Delete,
   Groups,
+  Lock,
   Mail,
   Schedule,
   TaskAlt,
@@ -163,6 +164,62 @@ export interface PersonView {
    * nothing useful to say.
    */
   sealingProblem: string | null;
+  /**
+   * Every contract this person has signed in Craig, as the record rather than
+   * as a status.
+   *
+   * Assembled on the server, already in words, and deliberately *not* keyed off
+   * the steps: a signing outlives the template it was taken from, and the whole
+   * value of the thing is that it can still be read when the workflow has moved
+   * on. See `ContractAuditView`.
+   */
+  contracts: ContractAuditView[];
+}
+
+/**
+ * One signing, as the employer's screen shows it.
+ *
+ * Everything is already a string, formatted on the server, for the reason every
+ * date on this page is — and for one more that only applies here. This is
+ * evidence. A timestamp reformatted in the reader's timezone is a different
+ * timestamp from the one printed on the certificate inside the PDF, and two
+ * different times for one signature on two documents about the same event is
+ * precisely the discrepancy somebody would build an argument out of. So the
+ * instants below are ISO 8601 in UTC, exactly as the certificate prints them,
+ * and nothing here reformats them into anything friendlier.
+ */
+export interface ContractAuditView {
+  id: string;
+  /** Which step it belongs to, so a plan with two contracts on it reads
+      correctly and a card can find its own. */
+  stepId: string;
+  stepTitle: string;
+  documentName: string;
+  /** Grouped in fours, as the certificate prints it, for reading aloud. */
+  documentSha256: string;
+  signedSha256: string;
+  pages: string;
+  signerName: string;
+  signerEmail: string;
+  openedAt: string;
+  signedAt: string;
+  consentText: string;
+  consentedAt: string;
+  typedName: string | null;
+  drewSignature: boolean;
+  openIp: string | null;
+  openUserAgent: string | null;
+  signIp: string | null;
+  signUserAgent: string | null;
+  /**
+   * Whether the seals still check out, recomputed on the server on every view.
+   *
+   * A boolean and a sentence rather than a badge alone. A failing seal is not
+   * proof of tampering — rotating `SESSION_SECRET`, or renaming the company,
+   * produces exactly the same answer — and a screen that accused somebody of
+   * forgery on that evidence would be worse than one that said nothing.
+   */
+  sealsHold: boolean;
 }
 
 /**
@@ -793,6 +850,7 @@ function Detail({
       tick,
       seat,
       details,
+      contracts: person.contracts,
       startDate: person.startDate,
       /* Whether everything ahead of it is finished — the same rule the server
          applies before it will run anything, restated here so a step that
@@ -957,8 +1015,165 @@ function Detail({
             </p>
           )}
         </section>
+
+        {/* Below the plan rather than inside it, because it is not a step. A
+            signing outlives the step that produced it — the template can be
+            deleted, the workflow rewritten — and this is the part somebody
+            comes back to a year later with a question that has nothing to do
+            with onboarding. Absent entirely when there is nothing signed: an
+            empty "Signed contracts" heading reads as a section that failed to
+            load. */}
+        {person.contracts.length > 0 && (
+          <SignedContracts contracts={person.contracts} first={first} />
+        )}
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * The record behind a signature, laid out to be read rather than glanced at.
+ *
+ * **This is the product.** Everything else on this page is a status; this is the
+ * thing an employer actually bought when they chose to have somebody sign in
+ * Craig rather than by email, and it is worth the space. It is written as
+ * label-and-value rows for the same reason the certificate inside the PDF is:
+ * somebody arrives here looking for one line.
+ *
+ * The two hashes are the part people skip and the part that matters. The first
+ * is of the document as it was served; the second is of the signed copy. Both
+ * are recomputable by anybody holding the files, which is the only claim on this
+ * page that does not require trusting us — so they are shown in full, grouped,
+ * rather than truncated into something tidy that could not be checked.
+ *
+ * The seal line is stated carefully and deliberately does not accuse anybody. A
+ * seal that no longer verifies has three plausible causes and only one of them
+ * is somebody editing a row; the other two are a rotated `SESSION_SECRET` and a
+ * company that changed its name. The sentence names all three rather than
+ * putting a red badge on an honest record.
+ */
+function SignedContracts({
+  contracts,
+  first,
+}: {
+  contracts: ContractAuditView[];
+  first: string;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-lg font-semibold tracking-[-0.01em]">
+          Signed contracts
+        </h2>
+        <p className="text-sm text-text-muted">
+          What {first} was shown, what they agreed to, and when. This is the
+          record you would hand somebody if the signature were ever questioned.
+        </p>
+      </div>
+
+      {contracts.map((contract) => (
+        <article
+          key={contract.id}
+          className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-5 shadow-e1"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-1">
+              <h3 className="text-base font-semibold">
+                {contract.documentName}
+              </h3>
+              <p className="text-sm text-text-subtle">{contract.stepTitle}</p>
+            </div>
+            <a
+              href={`/api/signatures/${contract.id}`}
+              className={buttonVariants({ variant: "secondary", size: "sm" })}
+            >
+              Download
+            </a>
+          </div>
+
+          <dl className="flex flex-col gap-2.5">
+            <Row label="Signed by">
+              {contract.signerName} · {contract.signerEmail}
+            </Row>
+            <Row label="Signed at">{contract.signedAt}</Row>
+            <Row label="Opened at">{contract.openedAt}</Row>
+            <Row label="Pages shown">{contract.pages}</Row>
+            <Row label="Signature">
+              {[
+                contract.typedName ? `typed "${contract.typedName}"` : null,
+                contract.drewSignature ? "drawn" : null,
+              ]
+                .filter(Boolean)
+                .join(" and ") || "None recorded"}
+            </Row>
+            <Row label="Consent">
+              {/* The wording as it was shown, not a paraphrase and not a
+                  version number. Six months and three copy edits later, the
+                  question is what this person agreed to. */}
+              &ldquo;{contract.consentText}&rdquo; — recorded{" "}
+              {contract.consentedAt}
+            </Row>
+            <Row label="From">
+              {contract.signIp ?? "address not recorded"}
+              {contract.signUserAgent ? ` · ${contract.signUserAgent}` : ""}
+            </Row>
+            <Row label="When opened, from">
+              {contract.openIp ?? "address not recorded"}
+              {contract.openUserAgent ? ` · ${contract.openUserAgent}` : ""}
+            </Row>
+            <Row label="Document hash" mono>
+              {contract.documentSha256}
+            </Row>
+            <Row label="Signed copy hash" mono>
+              {contract.signedSha256}
+            </Row>
+          </dl>
+
+          {contract.sealsHold ? (
+            <p className="inline-flex items-start gap-1.5 text-xs leading-relaxed text-text-subtle">
+              <Lock className="mt-px size-3.5 shrink-0" />
+              This record still matches the seal it was written with, so nothing
+              in it has been altered since {first} signed.
+            </p>
+          ) : (
+            <p className="inline-flex items-start gap-1.5 text-xs leading-relaxed text-warning">
+              <Warning className="mt-px size-3.5 shrink-0" />
+              This record no longer matches the seal it was written with. That
+              happens if the signing key was rotated or the company was renamed,
+              as well as if the row itself was changed — the signed PDF and its
+              hash above are the things to check against.
+            </p>
+          )}
+        </article>
+      ))}
+    </section>
+  );
+}
+
+/** One line of the record. `mono` for the hashes, so groups line up. */
+function Row({
+  label,
+  children,
+  mono,
+}: {
+  label: string;
+  children: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
+      <dt className="shrink-0 text-xs font-medium uppercase tracking-[0.04em] text-text-subtle sm:w-44">
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          "min-w-0 break-words text-sm text-text",
+          mono && "font-mono text-xs leading-relaxed",
+        )}
+      >
+        {children}
+      </dd>
+    </div>
   );
 }
 
@@ -1056,8 +1271,14 @@ const ANSWER_LABEL: Record<
      and neither ever will — a dozen values do not go in a metric, and printing
      them on a page somebody leaves open is the thing those blocks were built to
      avoid — so both are excluded here and the compiler makes sure each has a
-     branch of its own rather than a label it would misuse. */
-  Exclude<JoinerField, "personal-details" | "payroll-details">,
+     branch of its own rather than a label it would misuse.
+
+     `contract` is excluded for a third reason again: its answer is not a value
+     at all. It is a signing record and a stamped PDF, and what this page shows
+     for one is a panel of its own with the audit trail in it. There is no
+     one-line form of "they signed it" that would not be a worse version of that
+     panel. */
+  Exclude<JoinerField, "personal-details" | "payroll-details" | "contract">,
   string
 > = {
   "middle-name": "is their middle name",
@@ -1114,6 +1335,8 @@ interface CardContext {
   tick: TickUi;
   seat: SeatUi;
   details: DetailsUi;
+  /** Every signing on this onboarding, so a contract card can find its own. */
+  contracts: ContractAuditView[];
   startDate: string;
   /** Whether everything ahead of this step has actually been finished. */
   due: boolean;
@@ -1171,6 +1394,12 @@ function toCard(step: JoinerStep, ctx: CardContext): WorkflowStep {
 
     if (step.field === "payroll-details") {
       dressPayroll(card, metrics, step, ctx);
+      card.metrics = metrics;
+      return card;
+    }
+
+    if (step.field === "contract") {
+      dressContract(card, metrics, step, ctx);
       card.metrics = metrics;
       return card;
     }
@@ -1279,6 +1508,61 @@ function dressDetails(
       if (!tick.busy) details.onOpen(step.id);
     },
   };
+}
+
+/**
+ * The contract step, which is the only card here whose answer is a document.
+ *
+ * The card stays deliberately thin. What an admin wants from a signed contract
+ * is the file and the record behind it, and neither goes on a card — the file is
+ * a download and the record is fifteen lines, which is a panel of its own
+ * further down the page. So this says the two things a card can carry usefully:
+ * that it is signed, and the way to the copy.
+ *
+ * The download is a `href` action rather than an `onClick`, because it is a
+ * link: middle-click, "open in new tab" and the status bar all keep working, and
+ * there is nothing to be in-flight. It points at a route that resolves the
+ * account before it redirects, so the id in it is not a capability.
+ *
+ * The unsigned wording names what the step actually is — a document to read —
+ * because "waiting on them" on a contract card invites an admin to chase
+ * somebody who has not been given anything to read. If the template is missing
+ * that is the admin's own to fix, and the card is where they will look first.
+ */
+function dressContract(
+  card: WorkflowStep,
+  metrics: StepMetric[],
+  step: JoinerStep,
+  { first, contracts }: CardContext,
+) {
+  const done = Boolean(step.completedAt);
+  const when = onDay(step.completedAt);
+  /* Matched on the step rather than taken by position: a plan can hold two
+     contract blocks, and a panel about the wrong one would be worse than none. */
+  const signing = contracts.find((c) => c.stepId === step.id);
+
+  if (!done) {
+    metrics.push({ value: first, label: "reads and signs this" });
+    card.description = step.contractDocumentId
+      ? `Waiting on ${first}. They read it a page at a time on their own screen and sign it there — nothing here can sign it for them.`
+      : `There's no document on this step, so ${first} has nothing to read. Attach one to the block in the workflow and it'll appear on their screen.`;
+    if (!step.contractDocumentId) card.status = "blocked";
+    return;
+  }
+
+  metrics.push({ value: "Signed", label: "in Craig" });
+  if (when) metrics.push({ value: when, label: "signed" });
+
+  card.description = signing
+    ? `${first} signed this themselves. The signed copy has a certificate of completion at the back of it, and the full record is below.`
+    : `${first} signed this themselves.`;
+
+  if (signing) {
+    card.secondaryAction = {
+      label: "Download the signed copy",
+      href: `/api/signatures/${signing.id}`,
+    };
+  }
 }
 
 /**
