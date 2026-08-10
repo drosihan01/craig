@@ -283,7 +283,18 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-canvas" style={vars}>
       <header className="sticky top-0 z-40 border-b border-border bg-canvas/85 backdrop-blur-md">
-        <div className="mx-auto flex h-12 max-w-[1500px] border-x border-border">
+        {/* Full width, no centring. This carried `mx-auto max-w-[1500px]`,
+            which on a wide monitor left a band of empty canvas down each side
+            and floated the whole product in the middle of the screen — the nav
+            drifted away from the left edge, and the notification bell away
+            from the top-right corner, which is the one place people throw the
+            pointer without looking.
+
+            `border-x` goes with it: an outer rule was drawing the seam between
+            the app and that empty band, and with the band gone it would be a
+            line painted along the edge of the window. The columns keep their
+            own dividers, which are the seams that mean something. */}
+        <div className="flex h-12">
           {/* Left cell — tracks the nav column's width, same rule. */}
           <div
             className={cn(
@@ -413,7 +424,10 @@ export function AppShell({
        * and should reach the bottom of the window when there is little on them. */}
       <div
         className={cn(
-          "relative mx-auto flex max-w-[1500px] border-x border-border",
+          /* Matches the header above it exactly — same removal, same reason.
+             These two must agree at every width or the vertical rule running
+             from the header into the page steps sideways at the join. */
+          "relative flex",
           fill ? "h-[calc(100vh-3rem)]" : "min-h-[calc(100vh-3rem)]",
         )}
       >
