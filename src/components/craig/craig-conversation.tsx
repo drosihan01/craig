@@ -263,10 +263,25 @@ export function CraigConversation({
 
             A spacer is content. It holds the first line clear on arrival and
             then scrolls fully out of the way like anything else, so the top of
-            the conversation really is the top. */}
-        <div aria-hidden className="h-10 shrink-0" />
+            the conversation really is the top.
 
-        {header}
+            **The header is wrapped in with it rather than left as its own flex
+            child.** `gap-7` is the space *between turns*, and a header is not a
+            turn — as a sibling it collected that gap on top of the spacer, so
+            the clearance above it was the spacer plus a turn's worth of air.
+            That is why Home opened 68px under the rule while the builder, whose
+            greeting sits outside this component under its own `pt-10`, opened
+            at 40 — the same clearance asked for in two places, and the two
+            answers were never going to match. Wrapped, the spacer is the whole
+            of the header's top margin: both screens start their mark in the
+            same place, and neither drifts if the turn gap is ever retuned.
+
+            Nothing changes for a screen that passes no header: the wrapper is
+            then just the spacer, at the same height, in the same slot. */}
+        <div className="shrink-0">
+          <div aria-hidden className="h-10" />
+          {header}
+        </div>
 
         {messages.map((m, i) => {
           if (m.role === "user") {
