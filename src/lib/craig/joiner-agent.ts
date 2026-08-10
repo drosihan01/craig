@@ -331,9 +331,35 @@ export function joinerSystemPrompt(brief: JoinerBrief): string {
     })
     .join("\n");
 
+  /* Today, and the start date as a person would say it.
+  
+     A new starter's questions are mostly about time — when do I start, how
+     long have I got to do this, when is my first payday — and he had no way
+     to answer any of them: no today, and a start date handed over as a raw
+     `2026-09-01`. Reading an ISO string aloud to somebody in their first week
+     is the tell that you are talking to a form. */
+  const today = new Date().toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Australia/Sydney",
+  });
+  const startsOn = brief.startsOn
+    ? new Date(`${brief.startsOn}T00:00:00+10:00`).toLocaleDateString("en-AU", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "Australia/Sydney",
+      })
+    : null;
+
   return `You are Craig. You help ${brief.firstName} start at ${brief.company}.
 
-They are joining as ${brief.role}${brief.startsOn ? `, starting ${brief.startsOn}` : ", and have already started"}. Their onboarding is called "${brief.workflowName}". ${brief.done} of ${brief.total} steps are done.
+They are joining as ${brief.role}${startsOn ? `, starting ${startsOn}` : ", and have already started"}. Their onboarding is called "${brief.workflowName}". ${brief.done} of ${brief.total} steps are done.
+
+Today is ${today}. Work out anything they ask about timing from that, and give them the day rather than a date they have to decode.
 
 Their steps:
 ${steps}
