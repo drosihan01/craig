@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   AppShell,
+  BackLink,
   Badge,
   EmailPreview,
   Field,
@@ -15,7 +16,8 @@ import {
   type AppNotification,
 } from "@/components/ui";
 import { Mail, Warning } from "@/components/ui/icons";
-import { ACCOUNT, NEW_HIRE } from "@/lib/demo";
+import { NEW_HIRE } from "@/lib/demo";
+import type { Session } from "@/lib/craig/contract";
 import {
   AUDIENCE,
   MERGE_FIELDS,
@@ -23,7 +25,7 @@ import {
   unknownTokens,
   type EmailTemplate,
 } from "@/lib/email";
-import { AdminNav, NavStat } from "@/components/app-nav";
+import { NavStat } from "@/components/app-nav";
 
 /**
  * The email Craig sends, and the words it says.
@@ -47,7 +49,21 @@ const NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-export function EmailScreen() {
+export function EmailScreen({
+  user,
+}: {
+  /**
+   * Who is signed in, read on the server by `page.tsx`.
+   *
+   * A prop rather than something this file fetches, because it cannot: the
+   * session lives in an httpOnly cookie and is verified against Supabase's
+   * public key on the server. The alternative was what this screen did before —
+   * render the demo fixture — and a profile box naming a person who does not
+   * exist is worse than no profile box, because the one control inside it signs
+   * the real person out.
+   */
+  user: Session;
+}) {
   const [drafts, setDrafts] = React.useState<EmailTemplate[]>(TEMPLATES);
   const [selectedId, setSelectedId] = React.useState(TEMPLATES[0].id);
   const [view, setView] = React.useState("edit");
@@ -66,7 +82,7 @@ export function EmailScreen() {
       title="Email"
       nav={<EmailNav selectedId={selectedId} onSelect={setSelectedId} />}
       notifications={NOTIFICATIONS}
-      account={ACCOUNT}
+      account={{ name: user.name, email: user.email }}
       asideTitle="Merge fields"
       aside={<EmailAside template={template} />}
       actions={
@@ -163,6 +179,35 @@ export function EmailScreen() {
   );
 }
 
+/**
+ * The way out, then the templates.
+ *
+ * This column used to be `AdminNav` — the product's own list of rooms, with the
+ * template switcher hung underneath it. Two things were wrong with that, and
+ * the framing one is the smaller of them.
+ *
+ * The framing: the mailmaker is not a room of the product. It is a tool for
+ * whoever is building the product, it is now reached from `/mission-control`
+ * along with the design system, and a column offering Home, People, Workflows
+ * and Settings invites somebody out of a screen before they have finished the
+ * one thing they came in to do — the argument Settings and the builder both
+ * make about their own columns. So the navigation here is the way back and this
+ * page's own contents, which is what a room you *went into* should have.
+ *
+ * The other thing is that `AdminNav` has been quietly broken for as long as it
+ * has been rendered here: its Workflows row points at `/builder`, and that
+ * route does not exist — the builder became `/workflows` and this list was
+ * never told. `/email` was the only live screen still drawing it, so this is
+ * also the change that stops shipping a dead link. `AdminNav` itself is left
+ * alone rather than fixed in passing: the design system documents it by name,
+ * and a nav nothing renders is a much smaller problem than one three screens do.
+ *
+ * No `navRail` either, so collapsing still takes the column to nothing. The
+ * template switcher is the useful half of this panel and a strip of icons
+ * cannot hold seven template names — they would all be the same envelope. A
+ * rail that kept only the back arrow would be offering the exit at the price of
+ * the thing you came for.
+ */
 function EmailNav({
   selectedId,
   onSelect,
@@ -171,7 +216,13 @@ function EmailNav({
   onSelect: (id: string) => void;
 }) {
   return (
-    <AdminNav>
+    <div className="flex flex-col gap-5">
+      <BackLink href="/mission-control" className="px-2">
+        Mission control
+      </BackLink>
+
+      <Separator />
+
       <div className="flex flex-col gap-2 px-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
           Templates
@@ -205,7 +256,7 @@ function EmailNav({
         All transactional. One person, one thing, triggered by a step — there
         is no list and nothing to unsubscribe from.
       </p>
-    </AdminNav>
+    </div>
   );
 }
 

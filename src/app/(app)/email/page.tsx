@@ -19,8 +19,16 @@ export const metadata = {
  * was served to nobody. Giving it a URL is what makes the guard necessary, and
  * doing both in one change is deliberate — a route that is reachable for even
  * one deploy before it is guarded is a route somebody can find.
+ *
+ * The session is now handed down rather than thrown away, because the screen
+ * needs it and cannot go and get it. It is `"use client"`, and there is no
+ * client-side way to ask who is signed in — the cookie is httpOnly and the
+ * token is verified on the server. Until now the shell's profile box was fed
+ * `ACCOUNT` from the demo fixtures, so the corner of this tool said "Ada
+ * Yıldız" to whoever was actually using it: the wrong name on the one control
+ * that signs you out.
  */
 export default async function EmailPage() {
-  await requireUser();
-  return <EmailScreen />;
+  const user = await requireUser();
+  return <EmailScreen user={user} />;
 }
