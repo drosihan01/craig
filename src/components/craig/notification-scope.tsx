@@ -28,6 +28,24 @@ import type { AppNotification } from "@/components/ui";
 
 const NotificationContext = React.createContext<AppNotification[]>([]);
 
+/**
+ * A request to open the bell, from somewhere that is not the bell.
+ *
+ * Home's "2 more" needs to open the panel in the shell's header, which is a
+ * sibling several levels up. The alternatives were worse: lifting the bell's
+ * open state into `AppShell` and threading a setter down to every screen, or
+ * having Home find the button in the DOM and click it — the second of which
+ * works until somebody changes an `aria-label`.
+ *
+ * A counter rather than a boolean, because the interesting event is *asked
+ * again*: pressing "2 more", closing the panel and pressing it again has to
+ * reopen it, and a boolean that is already `true` says nothing the second time.
+ */
+const OpenRequestContext = React.createContext<{
+  requests: number;
+  open: () => void;
+}>({ requests: 0, open: () => {} });
+
 export function NotificationScope({
   items,
   children,
@@ -39,11 +57,29 @@ export function NotificationScope({
      and these carry none, so nothing needs reviving into a Date. */
   const value = React.useMemo(() => items, [items]);
 
+  const [requests, setRequests] = React.useState(0);
+  const opener = React.useMemo(
+    () => ({ requests, open: () => setRequests((n) => n + 1) }),
+    [requests],
+  );
+
   return (
     <NotificationContext.Provider value={value}>
-      {children}
+      <OpenRequestContext.Provider value={opener}>
+        {children}
+      </OpenRequestContext.Provider>
     </NotificationContext.Provider>
   );
+}
+
+/** Ask the shell's bell to open. */
+export function useOpenNotifications() {
+  return React.useContext(OpenRequestContext).open;
+}
+
+/** The bell's own subscription: a number that changes when somebody asks. */
+export function useNotificationOpenRequests() {
+  return React.useContext(OpenRequestContext).requests;
 }
 
 /**

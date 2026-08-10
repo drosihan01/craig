@@ -9,6 +9,7 @@ import {
   Separator,
 } from "@/components/ui";
 import { NavStat } from "@/components/app-nav";
+import { useOpenNotifications } from "@/components/craig/notification-scope";
 import { CraigConversation } from "@/components/craig/craig-conversation";
 import { ThreadHistory } from "@/components/craig/thread-history";
 import {
@@ -115,6 +116,14 @@ function OutstandingRow({ item }: { item: OutstandingItem }) {
   );
 }
 
+/**
+ * How many outstanding items Home draws before deferring to the bell.
+ *
+ * Three, because this panel sits above the composer and is the first thing on
+ * the screen: a longer list stops being a summary and becomes the page.
+ */
+const HOME_ITEMS = 3;
+
 export function HomeScreen({
   user,
   outstanding,
@@ -141,6 +150,7 @@ export function HomeScreen({
   /* `home` is the third argument, and the flag that stops Craig treating this
      like discovery — see `HOME_NOTE`. Without it he reads an empty workflow and
      starts interviewing somebody who came to ask about one person. */
+  const openNotifications = useOpenNotifications();
   const chat = useCraigChat(undefined, undefined, true);
   const started = chat.messages.length > 0;
 
@@ -265,9 +275,32 @@ export function HomeScreen({
                           ? "One thing"
                           : `${outstanding.length} things`}
                       </p>
-                      {outstanding.map((item) => (
+                      {/* Three at most. This list sits above a composer and is
+                          the first thing on the screen, and an account with a
+                          dozen things wrong would push Craig off the bottom of
+                          it — the panel would stop being "here is what needs
+                          you" and become the whole page. The heading still
+                          counts them all, so the number never lies about what
+                          was left out. */}
+                      {outstanding.slice(0, HOME_ITEMS).map((item) => (
                         <OutstandingRow key={item.id} item={item} />
                       ))}
+
+                      {/* Only when something is actually hidden. A control that
+                          says "0 more" is a control that has nothing to do, and
+                          it opens the bell rather than expanding in place
+                          because the bell is already the full list — a second
+                          expanded copy on this screen would be the same items
+                          rendered twice, free to disagree. */}
+                      {outstanding.length > HOME_ITEMS && (
+                        <button
+                          type="button"
+                          onClick={openNotifications}
+                          className="self-start text-sm text-text-muted underline-offset-4 transition-colors hover:text-text hover:underline"
+                        >
+                          {outstanding.length - HOME_ITEMS} more
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

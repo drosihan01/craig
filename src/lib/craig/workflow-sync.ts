@@ -161,6 +161,23 @@ async function send(
 }
 
 /** Forget what the server has been told. For sign-out and the sandbox reset. */
+/**
+ * Push now rather than in `PUSH_DELAY_MS`.
+ *
+ * The delay exists so that typing in the canvas does not send a request per
+ * keystroke, and it is right for edits. It is wrong for *creation*: a workflow
+ * lives in the browser first, and the editor opens immediately — so for the
+ * first 800ms the server has no row to hang anything off. A thread cannot
+ * attach to a workflow that does not exist yet, which is how a new workflow
+ * came to show the previous one's conversation.
+ *
+ * Creation is one event, not a stream of them, so there is nothing to debounce.
+ */
+export function flushSync() {
+  if (timer) clearTimeout(timer);
+  flush();
+}
+
 export function forgetSync(email?: string | null) {
   pushed = new Map();
   pending = null;
