@@ -11,6 +11,7 @@ import {
   NavRailItem,
   Badge,
   BlockInspector,
+  CraigMark,
   BlockSetup,
   Button,
   Dialog,
@@ -716,6 +717,10 @@ function Editor({
       /* Only while Craig has the panel. His transcript starts at the top rule
          and scrolls under it; a block's settings below still want the margin. */
       asideFlushTop={!selected}
+      /* Shut, this button opens a conversation with Craig rather than "a
+         panel", and on the one screen where that is what is behind it, his
+         mark says so better than a rectangle does. */
+      asideIcon={<CraigMark className="size-4 text-accent" />}
       /* Collapsed, the column keeps the one thing it has: the way out. The
          other screens' rails carry Workflows and People, and this one
          deliberately doesn't offer those — so what's left is a back arrow,
@@ -751,28 +756,56 @@ function Editor({
         />
       }
       actions={
-        workflow.published ? (
-          <div className="flex items-center gap-2.5">
+        /* Both controls are always here, and the publish state decides which
+           one is live rather than which one exists.
+
+           Add person used to appear only after publishing, so the moment you
+           published, a button materialised in a row that had held one control a
+           second earlier — and the eye reads a new control as something that
+           has moved rather than something that has turned on. Present and
+           disabled says "this is what comes next"; absent says nothing at all,
+           and then surprises you.
+
+           It also stops the row changing width at the moment somebody is
+           reaching for it, which is how a press lands on the wrong thing. */
+        <div className="flex items-center gap-2.5">
+          {workflow.published ? (
             <Badge tone="success">
               <Check />
               Published
             </Badge>
-            <Button size="sm" onClick={addPerson}>
-              <PersonAdd />
-              Add person
+          ) : (
+            /* A trigger on its own is valid but pointless, so an empty
+               workflow is unpublishable for a different reason to an
+               unconfigured one. */
+            <Button
+              size="sm"
+              disabled={unconfigured > 0 || steps === 0 || isBlocked}
+              onClick={publish}
+            >
+              Publish
             </Button>
-          </div>
-        ) : (
-          /* A trigger on its own is valid but pointless, so an empty workflow
-             is unpublishable for a different reason to an unconfigured one. */
+          )}
+
           <Button
             size="sm"
-            disabled={unconfigured > 0 || steps === 0 || isBlocked}
-            onClick={publish}
+            variant={workflow.published ? "primary" : "secondary"}
+            disabled={!workflow.published}
+            /* Says why it is off. The button is the only thing on this screen
+               that mentions inviting anybody, so somebody looking for how to do
+               that finds it here and is told what has to happen first, rather
+               than finding nothing and assuming the product cannot. */
+            title={
+              workflow.published
+                ? undefined
+                : "Publish this workflow before inviting anybody onto it"
+            }
+            onClick={addPerson}
           >
-            Publish
+            <PersonAdd />
+            Add person
           </Button>
-        )
+        </div>
       }
       aside={
         /* One thing at a time, and no heading over it. With nothing selected

@@ -174,6 +174,7 @@ export function AppShell({
   aside,
   asideTitle,
   asideFlushTop,
+  asideIcon,
   asidePanel,
   account,
   actions,
@@ -215,6 +216,8 @@ export function AppShell({
    * want their margin.
    */
   asideFlushTop?: boolean;
+  /** What the shut right-panel button shows instead of the panel glyph. */
+  asideIcon?: React.ReactNode;
   /**
    * A starting width for the right panel, and its own place to remember one.
    *
@@ -398,6 +401,7 @@ export function AppShell({
                   open={asideOpen}
                   onToggle={toggleAside}
                   side="right"
+                  closedIcon={asideIcon}
                 />
               ) : (
                 <DrawerToggle
@@ -854,11 +858,22 @@ function PanelToggle({
   open,
   onToggle,
   side,
+  closedIcon,
   className,
 }: {
   open: boolean;
   onToggle: () => void;
   side: "left" | "right";
+  /**
+   * Drawn instead of the panel glyph while the panel is shut.
+   *
+   * Only the closed state, deliberately. Shut, the button's job is to say what
+   * is behind it — and "Craig is behind this" is more use than "a panel is
+   * behind this", on a screen where the panel is a conversation. Open, its job
+   * is to close, and a mark that does not change when pressed reads as a button
+   * that did nothing.
+   */
+  closedIcon?: React.ReactNode;
   className?: string;
 }) {
   const Icon =
@@ -884,7 +899,7 @@ function PanelToggle({
         className,
       )}
     >
-      <Icon className="size-4" />
+      {!open && closedIcon ? closedIcon : <Icon className="size-4" />}
     </button>
   );
 }
