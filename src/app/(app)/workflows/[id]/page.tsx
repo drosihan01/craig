@@ -3,6 +3,7 @@ import type { ConnectionProvider } from "@/lib/craig/blocks";
 import { requireUser } from "@/lib/craig/current-user";
 import { listJoiners } from "@/lib/craig/joiners";
 import { seatEntitlement } from "@/lib/craig/seats";
+import { slackViewFor } from "@/lib/slack/store";
 import { WorkflowEditor } from "./workflow-editor";
 
 export const metadata = {
@@ -65,8 +66,18 @@ export default async function ShowcaseWorkflowPage(
    */
   const account = await getAccount(user.email);
   const google = account?.google ?? null;
-  const connectedProviders: ConnectionProvider[] =
-    google && !google.needsReconnect ? ["google-workspace"] : [];
+  /* The push the comment above promised. Slack's connection lives in its own
+     store rather than on the account record — the argument is in
+     `src/lib/slack/store.ts` — so it is asked separately, with the same
+     `needsReconnect` rule for the same reason: the question is "would the
+     step work", and a revoked grant would not. */
+  const slack = await slackViewFor(user.email);
+  const connectedProviders: ConnectionProvider[] = [
+    ...(google && !google.needsReconnect
+      ? (["google-workspace"] as const)
+      : []),
+    ...(slack && !slack.needsReconnect ? (["slack"] as const) : []),
+  ];
 
   /**
    * How many seats there are to give, from the same account record.
