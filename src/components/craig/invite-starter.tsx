@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { PERSONAL_DETAILS_EXTRAS_FIELD } from "@/lib/craig/contract";
 import {
   Badge,
   Button,
@@ -48,6 +49,29 @@ export interface InvitedPerson {
   startDate: string;
   /** The provider's id for the message that went out, for looking it up. */
   messageId: string;
+}
+
+/**
+ * The block config keys that describe a *run* rather than the admin's answers.
+ *
+ * Everything else a block holds is either working notes or a value only the
+ * editor renders, and copying it onto a person would put settings nobody
+ * consults into a record about them. These two are read by the invite route,
+ * which allowlists the same pair again on its own side — a client is not a
+ * place to enforce anything.
+ */
+function pickRunConfig(
+  config: Record<string, string | string[]> | undefined,
+): Record<string, string | string[]> | undefined {
+  if (!config) return undefined;
+
+  const picked: Record<string, string | string[]> = {};
+  if (config["require-mfa"]) picked["require-mfa"] = config["require-mfa"];
+  if (Array.isArray(config[PERSONAL_DETAILS_EXTRAS_FIELD])) {
+    picked[PERSONAL_DETAILS_EXTRAS_FIELD] = config[PERSONAL_DETAILS_EXTRAS_FIELD];
+  }
+
+  return Object.keys(picked).length > 0 ? picked : undefined;
 }
 
 export function InviteStarter({
@@ -168,15 +192,15 @@ export function InviteStarter({
             title: b.title,
             preset: b.preset,
             due: b.due,
-            /* One key, not the config. The rule above still holds — a request
-               about a person has no use for the addresses and templates a
-               block collects — but `require-mfa` is different in kind: it
-               changes what "done" means for the step, so the step has to
-               carry it. The route allowlists this same single key rather than
-               trusting whatever arrives. */
-            config: b.config?.["require-mfa"]
-              ? { "require-mfa": String(b.config["require-mfa"]) }
-              : undefined,
+            /* Two keys, not the config. The rule above still holds — a
+               request about a person has no use for the addresses and
+               templates a block collects — but these two are different in
+               kind: `require-mfa` changes what "done" means for a step Craig
+               runs, and the extras multiselect changes which fields the new
+               starter is shown. Both describe the run rather than the admin's
+               working notes, so both travel. The route allowlists the same two
+               keys rather than trusting whatever arrives. */
+            config: pickRunConfig(b.config),
           })),
         }),
       });

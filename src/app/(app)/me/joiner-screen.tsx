@@ -13,13 +13,22 @@ import {
   Field,
   Input,
   Progress,
+  Select,
   toISODate,
 } from "@/components/ui";
-import { Check, DoneAll, Schedule } from "@/components/ui/icons";
+import { Check, DoneAll, Lock, Schedule } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { JoinerNav, JoinerNavRail } from "@/components/craig/joiner-nav";
 import { cn } from "@/lib/cn";
-import type { JoinerField, StepActor } from "@/lib/craig/contract";
+import {
+  AU_STATES,
+  PERSONAL_DETAIL_FIELDS,
+  PERSONAL_DETAIL_GROUPS,
+  type JoinerField,
+  type PersonalDetailField,
+  type PersonalDetailKey,
+  type StepActor,
+} from "@/lib/craig/contract";
 
 /**
  * The new starter's own screen, and the only one they will ever see.
@@ -82,6 +91,16 @@ export interface PlanStep {
    * screen cannot render a control against it even by mistake.
    */
   field?: JoinerField;
+  /**
+   * On a `personal-details` step, whether the form also asks who to call in an
+   * emergency.
+   *
+   * Straight off their snapshot rather than decided here. The admin ticked it
+   * when the workflow was written and it was frozen with the rest of the plan,
+   * so this screen renders what they were asked rather than what the block
+   * currently says.
+   */
+  askEmergencyContact?: boolean;
   /** When it's due, already a real date. Absent once it's done. */
   dueOn?: string;
   /**
@@ -181,7 +200,15 @@ const spell = (n: number) => NUMBERS[n] ?? String(n);
  * not true. Telling them what to write costs one line and unsticks the whole
  * thing.
  */
-const ASK: Record<JoinerField, { label: string; hint: string }> = {
+const ASK: Record<
+  /* Everything except the one field that is a form rather than a question. Its
+     labels live on `PERSONAL_DETAIL_FIELDS`, beside the validator that has to
+     agree with them, and excluding it here is what makes the compiler insist
+     the two are drawn by two different components rather than one that grew a
+     branch. */
+  Exclude<JoinerField, "personal-details">,
+  { label: string; hint: string }
+> = {
   "middle-name": {
     label: "Your middle name",
     hint: "As it's written on your passport or licence. If you haven't got one, put None.",
@@ -502,14 +529,26 @@ function PlanRow({
           </p>
         ) : null}
 
-        {step.field && (
+        {/* The two forms are two components, not one with a branch in it. One
+            is a box; the other is twelve boxes, a calendar, a select and a
+            payload that gets encrypted before it is stored — and the day
+            somebody adds a third kind of question, the alternative is a
+            component with three modes and a union of state that only makes
+            sense in one of them. */}
+        {step.field === "personal-details" ? (
+          <DetailsForm
+            stepId={step.id}
+            emergencyContact={Boolean(step.askEmergencyContact)}
+            finishing={finishing}
+          />
+        ) : step.field ? (
           <AnswerForm
             stepId={step.id}
             field={step.field}
             company={company}
             finishing={finishing}
           />
-        )}
+        ) : null}
       </div>
     </li>
   );
@@ -631,7 +670,7 @@ function AnswerForm({
   finishing,
 }: {
   stepId: string;
-  field: JoinerField;
+  field: Exclude<JoinerField, "personal-details">;
   company: string;
   finishing: boolean;
 }) {
@@ -733,6 +772,239 @@ function AnswerForm({
         </Button>
         <span className="text-xs text-text-subtle">
           Only {company} sees this.
+        </span>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * The twelve-box one.
+ *
+ * **Why it is one form and not twelve steps.** The plan above is the order
+ * things happen in, and turning "tell us who you are" into a dozen rows would
+ * make somebody's first week look like a list of chores that are really one
+ * act. It is also the shape of the answer: an address is one fact about a
+ * person, not four, and a workflow that can be half-way through an address is a
+ * workflow that can hold half an address. So the step keeps one answer and the
+ * answer has parts — the argument in full is on `PersonalDetails` in the
+ * contract.
+ *
+ * **The state is one record keyed by field id**, built from the same list the
+ * server validates against, rather than a `useState` per box. Fourteen pieces
+ * of state that have to stay in step with a list living somewhere else is
+ * fourteen chances to add a field to the form and forget it in the payload;
+ * one record cannot drift, because both ends read the same array.
+ *
+ * The date is the one exception and has to be, because the calendar hands back
+ * a `Date` and the payload wants `YYYY-MM-DD` — the same conversion the
+ * single-field form does, for the same reason.
+ *
+ * **It does not validate.** Whether a phone number is a phone number, whether
+ * a postcode is four digits, whether a required box is empty: all of that is
+ * decided on the server and comes back as one sentence, which is shown here. A
+ * copy of the rules in the browser would be a second opinion about what a valid
+ * answer is, and on the day the two disagree the browser's is both the wrong
+ * one and the one the person is looking at. What this does do is keep the
+ * button dark until every required box has something in it, which is a
+ * courtesy rather than a rule — the server still checks.
+ */
+function DetailsForm({
+  stepId,
+  emergencyContact,
+  finishing,
+}: {
+  stepId: string;
+  /** Whether the plan they were sent asks for one. */
+  emergencyContact: boolean;
+  finishing: boolean;
+}) {
+  const router = useRouter();
+  const [values, setValues] = React.useState<
+    Partial<Record<PersonalDetailKey, string>>
+  >({});
+  const [birthday, setBirthday] = React.useState<Date | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const [reloading, startReload] = React.useTransition();
+
+  const busy = saving || reloading;
+
+  /* Nobody has a birthday tomorrow. Held still for the life of the form so the
+     calendar cannot shift underneath somebody who leaves the tab open. */
+  const today = React.useMemo(() => new Date(), []);
+
+  /* The emergency contact's three fields are dropped from the list entirely
+     rather than hidden. A hidden field is still a field: it is filled in by
+     autofill, submitted by the form, and read by anything looking at the DOM.
+     If the company did not ask, this person is not asked. */
+  const fields = React.useMemo(
+    () =>
+      PERSONAL_DETAIL_FIELDS.filter(
+        (field) => !field.emergency || emergencyContact,
+      ),
+    [emergencyContact],
+  );
+
+  const valueOf = (field: PersonalDetailField) =>
+    field.kind === "date"
+      ? birthday
+        ? toISODate(birthday)
+        : ""
+      : (values[field.key] ?? "");
+
+  const ready = fields.every((field) => !field.required || valueOf(field).trim());
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!ready || busy) return;
+
+    setSaving(true);
+    setError(null);
+
+    /* Assembled from the field list rather than from the state object, so a
+       value left over from a field that is no longer asked for cannot ride
+       along in the payload. */
+    const details: Record<string, string> = {};
+    for (const field of fields) {
+      const value = valueOf(field).trim();
+      if (value) details[field.key] = value;
+    }
+
+    try {
+      const response = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        /* The step and the answer. Who this is comes from the cookie on the
+           server — an id in here would be a person anybody could name. */
+        body: JSON.stringify({ stepId, details }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setError(payload?.error ?? "That didn't save. Try it once more.");
+        setSaving(false);
+        return;
+      }
+
+      setSaving(false);
+      startReload(() => router.refresh());
+    } catch {
+      /* No response at all. Said carefully: the request may well have reached
+         the server, so this must not imply the answer was lost. */
+      setError(
+        "I couldn't reach the server just then. Check your connection and have another go — pressing it twice is safe.",
+      );
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      noValidate
+      className="mt-2 flex flex-col gap-5 rounded-lg border border-border bg-surface p-4 shadow-e1"
+    >
+      {PERSONAL_DETAIL_GROUPS.map((group) => {
+        const inGroup = fields.filter((field) => field.group === group.id);
+        if (inGroup.length === 0) return null;
+
+        return (
+          <fieldset key={group.id} className="flex flex-col gap-3">
+            <legend className="text-sm font-medium">{group.label}</legend>
+
+            {inGroup.map((field) => (
+              <Field
+                key={field.key}
+                label={field.label}
+                hint={field.hint}
+                required={field.required}
+              >
+                {field.kind === "date" ? (
+                  <DatePicker
+                    value={birthday}
+                    onChange={setBirthday}
+                    max={today}
+                    placeholder="Pick the day"
+                    aria-invalid={error ? true : undefined}
+                  />
+                ) : field.kind === "state" ? (
+                  <Select
+                    value={values[field.key] ?? ""}
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [field.key]: event.target.value,
+                      }))
+                    }
+                    autoComplete={field.autoComplete}
+                    disabled={busy}
+                  >
+                    <option value="">Pick one</option>
+                    {AU_STATES.map((state) => (
+                      <option key={state.id} value={state.id}>
+                        {state.label}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    value={values[field.key] ?? ""}
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [field.key]: event.target.value,
+                      }))
+                    }
+                    /* The browser's own type, so a phone gets a keypad and an
+                       email gets the @ key. `inputMode` for the postcode
+                       rather than `type="number"`, which draws spinners on a
+                       thing nobody increments and treats a leading zero as
+                       arithmetic — which is half of Australia. */
+                    type={
+                      field.kind === "email"
+                        ? "email"
+                        : field.kind === "phone"
+                          ? "tel"
+                          : "text"
+                    }
+                    inputMode={field.kind === "postcode" ? "numeric" : undefined}
+                    maxLength={field.max}
+                    autoComplete={field.autoComplete}
+                    disabled={busy}
+                  />
+                )}
+              </Field>
+            ))}
+          </fieldset>
+        );
+      })}
+
+      {/* Form-level, and here it matters more than on the one-box form: the
+          sentence that comes back names the field it is about, so pinning it
+          under an input would attach it to whichever box happened to be
+          last. */}
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button type="submit" loading={busy} disabled={!ready}>
+          {finishing ? "Save and finish" : "Save and carry on"}
+        </Button>
+        {/* Said where it is being asked for rather than in a policy nobody
+            opens. This is the one form in the product that asks for the bundle
+            people are most careful with, and naming what happens to it is
+            worth more than "only your employer sees this". */}
+        <span className="inline-flex items-center gap-1.5 text-xs text-text-subtle">
+          <Lock className="size-3.5" />
+          Encrypted the moment you send it.
         </span>
       </div>
     </form>

@@ -198,6 +198,7 @@ export type Database = {
       joiner_steps: {
         Row: {
           actor: string | null
+          ask_emergency_contact: boolean
           automation: string | null
           completed_at: string | null
           due: number | null
@@ -210,10 +211,14 @@ export type Database = {
           step_id: string
           title: string
           value: string | null
+          value_ciphertext: string | null
+          value_iv: string | null
+          value_tag: string | null
           version: number
         }
         Insert: {
           actor?: string | null
+          ask_emergency_contact?: boolean
           automation?: string | null
           completed_at?: string | null
           due?: number | null
@@ -225,10 +230,14 @@ export type Database = {
           step_id: string
           title: string
           value?: string | null
+          value_ciphertext?: string | null
+          value_iv?: string | null
+          value_tag?: string | null
           version?: number
         }
         Update: {
           actor?: string | null
+          ask_emergency_contact?: boolean
           automation?: string | null
           completed_at?: string | null
           due?: number | null
@@ -240,6 +249,9 @@ export type Database = {
           step_id?: string
           title?: string
           value?: string | null
+          value_ciphertext?: string | null
+          value_iv?: string | null
+          value_tag?: string | null
           version?: number
         }
         Relationships: [
