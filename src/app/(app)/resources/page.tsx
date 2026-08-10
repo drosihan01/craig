@@ -17,6 +17,14 @@ export const metadata = {
  * screen needs is a name, a size in words and one switch; the storage path is
  * the server's business and never travels — a path is the one field on this row
  * that would tell a browser something about how the bucket is laid out.
+ *
+ * The session travels too, and only so the shell can draw the account cell at
+ * the foot of the nav. That is the same trip `people/page.tsx` makes for the
+ * same reason: `AppShell` is a client component, so the one piece of the frame
+ * that knows who is signed in has to be handed across the boundary rather than
+ * read on the far side of it. Nothing else about `user` reaches the browser —
+ * the documents were already filtered to this account by the query above, which
+ * is where that check belongs.
  */
 export default async function ResourcesPage() {
   const user = await requireUser();
@@ -31,7 +39,7 @@ export default async function ResourcesPage() {
     uploadedOn: readableDay(document.uploadedAt),
   }));
 
-  return <ResourcesScreen rows={rows} />;
+  return <ResourcesScreen user={user} rows={rows} />;
 }
 
 /**
