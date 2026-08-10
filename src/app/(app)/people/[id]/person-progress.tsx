@@ -33,14 +33,19 @@ import {
   Groups,
   Schedule,
   TaskAlt,
+  Visibility,
   Warning,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
-import type {
-  JoinerField,
-  JoinerStep,
-  Session,
-  StepActor,
+import { cn } from "@/lib/cn";
+import {
+  DETAILS_ENDPOINT,
+  PERSONAL_DETAIL_GROUPS,
+  type DetailLine,
+  type JoinerField,
+  type JoinerStep,
+  type Session,
+  type StepActor,
 } from "@/lib/craig/contract";
 import { SETTINGS_PATH } from "@/lib/craig/google-outcome";
 import { readable } from "../people-list";
@@ -82,6 +87,9 @@ import { dueDateFrom } from "@/lib/workflow/library";
 
 /** Where a tick goes. */
 const TICK_ENDPOINT = "/api/showcase/tick";
+/* Where a reveal goes is `DETAILS_ENDPOINT`, named in the contract rather than
+   here: the route and this button are the only two things that have to agree
+   on it, and they are in different halves of the app. */
 /** Where taking the seat back goes. */
 const PERSON_ENDPOINT = "/api/showcase/person";
 /** Where "how is that account getting on" goes. */
@@ -116,6 +124,29 @@ export interface PersonView {
    * they blink. Same rule as every date on this page.
    */
   interrupted: string[];
+  /**
+   * The sealed answers, opened on the server and **masked before they were put
+   * in this prop**, keyed by step id.
+   *
+   * Masked on the other side rather than here, and that is the point of the
+   * shape: what reaches this browser is a list of labels with the values struck
+   * out, so the page can be left open, screenshotted or shared on a call
+   * without a date of birth and a home address being in it. Hiding real values
+   * with CSS would have put all of them in the HTML and asked politely.
+   *
+   * A step that answered but cannot be opened has no entry — the card says so
+   * rather than showing an empty panel.
+   */
+  details: Record<string, DetailLine[]>;
+  /**
+   * Why this deployment cannot open sealed answers, when it can't.
+   *
+   * One cause has a fix somebody can act on — the encryption key is not set —
+   * and it is worth naming, because the alternative reading of an unopenable
+   * answer is that the new starter did something wrong. Null when there is
+   * nothing useful to say.
+   */
+  sealingProblem: string | null;
 }
 
 /**
@@ -176,6 +207,13 @@ export function PersonProgress({
   const [error, setError] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState(false);
   const [removing, setRemoving] = React.useState(false);
+
+  /* Reading somebody's sealed personal details, which is its own small machine
+     — a panel, a request, and a copy of the answer that is thrown away when the
+     panel closes. Its own hook rather than four more `useState`s here, because
+     none of the state above it has anything to do with it and the page already
+     has plenty. */
+  const details = useDetails(person.id);
 
   /* Which automated step is being asked about, by id, for the same reason
      `saving` is a single id rather than a set: one at a time is all anybody
@@ -417,6 +455,11 @@ export function PersonProgress({
         user={user}
         tick={{ saving, busy, onTick: tick }}
         seat={{ checking, busy, onCheck: check }}
+        details={{
+          masked: person.details,
+          problem: person.sealingProblem,
+          onOpen: details.open,
+        }}
         error={error}
         onRemove={() => setConfirming(true)}
       />
@@ -427,8 +470,99 @@ export function PersonProgress({
         onCancel={() => setConfirming(false)}
         onConfirm={remove}
       />
+      <DetailsDialog person={person} details={details} />
     </>
   );
+}
+
+/**
+ * Reading somebody's personal details, in the two states that has.
+ *
+ * Masked is what the page holds; revealed is what the server sends back when
+ * somebody presses the button. Both are the same list of lines in the same
+ * order, which is what makes the panel one layout rather than two — and what
+ * makes it impossible for the revealed view to show a field the masked view
+ * didn't admit was there.
+ *
+ * The revealed copy is dropped the moment the panel closes. It is only in a
+ * React state for as long as somebody is looking at it, which is a small thing
+ * and the right one: a page left open for an afternoon should not still be
+ * holding a date of birth in memory because somebody glanced at it before
+ * lunch.
+ */
+interface DetailsState {
+  /** Which step's panel is open, by id. */
+  stepId: string | null;
+  lines: DetailLine[] | null;
+  loading: boolean;
+  error: string | null;
+  open: (stepId: string) => void;
+  close: () => void;
+  reveal: () => void;
+}
+
+function useDetails(joinerId: string): DetailsState {
+  const [stepId, setStepId] = React.useState<string | null>(null);
+  const [lines, setLines] = React.useState<DetailLine[] | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const open = React.useCallback((id: string) => {
+    setStepId(id);
+    setLines(null);
+    setError(null);
+  }, []);
+
+  const close = React.useCallback(() => {
+    setStepId(null);
+    /* Cleared with the panel, not left behind for the next one to flash the
+       previous person's answer before its own request comes back. */
+    setLines(null);
+    setError(null);
+  }, []);
+
+  const reveal = React.useCallback(async () => {
+    if (!stepId || loading) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(DETAILS_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ joinerId, stepId }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        lines?: DetailLine[];
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok || !payload.lines) {
+        setError(payload?.error ?? "I couldn't open those just then.");
+        setLoading(false);
+        return;
+      }
+
+      setLines(payload.lines);
+      setLoading(false);
+    } catch {
+      setError(
+        "That didn't reach the server. Check your connection and try again.",
+      );
+      setLoading(false);
+    }
+  }, [joinerId, stepId, loading]);
+
+  return {
+    stepId,
+    lines,
+    loading,
+    error,
+    open,
+    close,
+    reveal: () => void reveal(),
+  };
 }
 
 /**
@@ -505,12 +639,22 @@ interface SeatUi {
   onCheck: (stepId: string) => void;
 }
 
+/** What a card needs to know about a sealed answer: whether it can be opened,
+    why not, and how to ask. Nothing here carries a value — the masked lines are
+    read by the panel, not by the card. */
+interface DetailsUi {
+  masked: Record<string, DetailLine[]>;
+  problem: string | null;
+  onOpen: (stepId: string) => void;
+}
+
 function Detail({
   person,
   progress,
   user,
   tick,
   seat,
+  details,
   error,
   onRemove,
 }: {
@@ -519,6 +663,7 @@ function Detail({
   user: Session;
   tick: TickUi;
   seat: SeatUi;
+  details: DetailsUi;
   error: string | null;
   onRemove: () => void;
 }) {
@@ -530,6 +675,7 @@ function Detail({
       first,
       tick,
       seat,
+      details,
       startDate: person.startDate,
       /* Whether everything ahead of it is finished — the same rule the server
          applies before it will run anything, restated here so a step that
@@ -787,7 +933,15 @@ function Lead({
  * "Anne is what they gave" is the same sentence with the useful noun removed —
  * true, and worth nothing to whoever is making the name tag.
  */
-const ANSWER_LABEL: Record<JoinerField, string> = {
+const ANSWER_LABEL: Record<
+  /* The fields whose whole answer fits on one line. Personal details does not
+     and never will — a dozen values do not go in a metric, and printing them
+     on a page somebody leaves open is the thing that block was built to avoid
+     — so it is excluded here and the compiler makes sure it has a branch of
+     its own rather than a label it would misuse. */
+  Exclude<JoinerField, "personal-details">,
+  string
+> = {
   "middle-name": "is their middle name",
   "date-of-birth": "is their date of birth",
 };
@@ -841,6 +995,7 @@ interface CardContext {
   first: string;
   tick: TickUi;
   seat: SeatUi;
+  details: DetailsUi;
   startDate: string;
   /** Whether everything ahead of this step has actually been finished. */
   due: boolean;
@@ -885,6 +1040,17 @@ function toCard(step: JoinerStep, ctx: CardContext): WorkflowStep {
   }
 
   if (step.actor === "joiner") {
+    /* Ahead of the generic answer branch, because this one has no answer to
+       show: what they gave is sealed, the card carries no value at all, and
+       the whole of the reading happens behind a button. It also narrows
+       `step.field` for everything below, which is what keeps `ANSWER_LABEL` a
+       record of the fields that really do fit on one line. */
+    if (step.field === "personal-details") {
+      dressDetails(card, metrics, step, ctx);
+      card.metrics = metrics;
+      return card;
+    }
+
     if (done) {
       const value = answerOf(step);
       metrics.push({
@@ -927,6 +1093,178 @@ function toCard(step: JoinerStep, ctx: CardContext): WorkflowStep {
 
   card.metrics = metrics;
   return card;
+}
+
+/**
+ * The personal details step, which is the one card on this page that shows no
+ * answer at all.
+ *
+ * Every other finished joiner step puts what they gave straight on the card,
+ * and that is right for a middle name. It is wrong for this one, and the
+ * difference is not squeamishness: a date of birth, a home address and a mobile
+ * number together are the bundle somebody opens a credit account with, and this
+ * page is a status screen — left open on a second monitor, shared on a call,
+ * screenshotted to ask a colleague about a start date. Printing it here would
+ * expose it to everybody who ever glances at this tab, in exchange for nobody
+ * having actually read it.
+ *
+ * So the card says the step is done and offers a way in. What is behind the
+ * button is masked too; the real values are a request away, and the request is
+ * the record of somebody having asked.
+ *
+ * The unopenable case gets its own words, because the honest reading of a
+ * finished step with nothing behind it is that the new starter did something
+ * wrong — and they didn't. It is a key on this deployment, and the sentence
+ * names that when it can.
+ */
+function dressDetails(
+  card: WorkflowStep,
+  metrics: StepMetric[],
+  step: JoinerStep,
+  { first, details, tick }: CardContext,
+) {
+  const done = Boolean(step.completedAt);
+  const when = onDay(step.completedAt);
+  const masked = details.masked[step.id];
+
+  if (!done) {
+    metrics.push({ value: first, label: "fills this in" });
+    card.description = `Waiting on ${first}. It's a form on their own screen — their legal name, date of birth, contact details and address${
+      step.askEmergencyContact ? ", and an emergency contact" : ""
+    } — and there's nothing here that can answer it for them.`;
+    return;
+  }
+
+  if (!masked) {
+    card.status = "blocked";
+    card.description =
+      details.problem ??
+      `${first} filled this in, and I can't open it. That means the key it was encrypted with has changed since they sent it — the answer is still there and nothing can read it, so it will have to be asked for again.`;
+    return;
+  }
+
+  metrics.push({ value: `${masked.length}`, label: "details, encrypted" });
+  if (when) metrics.push({ value: when, label: "sent" });
+  card.description = `${first} filled this in themselves. It's encrypted, and it isn't on this page — open it to read it.`;
+  card.secondaryAction = {
+    label: "See their details",
+    /* Refused while anything else on the page is mid-flight, like every other
+       control here, so a reveal can't land on top of a tick that is still
+       resolving. */
+    onClick: () => {
+      if (!tick.busy) details.onOpen(step.id);
+    },
+  };
+}
+
+/**
+ * The panel, in its two states.
+ *
+ * Masked when it opens, and it opens masked *every time* — there is no "keep it
+ * revealed" and no memory of the last time. Somebody who needs the bank details
+ * to pay a person presses one more button, which costs them a second and buys
+ * the property that this data is never on screen without a deliberate act.
+ *
+ * The revealed copy is fetched rather than unhidden, and the difference is the
+ * whole design: the page it sits on has never held these values, so there is
+ * nothing to un-blur, nothing in the HTML and nothing in a screenshot taken a
+ * minute ago. Closing the panel throws the copy away again.
+ */
+function DetailsDialog({
+  person,
+  details,
+}: {
+  person: PersonView;
+  details: DetailsState;
+}) {
+  const stepId = details.stepId;
+  const masked = stepId ? person.details[stepId] : undefined;
+  const lines = details.lines ?? masked ?? [];
+  const revealed = details.lines !== null;
+  const first = person.name.split(" ")[0];
+
+  return (
+    <Dialog
+      open={Boolean(stepId && masked)}
+      onClose={details.close}
+      title={`${first}'s personal details`}
+      description={
+        revealed
+          ? "Open on this screen now. It closes back to masked."
+          : "Held encrypted. Reveal it when you actually need to read it."
+      }
+      size="md"
+      footer={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="ghost" onClick={details.close}>
+            Close
+          </Button>
+          {!revealed && (
+            <Button onClick={details.reveal} loading={details.loading}>
+              <Visibility />
+              Reveal
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {PERSONAL_DETAIL_GROUPS.map((group) => {
+          const inGroup = lines.filter((line) => line.group === group.id);
+          if (inGroup.length === 0) return null;
+
+          return (
+            <section key={group.id} className="flex flex-col gap-1.5">
+              <h3 className="text-2xs font-medium uppercase tracking-wide text-text-subtle">
+                {group.label}
+              </h3>
+              <dl className="flex flex-col gap-1">
+                {inGroup.map((line) => (
+                  <div
+                    key={line.key}
+                    className="flex items-baseline justify-between gap-4"
+                  >
+                    <dt className="shrink-0 text-sm text-text-muted">
+                      {line.label}
+                    </dt>
+                    {/* Mono only while it is dots, so a column of masks lines
+                        up and a column of real answers reads as prose. */}
+                    <dd
+                      className={cn(
+                        "min-w-0 flex-1 truncate text-right text-sm",
+                        line.masked
+                          ? "font-mono text-text-subtle"
+                          : "font-medium",
+                      )}
+                      title={line.masked ? undefined : line.value}
+                    >
+                      {line.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          );
+        })}
+
+        {details.error && (
+          <p role="alert" className="text-sm text-danger">
+            {details.error}
+          </p>
+        )}
+
+        {/* Said once, at the bottom, where somebody who has just read a
+            stranger's home address is looking. Not a warning — they are
+            entitled to it — but the reveal is written to the runtime log, and
+            people should be told that rather than find out. */}
+        <p className="text-xs leading-relaxed text-text-subtle">
+          {first} gave these as part of their onboarding. They&apos;re encrypted
+          where they&apos;re stored, and opening them here is noted in the
+          server log.
+        </p>
+      </div>
+    </Dialog>
+  );
 }
 
 /**

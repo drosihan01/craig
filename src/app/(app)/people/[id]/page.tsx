@@ -4,7 +4,12 @@ import {
   isRunInterrupted,
   progressOf,
 } from "@/lib/craig/joiners";
-import type { Joiner } from "@/lib/craig/contract";
+import type { DetailLine, Joiner } from "@/lib/craig/contract";
+import {
+  maskDetails,
+  readPersonalDetails,
+  sealingProblem,
+} from "@/lib/craig/personal-details";
 import { NoPerson, PersonProgress } from "./person-progress";
 
 /**
@@ -120,6 +125,33 @@ export default async function ShowcasePersonPage(
     .filter((step) => isRunInterrupted(step))
     .map((step) => step.id);
 
+  /**
+   * The sealed answers, opened here and masked before they leave.
+   *
+   * This is the whole of the "sealed at rest, readable by their admin" claim,
+   * in three lines: the row holds ciphertext, the server opens it because it
+   * has the key and this reader has been proven to own this person, and what
+   * crosses to the browser is a list of labels with the values struck out.
+   *
+   * Masked on this side rather than in the component, and that is the decision
+   * worth defending. Sending the real values and hiding them with CSS — a blur,
+   * a `type="password"`, a `hidden` attribute — is not hiding: they would be in
+   * the HTML of a page people leave open, screenshot and share their screen on,
+   * and one inspector tab away for anybody in the room. The full values are
+   * fetched, once, when somebody presses Reveal.
+   *
+   * A step whose answer cannot be opened is simply absent from the map, and the
+   * card says so rather than drawing an empty panel. `sealingProblem()` names
+   * the one cause that has a fix — the key is not set on this deployment — and
+   * is null when there is nothing useful to say.
+   */
+  const details: Record<string, DetailLine[]> = {};
+  if (joiner.steps.some((step) => step.field === "personal-details")) {
+    for (const [stepId, answer] of await readPersonalDetails(joiner.id)) {
+      details[stepId] = maskDetails(answer);
+    }
+  }
+
   return (
     <PersonProgress
       user={user}
@@ -134,6 +166,8 @@ export default async function ShowcasePersonPage(
         invitedAt: joiner.invitedAt,
         steps: joiner.steps,
         interrupted,
+        details,
+        sealingProblem: sealingProblem(),
       }}
       progress={{
         done: progress.overall.done,
