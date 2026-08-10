@@ -293,6 +293,7 @@ type Order = "newest" | "oldest" | "name" | "largest";
 export function ResourcesScreen({
   user,
   rows,
+  waiting,
 }: {
   /**
    * Only ever the account cell at the foot of the nav.
@@ -305,6 +306,8 @@ export function ResourcesScreen({
    */
   user: Session;
   rows: ResourceRow[];
+  /** How many of Craig's questions are unanswered. Drawn on the notebook link. */
+  waiting: number;
 }) {
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -509,6 +512,17 @@ export function ResourcesScreen({
           >
             <MenuBook aria-hidden />
             Notebook
+            {waiting > 0 && (
+              /* The number, not a dot. A dot says something changed; a number
+                 says how much work it is, and the difference decides whether
+                 somebody opens it now or later. */
+              <span
+                className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-accent-fg"
+                aria-label={`${waiting} ${waiting === 1 ? "question" : "questions"} from Craig`}
+              >
+                {waiting}
+              </span>
+            )}
           </Link>
 
           <Button onClick={() => inputRef.current?.click()} loading={uploading}>
