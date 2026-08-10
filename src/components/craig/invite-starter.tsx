@@ -168,6 +168,15 @@ export function InviteStarter({
             title: b.title,
             preset: b.preset,
             due: b.due,
+            /* One key, not the config. The rule above still holds — a request
+               about a person has no use for the addresses and templates a
+               block collects — but `require-mfa` is different in kind: it
+               changes what "done" means for the step, so the step has to
+               carry it. The route allowlists this same single key rather than
+               trusting whatever arrives. */
+            config: b.config?.["require-mfa"]
+              ? { "require-mfa": String(b.config["require-mfa"]) }
+              : undefined,
           })),
         }),
       });

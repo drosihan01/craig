@@ -124,6 +124,29 @@ export interface DirectoryUser {
   changePasswordAtNextLogin: boolean;
   /** Whether Gmail has finished provisioning. Only meaningful with a licence. */
   isMailboxSetup: boolean;
+  /**
+   * Whether this person has turned on 2-step verification.
+   *
+   * Google's own field, output only, on the same user resource everything else
+   * here reads — so knowing it costs nothing extra: no new scope, no second
+   * call, no new polling. That is the whole reason MFA is expressible as a
+   * condition on this step rather than as an integration of its own.
+   *
+   * Distinct from `isEnforcedIn2Sv`, which is about *policy* — whether the
+   * domain requires it. A domain can enforce 2SV without this person having
+   * completed enrolment yet, and enrolment is the thing an onboarding step
+   * waits for. Absent means false, like every other boolean here.
+   */
+  isEnrolledIn2Sv: boolean;
+  /**
+   * Whether the domain's policy requires 2-step verification of them.
+   *
+   * Read but never waited on. It is the answer to "should this person have
+   * MFA", which is the admin's configuration rather than the new starter's
+   * progress — useful for saying *why* a step is waiting, and wrong to treat
+   * as the completion signal.
+   */
+  isEnforcedIn2Sv: boolean;
   /** ISO 8601, as Google returned it. */
   creationTime: string | null;
 }
@@ -186,6 +209,8 @@ function toDirectoryUser(
     archived: asBool(user.archived),
     changePasswordAtNextLogin: asBool(user.changePasswordAtNextLogin),
     isMailboxSetup: asBool(user.isMailboxSetup),
+    isEnrolledIn2Sv: asBool(user.isEnrolledIn2Sv),
+    isEnforcedIn2Sv: asBool(user.isEnforcedIn2Sv),
     creationTime: asString(user.creationTime),
   };
 }
@@ -527,4 +552,36 @@ export async function getUser(
 export function hasAcceptedSeat(user: DirectoryUser): boolean {
   if (user.suspended || user.archived) return false;
   return user.agreedToTerms;
+}
+
+/**
+ * Has this person finished, given what this workflow asked for?
+ *
+ * Acceptance is the floor and it is not always the ceiling. An account that
+ * exists, has been signed into, and has no second factor on it is a company
+ * email address protected by one password — which is the thing that actually
+ * gets phished in somebody's first fortnight, when they do not yet know who
+ * their finance director is or how the company writes an email.
+ *
+ * So a workflow may ask for more, and this is the one place that decides
+ * whether it got it. Written as a widening of `hasAcceptedSeat` rather than a
+ * replacement: the terms are still what makes the seat theirs, and MFA is an
+ * extra condition on top of it rather than an alternative to it. An account
+ * with 2SV enrolled but the terms unaccepted has not been taken by anybody —
+ * which cannot really happen, since enrolment requires signing in, and the
+ * ordering here means we do not have to rely on that.
+ *
+ * `isEnforcedIn2Sv` is deliberately not consulted. That field says the
+ * *domain* requires 2SV, which is the customer's policy and not this person's
+ * progress: a workflow that waited on it would complete instantly for a
+ * customer who has enforcement switched on and never for one who has not,
+ * neither of which is "has this person set up a second factor".
+ */
+export function hasCompletedSeat(
+  user: DirectoryUser,
+  options?: { requireMfa?: boolean },
+): boolean {
+  if (!hasAcceptedSeat(user)) return false;
+  if (options?.requireMfa && !user.isEnrolledIn2Sv) return false;
+  return true;
 }

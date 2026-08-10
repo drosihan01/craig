@@ -204,6 +204,7 @@ export type Database = {
           field: string | null
           joiner_id: string
           position: number
+          require_mfa: boolean
           run: Json | null
           run_state: string | null
           step_id: string
@@ -219,6 +220,7 @@ export type Database = {
           field?: string | null
           joiner_id: string
           position: number
+          require_mfa?: boolean
           run?: Json | null
           step_id: string
           title: string
@@ -233,6 +235,7 @@ export type Database = {
           field?: string | null
           joiner_id?: string
           position?: number
+          require_mfa?: boolean
           run?: Json | null
           step_id?: string
           title?: string
