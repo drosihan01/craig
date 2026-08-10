@@ -7,6 +7,11 @@ import type { WorkspaceAccount } from "@/components/craig/google-workspace";
 import { LinearStep } from "@/components/craig/linear";
 import { SlackStep } from "@/components/craig/slack-connect";
 import {
+  blockFor,
+  providerNeededBy,
+  type HasPreset,
+} from "@/lib/craig/blocks";
+import {
   GITHUB_PRESET,
   GOOGLE_WORKSPACE_PRESET,
   LINEAR_PRESET,
@@ -77,8 +82,27 @@ const PANELS: Record<string, BlockSettingsComponent> = {
 
 /** The panel for a preset, or `null` when the block needs no extra settings. */
 export function blockSettingsFor(
-  preset: string | undefined,
+  block: HasPreset | undefined,
 ): BlockSettingsComponent | null {
+  const preset = block?.preset;
   if (!preset) return null;
-  return Object.hasOwn(PANELS, preset) ? PANELS[preset] : null;
+
+  const panel = Object.hasOwn(PANELS, preset) ? PANELS[preset] : null;
+  if (!panel) return null;
+
+  /* A panel that exists for a *connection* only belongs on a step that
+     actually needs one. `sign-contract` is the block that forced this: its
+     panel is a DocuSign connection card, and a contract Craig signs himself
+     needs no connection and should be shown no card about one. Asked of
+     `providerNeededBy` rather than of the preset, because that is the one
+     resolver that reads a block's own settings.
+
+     Blocks whose requirement is unconditional are unaffected — Google, Slack,
+     Linear and GitHub each name a provider outright, so this is always true
+     for them. */
+  const definition = blockFor(preset);
+  const conditional = Boolean(definition?.providerWhen && !definition.provider);
+  if (conditional && !providerNeededBy(block)) return null;
+
+  return panel;
 }
