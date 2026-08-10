@@ -196,6 +196,7 @@ export const GOOGLE_WORKSPACE_PRESET = "google-workspace";
  */
 export const SLACK_PRESET = "slack";
 export const LINEAR_PRESET = "linear";
+export const GITHUB_PRESET = "github";
 
 /** An account on a third-party service. */
 function account(
@@ -604,10 +605,44 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
           },
         ],
       ),
+      /**
+       * The fields are the invite request, and they were not before.
+       *
+       * This preset used to ask for a **Base permission** — Read, Write,
+       * Maintain, Admin — which reads as the obvious question and is the wrong
+       * one. Those four are *repository* permissions, granted to a team on a
+       * repo. `POST /orgs/{org}/invitations`, the call this block exists to
+       * make, takes something else entirely: an organisation `role`, one of
+       * `admin`, `direct_member` or `billing_manager`. There is no field in
+       * that request a repository permission could go in.
+       *
+       * So the field asked an admin to decide something the block would then
+       * ignore, and — worse — to decide it in a vocabulary that would look
+       * answered while the invite went out with GitHub's default. Read the
+       * rule this library's own header states: a required field with no effect
+       * is not clutter, it is a screen inviting somebody to configure
+       * something and then ignoring what they said. Renamed to the thing the
+       * API actually accepts, with the values GitHub actually names.
+       *
+       * `direct_member` is the default here as it is at GitHub, and it is the
+       * right default: it is the least the person can be given and still be in
+       * the organisation. Billing manager is deliberately offered even though
+       * onboarding rarely wants it — leaving it out would mean an admin who
+       * does want it silently gets a member instead.
+       *
+       * Teams stay a free multiselect of names, and there is a gap behind that
+       * worth knowing before anybody writes the runner: the API takes `team_ids`,
+       * numeric, not slugs. Turning "engineering" into an id needs a
+       * `GET /orgs/{org}/teams` call first, and a name that matches no team is
+       * a silent no-op rather than an error. That lookup belongs in the runner,
+       * against a live organisation — offering a picker here would mean
+       * fetching a customer's teams from inside the block library, which is a
+       * server call from a data module.
+       */
       account(
-        "github",
+        GITHUB_PRESET,
         "GitHub",
-        "Org invite, the teams they join, and what they can do to a repo.",
+        "Org invite, the teams they join, and what they can do once they're in.",
         GitHub,
         [
           {
@@ -621,6 +656,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             id: "teams",
             label: "Teams",
             kind: "multiselect",
+            hint: "Named exactly as they are in GitHub",
             options: [
               { id: "eng", label: "engineering" },
               { id: "infra", label: "infra" },
@@ -628,15 +664,14 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             ],
           },
           {
-            id: "permission",
-            label: "Base permission",
+            id: "role",
+            label: "Role in the org",
             kind: "select",
-            hint: "Start at the lowest that lets them work",
+            hint: "What they are to the organisation, not to a repo",
             options: [
-              { id: "read", label: "Read" },
-              { id: "write", label: "Write" },
-              { id: "maintain", label: "Maintain" },
-              { id: "admin", label: "Admin" },
+              { id: "direct_member", label: "Member" },
+              { id: "admin", label: "Owner" },
+              { id: "billing_manager", label: "Billing manager" },
             ],
             required: true,
           },

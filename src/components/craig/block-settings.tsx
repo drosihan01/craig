@@ -1,10 +1,12 @@
 "use client";
 
+import { GitHubStep } from "@/components/craig/github";
 import { GoogleStep } from "@/components/craig/google-workspace";
 import type { WorkspaceAccount } from "@/components/craig/google-workspace";
 import { LinearStep } from "@/components/craig/linear";
 import { SlackStep } from "@/components/craig/slack-connect";
 import {
+  GITHUB_PRESET,
   GOOGLE_WORKSPACE_PRESET,
   LINEAR_PRESET,
   SLACK_PRESET,
@@ -53,6 +55,12 @@ const PANELS: Record<string, BlockSettingsComponent> = {
      its entry here does. Adding a block is a row, not a branch. */
   [SLACK_PRESET]: ({ account }) => <SlackStep account={account} />,
   [LINEAR_PRESET]: ({ account }) => <LinearStep account={account} />,
+  /* Four rows now, and the editor still knows none of their names. That is
+     the whole return on the registry: the fourth block cost one import and one
+     line here, where the second would have cost a branch in the canvas, a
+     clause in the publish gate and a boolean threaded through the component
+     tree. */
+  [GITHUB_PRESET]: ({ account }) => <GitHubStep account={account} />,
 };
 
 /** The panel for a preset, or `null` when the block needs no extra settings. */
