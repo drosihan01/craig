@@ -57,3 +57,6 @@ next-env.d.ts
 
 # Showcase data, written at runtime. Accounts live here between restarts.
 /.data/
+
+# Sentry
+.sentryclirc
