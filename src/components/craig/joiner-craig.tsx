@@ -278,6 +278,12 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
         /* No attachments. There is nowhere to put a file in this product yet,
            and a button that accepts one and drops it is worse than no button. */
         attachments={false}
+        /* Off, and the component's own doc is the argument: the route behind
+           this bar is fixed to one model, so a picker here is a control the
+           server ignores — "the one control in this system that must never
+           ship". It shipped anyway, because the default is on and nothing
+           here said otherwise; a screenshot caught what the diff could not. */
+        modelPicker={false}
       />
     </section>
   );
