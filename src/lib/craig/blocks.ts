@@ -1,4 +1,9 @@
-import { AUTOMATION_BY_PRESET, type StepAutomation } from "@/lib/craig/contract";
+import {
+  AUTOMATION_BY_PRESET,
+  type StepAutomation,
+  type StepDirection,
+  type StepMechanism,
+} from "@/lib/craig/contract";
 import {
   DOCUSIGN_SIGNING_METHOD,
   GITHUB_PRESET,
@@ -131,7 +136,31 @@ export interface BlockDefinition {
    * them. Called with whatever shape the caller holds; see `HasPreset`.
    */
   providerWhen?: (step: HasPreset) => ConnectionProvider | null;
-  /** The automation it produces on a joiner's step, if it produces one. */
+  /**
+   * Which way information moves for this block, relative to Craig.
+   *
+   * Static, unlike `mechanism`. A contract is two-way whether it is signed in
+   * Craig or through DocuSign — Craig puts a document in front of somebody and
+   * waits for a signature either way. What changes with configuration is *how*
+   * it reaches them, and that is the other axis.
+   *
+   * This is what a runner should branch on rather than on which vendor a step
+   * names. Retry is safe for `outbound` and dangerous for `two-way`; chasing
+   * is right for `inbound` and wrong for the others; a step that is `inbound`
+   * cannot fail, only not have happened yet.
+   */
+  direction: StepDirection;
+  /**
+   * The provider this block's automation runs against, if Craig runs it.
+   *
+   * Still called `automation` because that is the column on `joiner_steps` and
+   * renaming a column is a migration for a word. What has changed is what it
+   * *means*: it used to be the answer to "what kind of step is this", which is
+   * why `StepAutomation` is a union of vendor names and why adding a second
+   * runner meant teaching every reader a new member. It is now a detail
+   * underneath `direction` and `mechanism` — those say what the runner must
+   * do, this says who it talks to.
+   */
   automation: StepAutomation | null;
   /**
    * What the publish gate says when `provider` is not connected.
@@ -169,6 +198,11 @@ export const BLOCKS: Record<string, BlockDefinition> = {
   [GOOGLE_WORKSPACE_PRESET]: {
     preset: GOOGLE_WORKSPACE_PRESET,
     provider: "google-workspace",
+    /* Craig creates the account, then waits for them to sign in and accept
+       Google's terms. The waiting half is not politeness — nothing makes
+       somebody a user until they accept, so `awaiting` is the honest state
+       and a second attempt would make a second account. */
+    direction: "two-way",
     automation: AUTOMATION_BY_PRESET[GOOGLE_WORKSPACE_PRESET] ?? null,
     blockedReason: "Connect Google Workspace before publishing this.",
     connectedLabel: "Google Workspace connected",
@@ -194,6 +228,12 @@ export const BLOCKS: Record<string, BlockDefinition> = {
   [SLACK_PRESET]: {
     preset: SLACK_PRESET,
     provider: "slack",
+    /* The one genuinely fire-and-forget block: below Enterprise Grid, Slack
+       cannot invite anybody, so this puts an existing member into channels and
+       there is nothing to wait for. Which also makes it the only integration
+       here that is **safe to retry** — a second attempt adds somebody to a
+       channel they are already in, and Slack shrugs. */
+    direction: "outbound",
     automation: null,
     blockedReason: "Connect Slack before publishing this.",
     connectedLabel: "Slack connected",
@@ -216,6 +256,11 @@ export const BLOCKS: Record<string, BlockDefinition> = {
   [LINEAR_PRESET]: {
     preset: LINEAR_PRESET,
     provider: "linear",
+    /* Two-way if it is ever built: Linear's invitation is pending until it is
+       accepted, exactly like GitHub's. Recorded now so that whoever decides
+       whether this block earns its place is deciding about a shape rather
+       than about a logo. */
+    direction: "two-way",
     automation: null,
     blockedReason: "Connect Linear before publishing this.",
     connectedLabel: "Linear connected",
@@ -257,6 +302,11 @@ export const BLOCKS: Record<string, BlockDefinition> = {
   [GITHUB_PRESET]: {
     preset: GITHUB_PRESET,
     provider: "github",
+    /* `POST /orgs/{org}/invitations` creates a *pending* invitation and
+       nothing makes them a member but accepting it. The same shape as Google,
+       and the reason retry is dangerous here: a second call while the first
+       is outstanding is a second invitation to the same person. */
+    direction: "two-way",
     automation: null,
     blockedReason: "Connect GitHub before publishing this.",
     connectedLabel: "GitHub connected",
@@ -313,6 +363,11 @@ export const BLOCKS: Record<string, BlockDefinition> = {
   [SIGN_CONTRACT_PRESET]: {
     preset: SIGN_CONTRACT_PRESET,
     provider: null,
+    /* Two-way regardless of how it is signed. Craig puts a document in front
+       of somebody and waits for a signature; whether the pen is Craig's or
+       DocuSign's changes the *mechanism*, never the direction. That is the
+       distinction `providerWhen` was groping for. */
+    direction: "two-way",
     providerWhen: (step) =>
       step.config?.[SIGNING_METHOD_FIELD] === DOCUSIGN_SIGNING_METHOD
         ? "docusign"
@@ -337,6 +392,36 @@ export const BLOCKS: Record<string, BlockDefinition> = {
  * today; the ordering is stated so that the first block which does inherits a
  * decision rather than making one by accident.
  */
+/**
+ * Manual or integration, for this step as it is actually configured.
+ *
+ * **Derived, never declared.** A block needs a connection exactly when it
+ * reaches outside Craig, so "does it need a provider" and "is it an
+ * integration" are the same question asked twice — and a stored `mechanism`
+ * beside `providerNeededBy` would be two facts obliged to agree forever, with
+ * nothing to notice the day they stop.
+ *
+ * That also makes `sign-contract` stop being a special case. It is not a block
+ * with a strange conditional requirement; it is a block whose **mechanism is
+ * chosen by its own configuration** — manual when Craig holds the pen,
+ * integration when DocuSign does. Same direction either way.
+ */
+export function mechanismFor(step: HasPreset): StepMechanism {
+  return providerNeededBy(step) ? "integration" : "manual";
+}
+
+/**
+ * Which way information moves for this step, or `null` if the preset is not
+ * one this registry knows.
+ *
+ * A separate lookup from `mechanismFor` because it needs no configuration —
+ * direction is a fact about the block, and asking for it should not require
+ * the caller to hold a configured step.
+ */
+export function directionOf(step: HasPreset): StepDirection | null {
+  return blockFor(step.preset)?.direction ?? null;
+}
+
 export function providerNeededBy(step: HasPreset): ConnectionProvider | null {
   const block = blockFor(step.preset);
   if (!block) return null;

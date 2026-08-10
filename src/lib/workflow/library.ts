@@ -67,8 +67,8 @@ import {
  *
  * A `SetupField` is what the preset needs before it can run. This is the part
  * that makes a block real rather than a label: "Sign contract" means nothing
- * until a template is attached and somebody is named to countersign, and
- * "Invite to GitHub" means nothing without the org and the permission level.
+ * until a template is attached, and "Invite to GitHub" means nothing without
+ * the org and the permission level.
  * Required fields with no value are exactly what "unconfigured" means — the
  * badge is derived from them rather than typed in, so it can't lie.
  *
@@ -167,7 +167,21 @@ export interface BlockCategory {
   presets: BlockPreset[];
 }
 
-/* Reused across every account preset — same shape, different service. */
+/**
+ * Reused across every account preset — same shape, different service.
+ *
+ * **Kept, and now the only live `person` field, because it means something a
+ * one-admin product still needs to record.** It is not an assignment: nobody
+ * but the admin can act in Craig, so a field naming somebody else to *do*
+ * something is a required question with no useful answer. This one is a note
+ * about who owns the service at the company — the person to chase when
+ * Google refuses, which is often not the person holding the Craig login.
+ *
+ * `Who countersigns` was removed for exactly the opposite reason. With one
+ * admin there is precisely one possible countersigner, so it was a mandatory
+ * question with a single answer standing between somebody and Publish — the
+ * same defect the payroll block was trimmed for.
+ */
 const WHO_PROVISIONS: SetupField = {
   id: "owner",
   label: "Who provisions it",
@@ -344,12 +358,6 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
                one describes where the document has to come from. */
             kind: "document",
             hint: "Upload it in Resources first — this is the PDF they'll read and sign",
-            required: true,
-          },
-          {
-            id: "countersign",
-            label: "Who countersigns",
-            kind: "person",
             required: true,
           },
           {

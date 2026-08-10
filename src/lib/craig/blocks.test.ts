@@ -4,7 +4,12 @@ import {
   PAYROLL_DETAILS_EXTRAS_FIELD,
   PERSONAL_DETAILS_EXTRAS_FIELD,
 } from "./contract";
-import { blockFor, providerNeededBy } from "./blocks";
+import {
+  blockFor,
+  directionOf,
+  mechanismFor,
+  providerNeededBy,
+} from "./blocks";
 import {
   DOCUSIGN_SIGNING_METHOD,
   GOOGLE_WORKSPACE_PRESET,
@@ -66,6 +71,64 @@ describe("providerNeededBy", () => {
        every unconfigured contract starts demanding a connection and this says
        so before anybody publishes one. */
     expect(blockFor(SIGN_CONTRACT_PRESET)?.provider).toBeNull();
+  });
+});
+
+describe("direction and mechanism", () => {
+  /**
+   * The two axes that replace "which vendor is this".
+   *
+   * Worth pinning because the payoff is entirely in behaviour a type cannot
+   * enforce: `outbound` is safe to retry, `two-way` is not, and `inbound`
+   * cannot fail at all. A block that drifts to the wrong direction compiles
+   * perfectly and sends somebody a second invitation.
+   */
+  it("calls Slack outbound — the one integration safe to retry", () => {
+    expect(directionOf({ preset: "slack" })).toBe("outbound");
+  });
+
+  it("calls the account and invitation blocks two-way", () => {
+    /* Each of these creates something pending that only the person can
+       complete, so retrying the outbound half duplicates it. */
+    expect(directionOf({ preset: GOOGLE_WORKSPACE_PRESET })).toBe("two-way");
+    expect(directionOf({ preset: "github" })).toBe("two-way");
+  });
+
+  it("keeps a contract two-way however it is signed", () => {
+    /* The point of splitting the axes: the pen changes, the shape does not. */
+    expect(directionOf({ preset: SIGN_CONTRACT_PRESET })).toBe("two-way");
+  });
+
+  it("reads mechanism off the configuration, not the preset", () => {
+    expect(
+      mechanismFor({
+        preset: SIGN_CONTRACT_PRESET,
+        config: { [SIGNING_METHOD_FIELD]: "craig" },
+      }),
+    ).toBe("manual");
+
+    expect(
+      mechanismFor({
+        preset: SIGN_CONTRACT_PRESET,
+        config: { [SIGNING_METHOD_FIELD]: DOCUSIGN_SIGNING_METHOD },
+      }),
+    ).toBe("integration");
+  });
+
+  it("agrees with providerNeededBy, because it is derived from it", () => {
+    /* The reason mechanism is not a stored field. Two facts obliged to agree
+       forever are two facts that will one day not. */
+    for (const preset of [GOOGLE_WORKSPACE_PRESET, "slack", "github", "middle-name"]) {
+      const step = { preset };
+      expect(mechanismFor(step)).toBe(
+        providerNeededBy(step) ? "integration" : "manual",
+      );
+    }
+  });
+
+  it("says nothing about a preset it does not know", () => {
+    expect(directionOf({ preset: "not-a-real-preset" })).toBeNull();
+    expect(mechanismFor({ preset: "not-a-real-preset" })).toBe("manual");
   });
 });
 

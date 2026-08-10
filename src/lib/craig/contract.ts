@@ -1216,6 +1216,70 @@ export const ADMIN_TICK_PRESETS = new Set<string>(["name-tag"]);
  */
 export type StepAutomation = "google-workspace";
 
+/* --- What shape of thing a block is -------------------------------------- */
+
+/**
+ * Which way information moves, relative to Craig.
+ *
+ * The axis this product had been describing without naming, and naming it is
+ * most of the value. Two pieces of the existing code exist *only* because it
+ * was missing:
+ *
+ * - **`RunState`'s `awaiting`** is the two-way case wearing a costume. It was
+ *   added for Google Workspace — Craig creates the account, then waits for the
+ *   person to accept — and reads as a Google-shaped special case rather than
+ *   as what every two-way block does.
+ * - **`providerWhen`** exists because `sign-contract` reaches outside Craig
+ *   for one of its four signing methods. That is not a special case either: it
+ *   is one block whose *mechanism* is chosen by its own configuration.
+ *
+ * Both stop being exceptions once a block declares its shape.
+ */
+export type StepDirection =
+  /**
+   * Something arrives at Craig. A form somebody fills in, a tick, a webhook
+   * from a system reporting a fact Craig did not ask for.
+   *
+   * Cannot *fail* — only not have happened yet. That is the whole difference
+   * between an inbound step sitting untouched for a week and an outbound one
+   * doing the same, and it is why chasing is the right response to one and an
+   * error is the right response to the other.
+   */
+  | "inbound"
+  /**
+   * Craig does something to the world and does not wait. A channel somebody is
+   * added to; a message sent.
+   *
+   * The only direction that is safely **retryable**, because there is no
+   * outstanding request a second attempt could duplicate.
+   */
+  | "outbound"
+  /**
+   * Craig does something and then waits for an answer that comes back on its
+   * own schedule. An invitation accepted, a contract signed, a seat taken up.
+   *
+   * **Not retryable without care**, and this is the practical payoff of naming
+   * it: retrying the outbound half of a two-way step sends a second invitation
+   * to somebody who already has one. GitHub's org invitation is exactly this,
+   * and so is a DocuSign envelope.
+   */
+  | "two-way";
+
+/**
+ * Whether a person does it or a system does.
+ *
+ * Deliberately **not** the same question as `StepActor`. That says which human
+ * a step belongs to; this says whether the step reaches across a network at
+ * all. A contract signed in Craig is `manual` and its actor is the joiner; the
+ * same block set to DocuSign is `integration` with the same actor.
+ *
+ * Derived rather than declared — see `mechanismFor` in `blocks.ts`. A block
+ * that needs a connection for the way it is configured is an integration, and
+ * one that does not is manual, so storing it separately would be two facts
+ * that have to agree forever.
+ */
+export type StepMechanism = "manual" | "integration";
+
 export const AUTOMATION_BY_PRESET: Record<string, StepAutomation> = {
   "google-workspace": "google-workspace",
 };
