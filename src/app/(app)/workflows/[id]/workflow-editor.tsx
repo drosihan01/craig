@@ -934,10 +934,19 @@ function Editor({
                 warningFor={(block) => {
                   /* The badge asks the registry the same question the gate
                      does, so a block can never be publishable-looking on the
-                     canvas and refused by the button. */
-                  const provider = blockFor(block.preset)?.provider;
+                     canvas and refused by the button.
+
+                     And it says what the *registry* says. This was hardcoded
+                     to "Needs Google Workspace connected" while Google was the
+                     only block with a connection, which was true right up until
+                     it wasn't: a Slack block would have carried Google's
+                     sentence on the canvas while the publish gate underneath
+                     named Slack correctly. One block, two different accounts of
+                     what is wrong with it. */
+                  const definition = blockFor(block.preset);
+                  const provider = definition?.provider;
                   return provider && !connected.has(provider)
-                    ? "Needs Google Workspace connected"
+                    ? definition.blockedReason
                     : null;
                 }}
                 reveal={revealing}

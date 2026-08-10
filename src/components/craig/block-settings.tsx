@@ -2,8 +2,13 @@
 
 import { GoogleStep } from "@/components/craig/google-workspace";
 import type { WorkspaceAccount } from "@/components/craig/google-workspace";
+import { LinearStep } from "@/components/craig/linear";
 import { SlackStep } from "@/components/craig/slack-connect";
-import { GOOGLE_WORKSPACE_PRESET, SLACK_PRESET } from "@/lib/workflow/library";
+import {
+  GOOGLE_WORKSPACE_PRESET,
+  LINEAR_PRESET,
+  SLACK_PRESET,
+} from "@/lib/workflow/library";
 
 /**
  * Which settings panel a block shows, keyed by the same preset id as
@@ -43,10 +48,11 @@ export type BlockSettingsComponent = (
 
 const PANELS: Record<string, BlockSettingsComponent> = {
   [GOOGLE_WORKSPACE_PRESET]: ({ account }) => <GoogleStep account={account} />,
-  /* The line the registry's design was paid for: the editor learns nothing,
-     the publish gate learns from `blocks.ts`, and the Slack panel exists
-     because this entry does. */
+  /* The lines the registry's design was paid for: the editor learns nothing,
+     the publish gate learns from `blocks.ts`, and each panel exists because
+     its entry here does. Adding a block is a row, not a branch. */
   [SLACK_PRESET]: ({ account }) => <SlackStep account={account} />,
+  [LINEAR_PRESET]: ({ account }) => <LinearStep account={account} />,
 };
 
 /** The panel for a preset, or `null` when the block needs no extra settings. */
