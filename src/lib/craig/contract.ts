@@ -374,19 +374,25 @@ export const DRAFT_REQUEST =
  * than pretending the set is open. A block that maps to none of them is real
  * work that simply isn't the new starter's to do here, and it says so.
  *
- * `personal-details` is the odd one and the reason the two below it no longer
- * describe the shape. The first two name one input each and are answered with
- * one string; this one is a form with a dozen boxes on it, answered with a
- * structured payload that is sealed before it touches the database. See
- * `PersonalDetails` below, and `personal-details.ts` for the sealing.
+ * `personal-details` and `payroll-details` are the odd ones and the reason the
+ * two above them no longer describe the shape. Those two name one input each and
+ * are answered with one string; these are forms with a dozen boxes on them,
+ * answered with a structured payload that is sealed before it touches the
+ * database. See `PersonalDetails` and `PayrollDetails` below, and
+ * `sealed-answer.ts` for the one envelope they share.
  */
-export type JoinerField = "middle-name" | "date-of-birth" | "personal-details";
+export type JoinerField =
+  | "middle-name"
+  | "date-of-birth"
+  | "personal-details"
+  | "payroll-details";
 
 /** Preset ids that produce a step the new starter can actually answer. */
 export const JOINER_FIELD_BY_PRESET: Record<string, JoinerField> = {
   "middle-name": "middle-name",
   "date-of-birth": "date-of-birth",
   "personal-details": "personal-details",
+  "payroll-details": "payroll-details",
 };
 
 /* --- Personal details ----------------------------------------------------- */
@@ -732,8 +738,357 @@ export interface DetailLine {
   masked: boolean;
 }
 
-/** Where the admin asks to see somebody's details in full. */
+/** Where the admin asks to see somebody's sealed answers in full — either
+    block's. One route for both: the check it performs is "is this person yours
+    and is this step of theirs sealed", which does not vary by which form it
+    was. */
 export const DETAILS_ENDPOINT = "/api/showcase/details";
+
+/* --- Payroll details ------------------------------------------------------ */
+
+/**
+ * Everything the "Payroll details" block collects, as one answer.
+ *
+ * **The other half of the paperwork, and only the other half.** The identity
+ * block took the legal name, the date of birth, the contact details and the
+ * address, and left a note in the library saying this block should therefore
+ * drop them. It has. Asking somebody their legal name twice in one onboarding
+ * teaches them something true about how joined-up the company is, and the two
+ * halves are not the same kind of thing anyway: identity is a set of facts about
+ * a person, and this is a set of instructions about money. The blocks can sit in
+ * one workflow and between them ask each question once.
+ *
+ * **There is no payroll provider, and that decides the scope.** Craig does not
+ * forward any of this to Deel, Gusto, Xero or anything else, and — Dzaky's call
+ * — will not. The admin reads it off their screen and pays the person by bank
+ * transfer themselves. Two consequences follow and both are load-bearing.
+ *
+ * The first is that "don't store it" was never available. A value that has to be
+ * read by a human next Tuesday has to be somewhere on Tuesday, so sealing is not
+ * a nice-to-have on this block; it is the only thing standing between a bank
+ * account number and a plaintext column. `sealed-answer.ts` is the envelope, the
+ * same one the identity block uses.
+ *
+ * The second is what is *absent*: there is no `system` field. The preset used to
+ * offer Deel / Remote / Gusto / "Spreadsheet, for now", which was a choice
+ * between four behaviours that were all one behaviour. See the library for that
+ * argument written out where somebody choosing the block will read it.
+ *
+ * **Australian, and it says so** — the same limit the identity block named
+ * rather than pretended away, and a harder one. A BSB is not a sort code and is
+ * not a routing number; superannuation has no equivalent in most of the world;
+ * and the tax-free threshold is a question off an ATO form. A person hired in
+ * Auckland or Austin does not have a smaller version of this — they have a
+ * different form entirely, and the honest response the day that happens is a
+ * second block rather than a `country` field bolted onto this one.
+ *
+ * **Flat, deliberately**, for the reason `PersonalDetails` gives: nesting the
+ * bank account and the super fund would read better in this one declaration and
+ * cost three special cases in every loop that touches the shape. `group` on the
+ * field descriptor carries the grouping for the one place that wants it.
+ */
+export interface PayrollDetails {
+  /** The name on the account, which is often not the name on their passport —
+      a joint account, a maiden name, a trading name for a contractor. */
+  accountName: string;
+  /** Six digits, stored as `123-456`. The branch, not the account. */
+  bsb: string;
+  /** Digits only once stored. Australian account numbers run about 5–10. */
+  accountNumber: string;
+  /**
+   * `yes` or `no`, from `TAX_FREE_THRESHOLD_OPTIONS`.
+   *
+   * A real question off the ATO's tax file number declaration, and the one
+   * answer here that changes what somebody is paid: claiming it from two
+   * employers at once is the most common way a person ends up with a tax bill
+   * they were not expecting.
+   */
+  claimsTaxFreeThreshold: string;
+  /**
+   * Only when the admin asked for the TFN. Optional even then, and that is a
+   * legal requirement rather than a kindness — see `TFN_NOTICE`.
+   */
+  taxFileNumber?: string;
+  /** The three below are only asked when the admin ticked the super fund
+      option, and are optional even then — see `PAYROLL_DETAIL_FIELDS`. */
+  superFundName?: string;
+  /** The fund's USI, or its ABN. Both identify the fund rather than the
+      person, which is why neither is masked. */
+  superUsi?: string;
+  superMemberNumber?: string;
+}
+
+export type PayrollDetailKey = keyof PayrollDetails;
+
+/**
+ * How a payroll field is entered, and how what comes back is checked.
+ *
+ * Its own vocabulary rather than `PersonalDetailKind`'s, and the overlap is one
+ * word out of six. Sharing them would put `postcode` and `state` in a union that
+ * has to be exhaustive over a form with no address on it, and would mean the day
+ * somebody changes what a phone number is they change what a BSB is.
+ */
+export type PayrollDetailKind =
+  | "text"
+  /** Six digits, conventionally written `123-456`. */
+  | "bsb"
+  /** Digits, however many they put between them. */
+  | "account-number"
+  /** Eight or nine digits, checksummed where the ATO's algorithm applies. */
+  | "tfn"
+  /** A fund's USI or ABN — alphanumeric, loosely bounded. */
+  | "usi"
+  /** One of the field's own `options`. */
+  | "choice";
+
+/** The heading a payroll field sits under, on both screens. */
+export type PayrollDetailGroup = "bank" | "tax" | "super";
+
+/**
+ * The two things an admin can decide to also ask for.
+ *
+ * Named as a union rather than left as loose strings, so a field can declare
+ * which tick governs it and the compiler can insist the tick exists. Both are
+ * *off* by default, which is the whole design: the block collects what you
+ * cannot pay somebody without, and everything beyond that is somebody
+ * deliberately deciding to hold more.
+ */
+export type PayrollExtra = "super-fund" | "tax-file-number";
+
+export interface PayrollDetailField {
+  key: PayrollDetailKey;
+  group: PayrollDetailGroup;
+  kind: PayrollDetailKind;
+  /** What the new starter is asked. Second person, because they're reading it. */
+  label: string;
+  /** What the admin's screen calls it. Third person, for the same reason. */
+  adminLabel: string;
+  hint?: string;
+  /** Refused when empty. Absent means genuinely optional, not "nice to have". */
+  required?: boolean;
+  /** Longest we'll store. Bounded because the payload is written by a
+      stranger's browser; generous because a fund's name can be long. */
+  max: number;
+  /** For `kind: "choice"`. Ids persist, labels are for reading — the same rule
+      the block library's `when` fields follow. */
+  options?: { id: string; label: string }[];
+  autoComplete?: string;
+  /** Only asked when the admin ticked this option. Absent means always asked. */
+  extra?: PayrollExtra;
+}
+
+/**
+ * Claiming the tax-free threshold, as the ATO asks it.
+ *
+ * A choice rather than a tick box, and the difference matters on a form
+ * somebody fills in once. An unticked box is indistinguishable from a box
+ * nobody read, and the two answers have opposite consequences for what lands in
+ * their account — so this makes them say which, rather than defaulting somebody
+ * into the more common one and being wrong for the person with two jobs.
+ */
+export const TAX_FREE_THRESHOLD_OPTIONS: { id: string; label: string }[] = [
+  { id: "yes", label: "Yes — this is my main job" },
+  { id: "no", label: "No — I claim it somewhere else" },
+];
+
+/**
+ * What the new starter must be told when a tax file number is asked for.
+ *
+ * **Not copy. A legal requirement, quoted where it is enforceable.** The Privacy
+ * (Tax File Number) Rule 2015, made under s 17 of the Privacy Act 1988, requires
+ * a TFN recipient collecting TFN information to inform the individual of the law
+ * authorising the collection, the purpose, **that declining is not an offence**,
+ * and what happens if they decline. All four are in the sentences below, and the
+ * third is the one that decides the shape of the field: `taxFileNumber` is
+ * optional even when the admin has asked for it, because a form that refuses to
+ * submit without one is a form that has made declining an offence in practice
+ * whatever it says underneath.
+ *
+ * `payroll-details.ts` carries the rest of the obligation — the collection
+ * purpose test, the use-as-identifier prohibition, the destruction rule, and the
+ * argument that Craig should probably not be holding one of these at all.
+ */
+export const TFN_NOTICE = {
+  /** Under the field itself, where somebody deciding whether to type it looks. */
+  hint: "You don't have to give this, and it isn't an offence to leave it blank — but without it your employer has to withhold tax at the highest rate.",
+  /** Under the group, saying who is asking and what for. */
+  purpose:
+    "Your employer asks for this under the Taxation Administration Act, so they can work out how much tax to withhold from your pay. It's encrypted here and it isn't sent anywhere else.",
+} as const;
+
+/**
+ * The whole payroll form, once, as data.
+ *
+ * One list feeding five things — the joiner's form, the validator, the sealed
+ * payload, the admin's masked summary and the revealed one — because the
+ * alternative is five lists that agree until somebody adds a field to four of
+ * them. The compiler catches a `key` that isn't on `PayrollDetails`; nothing
+ * would have caught a field the form asks for and the validator drops.
+ *
+ * **Why the super fields are optional even when asked**, which is a departure
+ * from the emergency contact's all-or-nothing rule and is deliberate. An
+ * emergency contact with a name and no number is not somebody you can call, so
+ * half of one is worth nothing. A super fund is different: in Australia an
+ * employee who names no fund is paid into their stapled fund or the employer's
+ * default, which is a real and common outcome rather than a failure — and plenty
+ * of first-job starters genuinely have no fund yet. Requiring it would trap
+ * exactly the people it is most likely to be a first job for.
+ */
+export const PAYROLL_DETAIL_FIELDS: readonly PayrollDetailField[] = [
+  {
+    key: "accountName",
+    group: "bank",
+    kind: "text",
+    label: "Account name",
+    adminLabel: "Account name",
+    hint: "Exactly as it appears on your statement.",
+    required: true,
+    max: 80,
+  },
+  {
+    key: "bsb",
+    group: "bank",
+    kind: "bsb",
+    label: "BSB",
+    adminLabel: "BSB",
+    hint: "Six digits, usually written 123-456.",
+    required: true,
+    /* `123-456` is seven characters. Stored normalised, so the cap is the
+       stored form rather than the longest thing somebody might type. */
+    max: 7,
+    autoComplete: "off",
+  },
+  {
+    key: "accountNumber",
+    group: "bank",
+    kind: "account-number",
+    label: "Account number",
+    adminLabel: "Account number",
+    hint: "Usually between five and ten digits.",
+    required: true,
+    max: 10,
+    autoComplete: "off",
+  },
+  {
+    key: "claimsTaxFreeThreshold",
+    group: "tax",
+    kind: "choice",
+    label: "Are you claiming the tax-free threshold from this job?",
+    adminLabel: "Tax-free threshold",
+    hint: "Claim it from the job that pays you most, and only from one at a time.",
+    required: true,
+    max: 3,
+    options: TAX_FREE_THRESHOLD_OPTIONS,
+  },
+  {
+    key: "taxFileNumber",
+    group: "tax",
+    kind: "tfn",
+    label: "Tax file number",
+    adminLabel: "Tax file number",
+    hint: TFN_NOTICE.hint,
+    /* Never `required`. See `TFN_NOTICE` — declining is not an offence, and a
+       form that will not submit without one has quietly made it one. */
+    max: 11,
+    autoComplete: "off",
+    extra: "tax-file-number",
+  },
+  {
+    key: "superFundName",
+    group: "super",
+    kind: "text",
+    label: "Super fund name",
+    adminLabel: "Super fund",
+    hint: "Leave the whole section blank if you haven't got a fund yet — you'll be asked again.",
+    max: 100,
+    extra: "super-fund",
+  },
+  {
+    key: "superUsi",
+    group: "super",
+    kind: "usi",
+    label: "Fund USI or ABN",
+    adminLabel: "Fund USI / ABN",
+    hint: "It's on your fund's statement, or on their website.",
+    max: 24,
+    extra: "super-fund",
+  },
+  {
+    key: "superMemberNumber",
+    group: "super",
+    kind: "text",
+    label: "Your member number",
+    adminLabel: "Member number",
+    max: 40,
+    extra: "super-fund",
+  },
+];
+
+/** The headings, in the order the form asks for them. */
+export const PAYROLL_DETAIL_GROUPS: {
+  id: PayrollDetailGroup;
+  label: string;
+}[] = [
+  { id: "bank", label: "Where your pay goes" },
+  { id: "tax", label: "Tax" },
+  { id: "super", label: "Your super fund" },
+];
+
+/**
+ * The setup field the admin ticks to ask for more than the minimum, and the two
+ * options inside it.
+ *
+ * Named here rather than typed into the preset, the invite route and the
+ * snapshot separately, because those three have to agree on the strings and a
+ * literal in each is three chances to typo one. The symptom of a typo would be a
+ * tick box that changes nothing — the worst kind, because the admin can see they
+ * ticked it.
+ *
+ * Its own field id rather than sharing `PERSONAL_DETAILS_EXTRAS_FIELD`. The two
+ * blocks can sit in one workflow, each holding its own config, and a shared id
+ * would be readable — right up until somebody reasonably assumed one list of
+ * extras and put an emergency contact tick on a payroll block.
+ *
+ * **Why either is configurable at all**, which is the same argument the
+ * emergency contact makes and a stronger one each time. The bank details are
+ * something an employer cannot do without: there is no paying somebody by bank
+ * transfer without an account to transfer to. The other two are not.
+ *
+ * A super fund is a choice the employee may not have made yet, and an employer
+ * who is going to pay into the stapled fund has no use for the question.
+ *
+ * A tax file number is in a category of its own, and the tick is the mechanism
+ * that keeps it out of a default deployment: it is regulated under the Privacy
+ * (Tax File Number) Rule 2015 as well as the Privacy Act, its misuse is an
+ * offence under the Taxation Administration Act rather than merely a privacy
+ * interference, and — the part that decides it here — Craig has no payroll
+ * system to compute withholding in, so nothing in this product does the one job
+ * that would authorise collecting it. `payroll-details.ts` argues that out in
+ * full. Off by default is the least this file can do about it; deleting the
+ * option outright is the recommendation.
+ */
+export const PAYROLL_DETAILS_EXTRAS_FIELD = "payroll-extras";
+export const SUPER_FUND_EXTRA: PayrollExtra = "super-fund";
+export const TAX_FILE_NUMBER_EXTRA: PayrollExtra = "tax-file-number";
+
+/**
+ * One line of a payroll answer as a screen shows it, masked or in full.
+ *
+ * A sibling of `DetailLine` rather than the same type, because `key` and `group`
+ * are drawn from different unions and collapsing them to `string` would lose the
+ * one property those fields are typed for. The two are structurally identical
+ * otherwise, which is what lets one component render either — see
+ * `SealedLines` on the admin's page.
+ */
+export interface PayrollDetailLine {
+  key: PayrollDetailKey;
+  group: PayrollDetailGroup;
+  label: string;
+  /** Masked or plain, depending on which way it was built. */
+  value: string;
+  /** Whether `value` has been through the mask. Drives nothing but the styling. */
+  masked: boolean;
+}
 
 /**
  * Preset ids the admin ticks off themselves.
@@ -923,6 +1278,27 @@ export interface JoinerStep {
    * existed means.
    */
   askEmergencyContact?: boolean;
+  /**
+   * Only on `field: "payroll-details"`. Whether that form also asks for their
+   * super fund, and whether it also asks for their tax file number.
+   *
+   * Snapshotted at invitation time for exactly the reason `askEmergencyContact`
+   * above is: the admin can untick either afterwards, and somebody half-way
+   * through the form must not have a question vanish under them, nor find one
+   * has appeared the morning after they finished.
+   *
+   * `askTaxFileNumber` carries more than a form's shape. It is the record that
+   * somebody deliberately decided to collect a regulated identifier on this
+   * onboarding — which, under the TFN Rule's security and destruction
+   * obligations, is a fact an employer may one day have to be able to state
+   * about a particular person rather than about the product in general. It is
+   * its own column for that reason as much as for the form's.
+   *
+   * Both absent read as false, which is what every step written before they
+   * existed means.
+   */
+  askSuperFund?: boolean;
+  askTaxFileNumber?: boolean;
   /** Only on `actor: "craig"` steps. Which job it is Craig goes and does. */
   automation?: StepAutomation;
   /**

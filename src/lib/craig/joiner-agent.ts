@@ -191,12 +191,13 @@ export function briefFor(joiner: Joiner): JoinerBrief {
             ? "automatic"
             : "the company",
       state: step.completedAt ? "done" : step.id === nextId ? "next" : "later",
-      /* Empty on a personal-details step even when it is finished, because a
-         sealed answer never travels on the record — and that is the right
-         outcome rather than a gap to fix. Craig can say the step is done, which
-         is what anybody asks; putting a date of birth and a home address into a
-         model prompt so he can read them back would send them to a third party
-         on every turn, for a question nobody has. */
+      /* Empty on either sealed step even when it is finished, because a sealed
+         answer never travels on the record — and that is the right outcome
+         rather than a gap to fix. Craig can say the step is done, which is what
+         anybody asks; putting a date of birth, a home address or a bank account
+         into a model prompt so he can read them back would send them to a third
+         party on every turn, for a question nobody has. A tax file number would
+         be that and an unauthorised disclosure of one besides. */
       answer: step.value || undefined,
     })),
     done: progress.done,

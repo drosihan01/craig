@@ -4,6 +4,7 @@ import {
   AUTOMATION_BY_PRESET,
   JOIN_PATH,
   JOINER_FIELD_BY_PRESET,
+  PAYROLL_DETAILS_EXTRAS_FIELD,
   PERSONAL_DETAILS_EXTRAS_FIELD,
 } from "@/lib/craig/contract";
 import { currentUser } from "@/lib/craig/current-user";
@@ -460,11 +461,19 @@ function blocksFrom(value: unknown) {
 /**
  * The ticks on a block that change what the *new starter* is asked.
  *
- * Exactly one multiselect qualifies today — the emergency contact on the
- * personal details block — and this reads it without knowing that. It takes ids
- * from one named field, drops anything that isn't a short string, and caps the
- * list; what any of them mean is decided in `stepsFromBlocks`, which is where
- * the field they belong to is also decided.
+ * Two multiselects qualify today — the emergency contact on the personal
+ * details block, and the super fund and tax file number on the payroll one —
+ * and this reads them without knowing what any of the ids mean. It takes ids
+ * from the named fields, drops anything that isn't a short string, and caps the
+ * list; the meaning is decided in `stepsFromBlocks`, which is also where the
+ * field each id belongs to is decided.
+ *
+ * **Read from both names and merged, rather than switched on the preset.** The
+ * sanitiser has no business knowing which block it is looking at: a block only
+ * ever holds one of these two config keys, and `stepsFromBlocks` refuses an id
+ * against the wrong field anyway — so a request that put an emergency-contact
+ * tick in the payroll list would arrive here, survive, and then be dropped by
+ * the one check that can actually tell it is wrong. One rule, in one place.
  *
  * The rest of `config` deliberately does not travel. A block's setup is the
  * admin's own working — which template, who countersigns, which channels — and
@@ -475,13 +484,21 @@ function blocksFrom(value: unknown) {
 function extrasFrom(value: unknown): string[] | undefined {
   if (!value || typeof value !== "object") return undefined;
 
-  const raw = (value as Record<string, unknown>)[PERSONAL_DETAILS_EXTRAS_FIELD];
-  if (!Array.isArray(raw)) return undefined;
+  const config = value as Record<string, unknown>;
+  const ids: string[] = [];
 
-  const ids = raw
-    .slice(0, 8)
-    .map((entry) => oneLine(entry, MAX_ID))
-    .filter(Boolean);
+  for (const key of [
+    PERSONAL_DETAILS_EXTRAS_FIELD,
+    PAYROLL_DETAILS_EXTRAS_FIELD,
+  ]) {
+    const raw = config[key];
+    if (!Array.isArray(raw)) continue;
+
+    for (const entry of raw.slice(0, 8)) {
+      const id = oneLine(entry, MAX_ID);
+      if (id && !ids.includes(id)) ids.push(id);
+    }
+  }
 
   return ids.length > 0 ? ids : undefined;
 }

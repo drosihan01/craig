@@ -7,12 +7,14 @@ import {
   Badge,
   Button,
   Callout,
+  ControlRow,
   CraigMark,
   DatePicker,
   EmptyState,
   Field,
   Input,
   Progress,
+  Radio,
   Select,
   toISODate,
 } from "@/components/ui";
@@ -22,9 +24,14 @@ import { JoinerNav, JoinerNavRail } from "@/components/craig/joiner-nav";
 import { cn } from "@/lib/cn";
 import {
   AU_STATES,
+  PAYROLL_DETAIL_FIELDS,
+  PAYROLL_DETAIL_GROUPS,
   PERSONAL_DETAIL_FIELDS,
   PERSONAL_DETAIL_GROUPS,
+  TFN_NOTICE,
   type JoinerField,
+  type PayrollDetailField,
+  type PayrollDetailKey,
   type PersonalDetailField,
   type PersonalDetailKey,
   type StepActor,
@@ -101,6 +108,17 @@ export interface PlanStep {
    * currently says.
    */
   askEmergencyContact?: boolean;
+  /**
+   * On a `payroll-details` step, whether the form also asks for their super
+   * fund and their tax file number.
+   *
+   * Straight off their snapshot, exactly like the flag above, and for the same
+   * reason: the admin ticked these when the workflow was written and they were
+   * frozen with the rest of the plan, so this screen renders what they were
+   * asked rather than what the block currently says.
+   */
+  askSuperFund?: boolean;
+  askTaxFileNumber?: boolean;
   /** When it's due, already a real date. Absent once it's done. */
   dueOn?: string;
   /**
@@ -201,12 +219,12 @@ const spell = (n: number) => NUMBERS[n] ?? String(n);
  * thing.
  */
 const ASK: Record<
-  /* Everything except the one field that is a form rather than a question. Its
-     labels live on `PERSONAL_DETAIL_FIELDS`, beside the validator that has to
-     agree with them, and excluding it here is what makes the compiler insist
-     the two are drawn by two different components rather than one that grew a
-     branch. */
-  Exclude<JoinerField, "personal-details">,
+  /* Everything except the two fields that are forms rather than questions.
+     Their labels live on `PERSONAL_DETAIL_FIELDS` and `PAYROLL_DETAIL_FIELDS`,
+     beside the validators that have to agree with them, and excluding them here
+     is what makes the compiler insist they are drawn by their own components
+     rather than by one that grew two branches. */
+  Exclude<JoinerField, "personal-details" | "payroll-details">,
   { label: string; hint: string }
 > = {
   "middle-name": {
@@ -529,16 +547,23 @@ function PlanRow({
           </p>
         ) : null}
 
-        {/* The two forms are two components, not one with a branch in it. One
-            is a box; the other is twelve boxes, a calendar, a select and a
-            payload that gets encrypted before it is stored — and the day
-            somebody adds a third kind of question, the alternative is a
-            component with three modes and a union of state that only makes
-            sense in one of them. */}
+        {/* The three forms are three components, not one with branches in it.
+            One is a box; one is twelve boxes, a calendar and a select; one is
+            nine boxes, a radio group and a legal notice — and two of them
+            produce payloads that get encrypted before they are stored. The
+            alternative is a component with three modes and a union of state
+            that only makes sense in one of them. */}
         {step.field === "personal-details" ? (
           <DetailsForm
             stepId={step.id}
             emergencyContact={Boolean(step.askEmergencyContact)}
+            finishing={finishing}
+          />
+        ) : step.field === "payroll-details" ? (
+          <PayrollForm
+            stepId={step.id}
+            superFund={Boolean(step.askSuperFund)}
+            taxFileNumber={Boolean(step.askTaxFileNumber)}
             finishing={finishing}
           />
         ) : step.field ? (
@@ -670,7 +695,7 @@ function AnswerForm({
   finishing,
 }: {
   stepId: string;
-  field: Exclude<JoinerField, "personal-details">;
+  field: Exclude<JoinerField, "personal-details" | "payroll-details">;
   company: string;
   finishing: boolean;
 }) {
@@ -1005,6 +1030,261 @@ function DetailsForm({
         <span className="inline-flex items-center gap-1.5 text-xs text-text-subtle">
           <Lock className="size-3.5" />
           Encrypted the moment you send it.
+        </span>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * The one that pays them.
+ *
+ * Built to the same rules as the form above it — one record of state keyed by
+ * field id, built from the same list the server validates against; no client
+ * validation, because a second opinion about what a valid BSB is would be the
+ * wrong one on the day the two disagree; the button dark until every required
+ * box has something in it, as a courtesy rather than a rule. Read
+ * `DetailsForm`'s header for those arguments; they are not repeated here.
+ *
+ * What is different is worth setting out, because all of it comes from one fact:
+ * **nothing here is forwarded anywhere.** There is no payroll provider behind
+ * this block and there will not be one. Somebody at the company reads these off
+ * their screen and pays this person from their own banking app.
+ *
+ * **The footnote says so.** The identity form promises encryption, which is the
+ * thing somebody typing their home address wants to know. Somebody typing their
+ * bank account wants to know that too *and* wants to know where it goes, and the
+ * honest answer — their employer, and nowhere else — is more reassuring than the
+ * vague one, not less.
+ *
+ * **The tax-free threshold is a radio group rather than a select.** Two mutually
+ * exclusive answers, one of which is wrong for a person with a second job, and
+ * the consequence of picking wrong lands in their pay rather than on this
+ * screen. A select would hide the second option behind a click; these are both
+ * on the page, and neither is preselected, so nobody is defaulted into a claim
+ * they did not make.
+ *
+ * **The tax file number carries a notice, and is never required.** That is not
+ * politeness. The Privacy (Tax File Number) Rule 2015 requires whoever collects
+ * one to say which law authorises it, what it is for, that declining is not an
+ * offence, and what happens if you decline — and a form that will not submit
+ * without one has made declining an offence in practice whatever it prints
+ * underneath. `TFN_NOTICE` in the contract holds those sentences; the field's
+ * own `required` is deliberately absent, and the button below does not wait on
+ * it. `payroll-details.ts` argues the rest, including whether this product
+ * should be asking at all.
+ */
+function PayrollForm({
+  stepId,
+  superFund,
+  taxFileNumber,
+  finishing,
+}: {
+  /** Whether the plan they were sent asks for a super fund... */
+  superFund: boolean;
+  /** ...and whether it asks for a tax file number. Both off their snapshot. */
+  taxFileNumber: boolean;
+  stepId: string;
+  finishing: boolean;
+}) {
+  const router = useRouter();
+  const [values, setValues] = React.useState<
+    Partial<Record<PayrollDetailKey, string>>
+  >({});
+  const [error, setError] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const [reloading, startReload] = React.useTransition();
+
+  const busy = saving || reloading;
+
+  /* Fields the company did not ask for are dropped from the list entirely
+     rather than hidden. A hidden field is still a field: it is filled in by
+     autofill, submitted by the form, and read by anything looking at the DOM.
+     If the company did not ask, this person is not asked — which on the tax
+     file number is the difference between a deployment that holds a regulated
+     identifier and one that does not. */
+  const fields = React.useMemo(
+    () =>
+      PAYROLL_DETAIL_FIELDS.filter((field) => {
+        if (field.extra === "super-fund") return superFund;
+        if (field.extra === "tax-file-number") return taxFileNumber;
+        return true;
+      }),
+    [superFund, taxFileNumber],
+  );
+
+  const valueOf = (field: PayrollDetailField) => values[field.key] ?? "";
+
+  const ready = fields.every((field) => !field.required || valueOf(field).trim());
+
+  const set = (key: PayrollDetailKey, value: string) =>
+    setValues((current) => ({ ...current, [key]: value }));
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!ready || busy) return;
+
+    setSaving(true);
+    setError(null);
+
+    /* Assembled from the field list rather than from the state object, so a
+       value left over from a field that is no longer asked for cannot ride
+       along in the payload. */
+    const details: Record<string, string> = {};
+    for (const field of fields) {
+      const value = valueOf(field).trim();
+      if (value) details[field.key] = value;
+    }
+
+    try {
+      const response = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        /* The step and the answer. Who this is comes from the cookie on the
+           server — an id in here would be a person anybody could name. */
+        body: JSON.stringify({ stepId, details }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setError(payload?.error ?? "That didn't save. Try it once more.");
+        setSaving(false);
+        return;
+      }
+
+      setSaving(false);
+      startReload(() => router.refresh());
+    } catch {
+      /* No response at all. Said carefully: the request may well have reached
+         the server, so this must not imply the answer was lost. */
+      setError(
+        "I couldn't reach the server just then. Check your connection and have another go — pressing it twice is safe.",
+      );
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      noValidate
+      className="mt-2 flex flex-col gap-5 rounded-lg border border-border bg-surface p-4 shadow-e1"
+    >
+      {PAYROLL_DETAIL_GROUPS.map((group) => {
+        const inGroup = fields.filter((field) => field.group === group.id);
+        if (inGroup.length === 0) return null;
+
+        return (
+          <fieldset key={group.id} className="flex flex-col gap-3">
+            <legend className="text-sm font-medium">{group.label}</legend>
+
+            {/* The collection notice, under the heading of the group it
+                governs, before the box rather than after it. Somebody has to be
+                told what a tax file number is being collected for *while they
+                are deciding whether to give it*, which is the whole point of
+                the obligation — a sentence underneath the button they have
+                already pressed is a disclaimer, not a notice. */}
+            {group.id === "tax" && taxFileNumber && (
+              <p className="text-xs leading-relaxed text-text-subtle">
+                {TFN_NOTICE.purpose}
+              </p>
+            )}
+
+            {inGroup.map((field) =>
+              field.kind === "choice" ? (
+                <Field
+                  key={field.key}
+                  label={field.label}
+                  hint={field.hint}
+                  required={field.required}
+                >
+                  {/* A real radio group: both answers visible, neither
+                      preselected. `name` is scoped to the field so two of these
+                      on one page could never share a group. */}
+                  <div className="flex flex-col gap-2 pt-1">
+                    {(field.options ?? []).map((option) => (
+                      <ControlRow
+                        key={option.id}
+                        control={
+                          <Radio
+                            name={`${stepId}-${field.key}`}
+                            value={option.id}
+                            checked={valueOf(field) === option.id}
+                            onChange={() => set(field.key, option.id)}
+                            disabled={busy}
+                          />
+                        }
+                        label={option.label}
+                      />
+                    ))}
+                  </div>
+                </Field>
+              ) : (
+                <Field
+                  key={field.key}
+                  label={field.label}
+                  hint={field.hint}
+                  required={field.required}
+                >
+                  <Input
+                    value={valueOf(field)}
+                    onChange={(event) => set(field.key, event.target.value)}
+                    /* `inputMode` rather than `type="number"` on all three of
+                       the numeric ones. A spinner on a BSB is absurd, and
+                       treating an account number as arithmetic eats the leading
+                       zero — which is most of them. */
+                    type="text"
+                    inputMode={
+                      field.kind === "bsb" ||
+                      field.kind === "account-number" ||
+                      field.kind === "tfn"
+                        ? "numeric"
+                        : undefined
+                    }
+                    maxLength={
+                      /* Room for the spaces and hyphens people type, which are
+                         stripped on the server. A `maxLength` of the stored
+                         length would cut `123 456 789` off at the last digit
+                         and look like the box was broken. */
+                      field.kind === "tfn" || field.kind === "bsb"
+                        ? field.max + 4
+                        : field.max
+                    }
+                    autoComplete={field.autoComplete ?? "off"}
+                    aria-invalid={error ? true : undefined}
+                    disabled={busy}
+                  />
+                </Field>
+              ),
+            )}
+          </fieldset>
+        );
+      })}
+
+      {/* Form-level, for the same reason it is on the form above: the sentence
+          that comes back names the field it is about, so pinning it under an
+          input would attach it to whichever box happened to be last. */}
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button type="submit" loading={busy} disabled={!ready}>
+          {finishing ? "Save and finish" : "Save and carry on"}
+        </Button>
+        {/* Two facts, both of which somebody handing over a bank account is
+            entitled to before they press the button: it is encrypted, and it
+            does not go anywhere. The second is the one no other form in this
+            product has to say, and it is only sayable because it is true. */}
+        <span className="inline-flex items-center gap-1.5 text-xs text-text-subtle">
+          <Lock className="size-3.5" />
+          Encrypted, and only your employer can open it.
         </span>
       </div>
     </form>

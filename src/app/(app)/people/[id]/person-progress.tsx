@@ -40,10 +40,12 @@ import { NavStat } from "@/components/app-nav";
 import { cn } from "@/lib/cn";
 import {
   DETAILS_ENDPOINT,
+  PAYROLL_DETAIL_GROUPS,
   PERSONAL_DETAIL_GROUPS,
   type DetailLine,
   type JoinerField,
   type JoinerStep,
+  type PayrollDetailLine,
   type Session,
   type StepActor,
 } from "@/lib/craig/contract";
@@ -138,6 +140,18 @@ export interface PersonView {
    * rather than showing an empty panel.
    */
   details: Record<string, DetailLine[]>;
+  /**
+   * The same, for the payroll block, and separate for the same reason the two
+   * have separate envelopes: a step is one kind or the other, they mask by
+   * different rules, and which map a step id is in is what tells this page which
+   * headings and which words the panel gets.
+   *
+   * Masked on the server before it became this prop, exactly as above. Nothing
+   * in here is a bank account or a tax file number — the first is dots and its
+   * last three digits, and the second is dots and nothing else, with no length
+   * and no tail. See `maskPayroll` for why that one gets no tail at all.
+   */
+  payroll: Record<string, PayrollDetailLine[]>;
   /**
    * Why this deployment cannot open sealed answers, when it can't.
    *
@@ -457,6 +471,7 @@ export function PersonProgress({
         seat={{ checking, busy, onCheck: check }}
         details={{
           masked: person.details,
+          payroll: person.payroll,
           problem: person.sealingProblem,
           onOpen: details.open,
         }}
@@ -470,9 +485,27 @@ export function PersonProgress({
         onCancel={() => setConfirming(false)}
         onConfirm={remove}
       />
-      <DetailsDialog person={person} details={details} />
+      <SealedDialog person={person} details={details} />
     </>
   );
+}
+
+/**
+ * One line of either sealed block, as this page draws it.
+ *
+ * Deliberately structural rather than `DetailLine | PayrollDetailLine`. The
+ * panel below renders a list of labels and values under headings and has no
+ * business knowing which union a key came from; typing it as the union would
+ * make every `.filter` and `.map` in there carry a discriminant it never reads.
+ * Both contract types are assignable to this, which is the compiler checking
+ * that the two really do stay the same shape.
+ */
+interface SealedLine {
+  key: string;
+  group: string;
+  label: string;
+  value: string;
+  masked: boolean;
 }
 
 /**
@@ -493,7 +526,7 @@ export function PersonProgress({
 interface DetailsState {
   /** Which step's panel is open, by id. */
   stepId: string | null;
-  lines: DetailLine[] | null;
+  lines: SealedLine[] | null;
   loading: boolean;
   error: string | null;
   open: (stepId: string) => void;
@@ -503,7 +536,7 @@ interface DetailsState {
 
 function useDetails(joinerId: string): DetailsState {
   const [stepId, setStepId] = React.useState<string | null>(null);
-  const [lines, setLines] = React.useState<DetailLine[] | null>(null);
+  const [lines, setLines] = React.useState<SealedLine[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -534,7 +567,7 @@ function useDetails(joinerId: string): DetailsState {
       });
       const payload = (await response.json().catch(() => null)) as {
         ok?: boolean;
-        lines?: DetailLine[];
+        lines?: SealedLine[];
         error?: string;
       } | null;
 
@@ -644,6 +677,7 @@ interface SeatUi {
     read by the panel, not by the card. */
 interface DetailsUi {
   masked: Record<string, DetailLine[]>;
+  payroll: Record<string, PayrollDetailLine[]>;
   problem: string | null;
   onOpen: (stepId: string) => void;
 }
@@ -934,12 +968,12 @@ function Lead({
  * true, and worth nothing to whoever is making the name tag.
  */
 const ANSWER_LABEL: Record<
-  /* The fields whose whole answer fits on one line. Personal details does not
-     and never will — a dozen values do not go in a metric, and printing them
-     on a page somebody leaves open is the thing that block was built to avoid
-     — so it is excluded here and the compiler makes sure it has a branch of
-     its own rather than a label it would misuse. */
-  Exclude<JoinerField, "personal-details">,
+  /* The fields whose whole answer fits on one line. Neither sealed block does
+     and neither ever will — a dozen values do not go in a metric, and printing
+     them on a page somebody leaves open is the thing those blocks were built to
+     avoid — so both are excluded here and the compiler makes sure each has a
+     branch of its own rather than a label it would misuse. */
+  Exclude<JoinerField, "personal-details" | "payroll-details">,
   string
 > = {
   "middle-name": "is their middle name",
@@ -1051,6 +1085,12 @@ function toCard(step: JoinerStep, ctx: CardContext): WorkflowStep {
       return card;
     }
 
+    if (step.field === "payroll-details") {
+      dressPayroll(card, metrics, step, ctx);
+      card.metrics = metrics;
+      return card;
+    }
+
     if (done) {
       const value = answerOf(step);
       metrics.push({
@@ -1158,7 +1198,62 @@ function dressDetails(
 }
 
 /**
- * The panel, in its two states.
+ * The payroll details step, which is the other card on this page that shows no
+ * answer at all — and shows rather less of one than the identity card does.
+ *
+ * The masked panel behind the identity button still names what is in it: a
+ * count of fields. This one does the same, and the count is deliberately the
+ * only number on the card. What it must never do is put anything from the
+ * answer in a metric — not the bank, not the last digits of the account, and
+ * above all nothing about the tax file number, whose presence is not even
+ * hinted at here. A metric reading "TFN on file" would be a fact about a
+ * regulated identifier, printed on a status screen people leave open, in
+ * exchange for nothing.
+ *
+ * The description says where the details go, because on this block that is the
+ * thing an admin most needs to have understood: nowhere. Craig forwards none of
+ * this to a payroll provider, so an admin who does not open this panel and act
+ * on it is an admin whose new starter does not get paid.
+ */
+function dressPayroll(
+  card: WorkflowStep,
+  metrics: StepMetric[],
+  step: JoinerStep,
+  { first, details, tick }: CardContext,
+) {
+  const done = Boolean(step.completedAt);
+  const when = onDay(step.completedAt);
+  const masked = details.payroll[step.id];
+
+  if (!done) {
+    metrics.push({ value: first, label: "fills this in" });
+    card.description = `Waiting on ${first}. It's a form on their own screen — their bank account and tax details${
+      step.askSuperFund ? ", their super fund" : ""
+    } — and there's nothing here that can answer it for them.`;
+    return;
+  }
+
+  if (!masked) {
+    card.status = "blocked";
+    card.description =
+      details.problem ??
+      `${first} filled this in, and I can't open it. That means the key it was encrypted with has changed since they sent it — the answer is still there and nothing can read it, so it will have to be asked for again.`;
+    return;
+  }
+
+  metrics.push({ value: `${masked.length}`, label: "details, encrypted" });
+  if (when) metrics.push({ value: when, label: "sent" });
+  card.description = `${first} filled this in themselves. It's encrypted, and it isn't on this page — open it to read it. Nothing is sent to a payroll provider, so paying them is yours to do.`;
+  card.secondaryAction = {
+    label: "See their payroll details",
+    onClick: () => {
+      if (!tick.busy) details.onOpen(step.id);
+    },
+  };
+}
+
+/**
+ * The panel, in its two states, for whichever sealed block the open step is.
  *
  * Masked when it opens, and it opens masked *every time* — there is no "keep it
  * revealed" and no memory of the last time. Somebody who needs the bank details
@@ -1169,8 +1264,15 @@ function dressDetails(
  * whole design: the page it sits on has never held these values, so there is
  * nothing to un-blur, nothing in the HTML and nothing in a screenshot taken a
  * minute ago. Closing the panel throws the copy away again.
+ *
+ * **One dialog for both blocks**, and which one is decided by which map the open
+ * step id is in rather than by a prop. The alternative was two components with
+ * the same forty lines of list markup and two footnotes that would drift; what
+ * actually differs is a set of headings and three sentences, and those are the
+ * only things that branch below. A step is in exactly one of the two maps,
+ * because a step has exactly one field.
  */
-function DetailsDialog({
+function SealedDialog({
   person,
   details,
 }: {
@@ -1178,16 +1280,21 @@ function DetailsDialog({
   details: DetailsState;
 }) {
   const stepId = details.stepId;
-  const masked = stepId ? person.details[stepId] : undefined;
-  const lines = details.lines ?? masked ?? [];
+  const payroll = stepId ? person.payroll[stepId] : undefined;
+  const masked = payroll ?? (stepId ? person.details[stepId] : undefined);
+  const lines: SealedLine[] = details.lines ?? masked ?? [];
   const revealed = details.lines !== null;
   const first = person.name.split(" ")[0];
+  const isPayroll = Boolean(payroll);
+  const groups = isPayroll ? PAYROLL_DETAIL_GROUPS : PERSONAL_DETAIL_GROUPS;
 
   return (
     <Dialog
       open={Boolean(stepId && masked)}
       onClose={details.close}
-      title={`${first}'s personal details`}
+      title={
+        isPayroll ? `${first}'s payroll details` : `${first}'s personal details`
+      }
       description={
         revealed
           ? "Open on this screen now. It closes back to masked."
@@ -1209,7 +1316,7 @@ function DetailsDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        {PERSONAL_DETAIL_GROUPS.map((group) => {
+        {groups.map((group) => {
           const inGroup = lines.filter((line) => line.group === group.id);
           if (inGroup.length === 0) return null;
 
@@ -1254,14 +1361,32 @@ function DetailsDialog({
         )}
 
         {/* Said once, at the bottom, where somebody who has just read a
-            stranger's home address is looking. Not a warning — they are
-            entitled to it — but the reveal is written to the runtime log, and
-            people should be told that rather than find out. */}
+            stranger's home address or bank account is looking. Not a warning —
+            they are entitled to it — but the reveal is written to the runtime
+            log, and people should be told that rather than find out. */}
         <p className="text-xs leading-relaxed text-text-subtle">
           {first} gave these as part of their onboarding. They&apos;re encrypted
           where they&apos;re stored, and opening them here is noted in the
           server log.
         </p>
+
+        {/* Only on the payroll panel, and only once it has actually been
+            opened. Two obligations that fall on whoever just read the screen
+            rather than on this product: a tax file number may only be used to
+            work out withholding and may not be used to identify anybody, and it
+            is not supposed to be kept once there is no longer a reason to hold
+            it. Craig cannot enforce either — it has no payroll system and no
+            retention policy — so the least dishonest thing it can do is say so
+            to the one person who can. */}
+        {isPayroll && revealed && (
+          <p className="text-xs leading-relaxed text-text-subtle">
+            If a tax file number is in there: it&apos;s regulated separately
+            from everything else on this page. Use it to work out their
+            withholding and nothing else, don&apos;t paste it into email or
+            chat, and don&apos;t keep a copy anywhere you won&apos;t remember to
+            delete.
+          </p>
+        )}
       </div>
     </Dialog>
   );

@@ -46,7 +46,10 @@ import type { BlockKind, WorkflowBlock } from "@/components/ui";
    safe for a module the block picker pulls into the browser. */
 import {
   EMERGENCY_CONTACT_EXTRA,
+  PAYROLL_DETAILS_EXTRAS_FIELD,
   PERSONAL_DETAILS_EXTRAS_FIELD,
+  SUPER_FUND_EXTRA,
+  TAX_FILE_NUMBER_EXTRA,
 } from "@/lib/craig/contract";
 
 /**
@@ -314,53 +317,89 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         ],
       },
       /*
-       * Kept whole, and deliberately not trimmed now that `personal-details`
-       * below collects the identity half of it. This one is unwired — it is
-       * not in `SHOWCASE_PRESETS`, so the picker greys it out and no workflow
-       * holds a config for it — and the honest move when somebody does wire it
-       * is to *drop* `legal-name`, `address`, `emergency` and `dob` from the
-       * options here and leave it as bank and tax. The argument for that split
-       * is written out on `personal-details`; the argument for not doing it
-       * today is that editing a preset nobody can pick, to tidy a duplication
-       * nobody can hit, is a change with a merge conflict and no user.
+       * The financial half, and only the financial half.
+       *
+       * **What it shed, and why the note above it is gone.** This preset used to
+       * claim "legal name, address, bank and tax details, emergency contact" —
+       * the whole of the paperwork in one card — and `personal-details` below
+       * left a note saying that whoever wired this one should drop the identity
+       * fields rather than ask for them twice. That has now happened. A person
+       * asked for their legal name twice in one onboarding has learned something
+       * true about how joined-up the company is, and the two halves were never
+       * the same kind of thing: identity is facts about a person, and this is
+       * instructions about money, where being wrong costs somebody a pay cycle
+       * rather than a re-typed form.
+       *
+       * **What went with it: the "Payroll system" select.** It offered Deel,
+       * Remote, Gusto and "Spreadsheet, for now", and every one of those answers
+       * produced identical behaviour — because Craig has never forwarded
+       * anything to a payroll provider and, by Dzaky's decision, will not. A
+       * required field whose every option means the same thing is not a setting;
+       * it is a claim about the product, made in a control the admin has to fill
+       * in before they can publish. Somebody who picks Deel there has been told
+       * their new starter's bank details are going to Deel. They aren't. The
+       * whole of what happens is that an administrator opens the person's page,
+       * presses Reveal, and pays them from their own banking app — which the
+       * block's `note` now says, where they are choosing.
+       *
+       * **And `WHO_PROVISIONS`.** Every account preset carries it because
+       * somebody has to go and create the account; nothing is provisioned here.
+       * This is a form the new starter fills in, so an owner field would be a
+       * required control that changes nothing and holds Publish shut — the same
+       * objection the trio above makes about setup fields in general.
+       *
+       * **The one setup field it keeps** is the same shape as the identity
+       * block's and for the same reason: it changes *what the new starter is
+       * asked* rather than what the admin has to supply, so it is not an inert
+       * control — and it is optional, so a workflow with this block on it is
+       * Ready the moment it lands. The bank account is not on it, because there
+       * is no version of this block that does not need one.
+       *
+       * **The id is load-bearing.** `JOINER_FIELD_BY_PRESET` keys off this exact
+       * string to decide which form the new starter is shown, and
+       * `PAYROLL_DETAILS_EXTRAS_FIELD` names the setup field below so the invite
+       * route can find the ticks. It kept the old id deliberately: the block is
+       * the same idea, narrowed.
        */
       {
         id: "payroll-details",
-        label: "Personal & payroll details",
+        label: "Payroll details",
         description:
-          "Legal name, address, bank and tax details, emergency contact.",
+          "Bank account, tax and super. They fill it in themselves, and it's encrypted.",
         kind: "document",
         icon: Badge,
-        title: "Personal and payroll details",
-        summary: "Collected once, before the first pay run",
+        title: "Provide your payroll details",
+        summary: "Bank account and tax details, before the first pay run",
+        /* Fixed behaviour, said out loud where the admin is choosing — both
+           halves of it. The first sentence is the same promise the identity
+           block makes. The second is the one this block has to make and that
+           one doesn't: there is no integration behind this, and an admin who
+           assumed otherwise would find out on payday. */
+        note: "Encrypted the moment they send it. Nothing is sent to a payroll provider — you read the details here and pay them yourself.",
         setup: [
           {
-            id: "fields",
-            label: "What to collect",
+            id: PAYROLL_DETAILS_EXTRAS_FIELD,
+            label: "Also ask for",
             kind: "multiselect",
+            hint: "Only tick what you actually need to hold",
             options: [
-              { id: "legal-name", label: "Legal name" },
-              { id: "address", label: "Home address" },
-              { id: "bank", label: "Bank / payment details" },
-              { id: "tax", label: "Tax details" },
-              { id: "emergency", label: "Emergency contact" },
-              { id: "dob", label: "Date of birth" },
+              { id: SUPER_FUND_EXTRA, label: "Super fund details" },
+              {
+                id: TAX_FILE_NUMBER_EXTRA,
+                /* The label carries the warning, because this is the last
+                   screen before somebody decides to collect a number that is
+                   regulated under the Privacy (Tax File Number) Rule 2015 and
+                   whose misuse is an offence under the Taxation Administration
+                   Act — not a privacy incident, an offence. The recommendation
+                   is not to: Craig runs no payroll and files nothing with the
+                   ATO, so the purpose that authorises collecting a TFN isn't
+                   one this product performs, and the employer still has to
+                   obtain it on a TFN declaration regardless. The full argument
+                   is in `payroll-details.ts`. */
+                label: "Tax file number — regulated, and Craig can't use it",
+              },
             ],
-            required: true,
           },
-          {
-            id: "system",
-            label: "Payroll system",
-            kind: "select",
-            options: [
-              { id: "deel", label: "Deel" },
-              { id: "remote", label: "Remote" },
-              { id: "gusto", label: "Gusto" },
-              { id: "manual", label: "Spreadsheet, for now" },
-            ],
-            required: true,
-          },
-          WHO_PROVISIONS,
         ],
       },
       /*
@@ -442,12 +481,18 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
        * somebody a pay cycle rather than a re-typed form.
        *
        * So this block takes the identity half, whole, and takes nothing else.
-       * No bank account, no tax file number, no super fund — the later payroll
-       * block does the financial half, against whichever provider it ends up
-       * talking to, and it will read this block's answers rather than asking
-       * for a legal name a second time. A person asked for their legal name
-       * twice in one onboarding has learned something true about how joined-up
-       * the company is.
+       * No bank account, no tax file number, no super fund — `payroll-details`
+       * above does the financial half, and it has since been trimmed to exactly
+       * that: it asks for no legal name, no address and no date of birth,
+       * because this block already holds them. A person asked for their legal
+       * name twice in one onboarding has learned something true about how
+       * joined-up the company is.
+       *
+       * What that block turned out *not* to be is a step on the way to a
+       * payroll integration. There isn't one and there won't be — so it
+       * collects, seals and shows, and somebody pays the person from their own
+       * banking app. The identity half is unaffected by that; it is noted here
+       * only because the sentence this paragraph replaced promised a provider.
        *
        * **The one setup field, and why it isn't the objection the trio above
        * makes.** Those three have no setup at all, on the argument that an
@@ -1584,6 +1629,7 @@ export const SHOWCASE_PRESETS = new Set<string>([
   "name-tag",
   "date-of-birth",
   "personal-details",
+  "payroll-details",
   GOOGLE_WORKSPACE_PRESET,
 ]);
 
