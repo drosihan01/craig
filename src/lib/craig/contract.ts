@@ -624,6 +624,16 @@ export interface Joiner {
 export const JOIN_PATH = "/join";
 /** The new starter's own screen, once the link has been accepted. */
 export const JOINER_HOME = "/me";
+/**
+ * Where a new starter asks Craig, as its own room rather than a panel.
+ *
+ * A route rather than a drawer because it is a nav destination now: the joiner
+ * gets the product's own shell, and a shell's nav points at addresses. It also
+ * means the conversation survives a reload and can be linked to, neither of
+ * which a panel managed.
+ */
+export const JOINER_ASK_PATH = "/me/ask";
+
 /** Separate from the admin's cookie: they are different people, possibly at once. */
 export const JOINER_COOKIE = "craig_joiner";
 

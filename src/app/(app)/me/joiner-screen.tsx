@@ -3,21 +3,21 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  AppShell,
   Badge,
   Button,
   Callout,
-  CraigLockup,
   CraigMark,
   DatePicker,
   EmptyState,
   Field,
   Input,
   Progress,
-  ThemeToggle,
   toISODate,
 } from "@/components/ui";
 import { Check, DoneAll, Schedule } from "@/components/ui/icons";
-import { JoinerCraig } from "@/components/craig/joiner-craig";
+import { NavStat } from "@/components/app-nav";
+import { JoinerNav, JoinerNavRail } from "@/components/craig/joiner-nav";
 import { cn } from "@/lib/cn";
 import type { JoinerField, StepActor } from "@/lib/craig/contract";
 
@@ -212,47 +212,33 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
   const shared = steps.some((step) => step.actor !== "joiner");
 
   return (
-    <main className="min-h-screen bg-canvas">
-      {/* Two columns on a wide screen: the plan, and Craig beside it.
-          He was a section under the plan until Dzaky asked for a panel, and
-          the panel is better for a reason the stacked version obscured — a
-          conversation and a checklist have different lifetimes. You read the
-          plan once and act on one step; you come back to him between steps.
-          Stacked, every question meant scrolling past everything you had
-          already read; beside it, both are on screen at once.
+    /* The product's own frame, with a nav holding two rows.
 
-          Built as a **column of the page** rather than a card floating in the
-          margin, which is the second thing Dzaky asked for and the one that
-          decides whether it reads as its own space. `AppShell`'s aside — the
-          builder's Craig — is a full-height column with a rule down its edge
-          and its own surface, and a card with rounded corners beside a plan is
-          a widget by comparison. This screen cannot use `AppShell` (there is
-          no nav: nowhere else for this person to go), so it borrows the
-          treatment rather than the component.
+       This screen used to build its own shell: a bare `<main>`, a hand-made
+       header with the lockup and the theme toggle in it, and a comment arguing
+       that a nav would be "a navigation bar that navigates nowhere". That was
+       true while `/me` was the only place a new starter could be. It stopped
+       being true when Craig became a room of his own, and the honest fix was
+       not a third bespoke layout but the shell every other screen already uses.
 
-          The right side, not the left, because that is Craig's seat everywhere
-          else in the product, and a person who later becomes an admin should
-          find him where they left him. The plan keeps the wider column: it is
-          still the thing with a deadline on it, and the panel being narrower is
-          what keeps answering a question from looking like the first task.
-
-          Below `lg` the column collapses and he returns to exactly where he
-          was — under the plan, above the way out. */}
-      <div className="lg:grid lg:min-h-screen lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
-        {/* The column is full-height; its *contents* are not full-width. Losing
-            the max-width when this became a column let the plan run the whole
-            1200px, and a checklist read across that distance is a paragraph you
-            lose your place in. Centred in the column so the page still balances
-            when the window is wider than the two of them need. */}
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-5 pb-16 pt-6 sm:px-8 lg:px-10 lg:py-10">
-        {/* The mark and the theme switch, and nothing else. There is nowhere
-            else for this person to go, so a header with links in it would be a
-            navigation bar that navigates nowhere. */}
-        <div className="flex items-center justify-between gap-3">
-          <CraigLockup className="text-text-muted" />
-          <ThemeToggle />
-        </div>
-
+       No `account` prop, so no account cell — `AppShell`'s is wired to Settings
+       and to a Sign out that clears the *admin's* cookie, and for a joiner both
+       would be controls that look like they work and do nothing. The reasoning
+       lives in `joiner-nav.tsx` with the nav it belongs to. */
+    <AppShell
+      title="Your tasks"
+      navRail={<JoinerNavRail />}
+      nav={
+        <JoinerNav>
+          {total > 0 && (
+            <div className="flex flex-col gap-1 px-1">
+              <NavStat label="Your part" value={`${done}/${total}`} />
+            </div>
+          )}
+        </JoinerNav>
+      }
+    >
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 py-10">
         <header className="flex flex-col gap-3 pt-4">
           <CraigMark className="size-9 text-accent" />
           <h1 className="text-3xl font-semibold tracking-[-0.02em]">
@@ -393,34 +379,15 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
               else typed — so the last line is a route back to a human rather
               than a legal notice about why they are receiving this. Craig
               beside it does not replace it: he can answer questions and change
-              nothing.
-
-              Inside the plan's column rather than spanning both, now that the
-              panel is a full-height column: a line running under a column that
-              reaches the bottom of the window has nothing to sit under. */}
-          <p className="text-xs leading-relaxed text-text-subtle">
-            You&apos;re seeing this because {company} gave you a seat. If
-            something here looks wrong, reply to the email that brought you — it
-            reaches a person.
-          </p>
-        </div>
-
-        {/* His column. The rule down the left edge and the panel surface are
-            what `AppShell` gives the builder's aside, and they are the whole
-            difference between a room and a widget.
-
-            `overflow` is deliberately not on this element. Making it a scroll
-            container would make it the scrollport for the sticky child inside,
-            which would then offset by `top` once and never stick again — the
-            same trap `app-shell.tsx` documents at length. This owns the edge;
-            the inner element owns sticking and scrolling. */}
-        <div className="border-border bg-surface lg:h-full lg:border-l">
-          <div className="lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-            <JoinerCraig firstName={firstName} />
-          </div>
-        </div>
+              nothing — and he is a nav row away now rather than beside this,
+              which makes the distinction easier to read rather than harder. */}
+        <p className="text-xs leading-relaxed text-text-subtle">
+          You&apos;re seeing this because {company} gave you a seat. If
+          something here looks wrong, reply to the email that brought you — it
+          reaches a person.
+        </p>
       </div>
-    </main>
+    </AppShell>
   );
 }
 
