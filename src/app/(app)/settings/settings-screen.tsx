@@ -11,6 +11,7 @@ import {
   NavRail,
   NavRailItem,
   Separator,
+  ThemeToggle,
 } from "@/components/ui";
 import { ArrowBack } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
@@ -104,6 +105,10 @@ export function SettingsScreen({
         <Separator />
 
         <AccountSection user={user} />
+
+        <Separator />
+
+        <AppearanceSection />
 
         <Separator />
 
@@ -359,6 +364,46 @@ function IntegrationsSection({
           }}
           outcome={outcome}
         />
+      </div>
+    </section>
+  );
+}
+
+/* --- Appearance ------------------------------------------------------------ */
+
+/**
+ * The theme switch, in the one room it belongs in.
+ *
+ * It used to sit in the header of every screen in the product, in the far
+ * corner — the most valuable piece of chrome there is — for a preference
+ * somebody sets roughly once and then never touches. The corner now holds
+ * notifications, which are about work waiting for you and are a reason to look
+ * back at it.
+ *
+ * Labelled rather than a bare icon, because the header gave it context by
+ * position and a settings page has to give it context in words. The control
+ * itself is the same component, so the two cannot drift: sign-in and sign-up
+ * still carry one, since somebody who cannot get in cannot reach this page.
+ */
+function AppearanceSection() {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <h2 className="text-xl font-semibold tracking-[-0.01em]">Appearance</h2>
+        <p className="text-md leading-relaxed text-text-muted">
+          Light or dark. Remembered on this device rather than on the account,
+          so it follows the machine you are sitting at.
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-4 py-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-md font-medium">Theme</span>
+          <span className="text-sm text-text-muted">
+            Follows your system until you change it here.
+          </span>
+        </div>
+        <ThemeToggle />
       </div>
     </section>
   );

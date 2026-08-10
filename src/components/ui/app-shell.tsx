@@ -18,7 +18,6 @@ import { CraigMark } from "./craig-mark";
 import { NotificationBell, type AppNotification } from "./notifications";
 import { DropdownMenu } from "./dropdown";
 import { DialogClose } from "./dialog";
-import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/cn";
 
 /**
@@ -359,14 +358,15 @@ export function AppShell({
           {/* Right cell — the app's own controls, never the page's. Tracks the
               details column's width, same rule. The panel's toggle sits hard
               left, against the rule it actually moves, mirroring the nav
-              toggle in the brand cell; theme and notifications take the far
-              corner.
+              toggle in the brand cell; notifications take the far corner.
 
-              Theme lives here rather than in the centre because it belongs to
-              the app, not to the workflow you happen to be looking at — and
-              because with it out of the way the centre cell's actions can go
-              hard right, which is where you look for them. Collapse the panel
-              and it's three icons, which is a corner, not a toolbar. */}
+              The theme switch used to live here and has moved to Settings. It
+              is a preference set roughly once, and it was holding the most
+              valuable corner of every screen in the product — while the bell,
+              which is about work waiting for you, appeared on two screens and
+              read hardcoded demo rows on both. The corner now holds the thing
+              you would come back to it for. Sign-in and sign-up keep their own
+              switch: somebody who cannot get in cannot reach Settings. */}
           <div
             className={cn(
               "flex shrink-0 items-center gap-1 pl-2 pr-4 lg:border-l lg:border-dotted lg:border-border",
@@ -386,14 +386,12 @@ export function AppShell({
                   onClick={() => setDrawer("aside")}
                 />
               ))}
-            <ThemeToggle className="ml-auto shrink-0" />
-
             {notifications && (
               <NotificationBell
                 items={notifications}
                 onSelect={onNotificationSelect}
                 onMarkAllRead={onMarkAllRead}
-                className="shrink-0"
+                className="ml-auto shrink-0"
               />
             )}
           </div>

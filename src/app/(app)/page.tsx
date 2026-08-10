@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { WELCOME_PATH } from "@/lib/craig/contract";
 import { requireUser } from "@/lib/craig/current-user";
+import { listDocuments } from "@/lib/craig/documents";
 import { subscriptionFor } from "@/lib/craig/accounts";
 import { listJoiners } from "@/lib/craig/joiners";
 import { listWorkflows } from "@/lib/craig/workflows";
 import { seatEntitlement } from "@/lib/craig/seats";
-import { outstandingFor } from "@/lib/craig/outstanding";
+import { asNotifications, outstandingFor } from "@/lib/craig/outstanding";
 import { HomeScreen } from "./home-screen";
 
 /**
@@ -37,10 +38,14 @@ import { HomeScreen } from "./home-screen";
 export default async function Home() {
   const user = await requireUser();
 
-  const [workflows, joiners, subscription] = await Promise.all([
+  const [workflows, joiners, subscription, documents] = await Promise.all([
     listWorkflows(user.email),
     listJoiners(user.email),
     subscriptionFor(user.email),
+    /* Counted here beside the other two rather than on the Resources screen,
+       because this is the screen that reports what the account *is*. Read in
+       the same `Promise.all` so all four numbers describe one moment. */
+    listDocuments(user.email),
   ]);
 
   /* Only while there is genuinely nothing. The moment Craig drafts something
@@ -60,6 +65,8 @@ export default async function Home() {
       outstanding={outstanding}
       workflowCount={workflows.length}
       peopleCount={joiners.length}
+      documentCount={documents.length}
+      notifications={asNotifications(outstanding)}
     />
   );
 }
