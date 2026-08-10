@@ -13,7 +13,6 @@ import {
   SegmentedControl,
   Separator,
   Textarea,
-  type AppNotification,
 } from "@/components/ui";
 import { Mail, Warning } from "@/components/ui/icons";
 import { NEW_HIRE } from "@/lib/demo";
@@ -38,16 +37,6 @@ import { NavStat } from "@/components/app-nav";
  * checking that what you typed reads like something a person would send, and
  * that's not a thing you can do from a form alone.
  */
-
-const NOTIFICATIONS: AppNotification[] = [
-  {
-    id: "e1",
-    kind: "info",
-    title: "Nothing has been sent yet",
-    description: "No workflow is published, so no email has gone anywhere.",
-    timestamp: new Date(Date.now() - 20 * 60_000),
-  },
-];
 
 export function EmailScreen({
   user,
@@ -81,7 +70,6 @@ export function EmailScreen({
     <AppShell
       title="Email"
       nav={<EmailNav selectedId={selectedId} onSelect={setSelectedId} />}
-      notifications={NOTIFICATIONS}
       account={{ name: user.name, email: user.email }}
       asideTitle="Merge fields"
       aside={<EmailAside template={template} />}
