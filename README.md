@@ -1,56 +1,124 @@
 # craig
 
-Onboarding workflow builder. An admin composes a workflow once; every new
-starter in that role gets walked through it.
+Craig is an onboarding agent. An admin describes their company to him in
+conversation; he finds the parts nobody wrote down, drafts a workflow out of it,
+and then runs the half of it that can be automated. A new starter gets a link,
+a checklist, and Craig himself to ask.
 
-Two seats:
+**Live at [craig-alpha.vercel.app](https://craig-alpha.vercel.app).**
 
-- **Admin** — build and publish onboarding workflows: ordered steps, owners,
-  due dates relative to the start date.
-- **New starter** — work through the assigned workflow, one stage at a time.
+Two seats, and they are genuinely two products:
 
-## Status
-
-Front-end only, pre-MVP. What exists today is the design system at
-[`/design-system`](http://localhost:3000/design-system) — the primitives both
-seats will be built from.
+- **Admin** — signs up, talks to Craig, publishes workflows, invites people,
+  connects Google Workspace, uploads documents, pays for seats.
+- **New starter** — arrives on a magic link with no account and no password,
+  works through their checklist, reads what the company shared, and asks Craig
+  questions about their own onboarding.
 
 ## Running it
 
 ```bash
 npm install
-npm run dev     # http://localhost:3000
+npm run dev          # http://localhost:3000
 ```
-
-`/` redirects to `/design-system` until there's an app to land on.
 
 ```bash
-npm run build   # production build
+npm run build        # production build
 npm run lint
-npx tsc --noEmit
+npx next typegen && npx tsc --noEmit
 ```
+
+`next typegen` matters: `PageProps` and `LayoutProps` are **generated** globals
+that live in `.next/types`. Delete `.next` and `tsc` reports nine errors that
+look like a broken branch and are a missing cache. Typegen regenerates them in
+about a second, which is also the fast way to typecheck — a full build takes
+minutes and catches the same type errors.
+
+Environment variables are documented in [`.env.example`](.env.example). Without
+Supabase and OpenAI keys the app builds and starts but cannot sign anybody in or
+answer anything.
+
+## Routes
+
+**Admin** (all behind a session, guarded per page — the proxy is a matcher, not
+a wall): `/` home · `/people` · `/people/[id]` · `/workflows` ·
+`/workflows/[id]` the builder · `/resources` documents · `/settings` ·
+`/welcome` first run · `/sign-in` · `/sign-up`
+
+**New starter** (magic link, no account): `/join` accepts the link and sets a
+cookie · `/me` their checklist, Craig, and anything shared with them
+
+**API**: `/api/chat`, `/api/joiner/chat`, `/api/documents/*`,
+`/api/joiner/documents/[id]`, `/api/google/*`, `/api/joiner/link`,
+`/api/showcase/*`
+
+`/api/showcase/*` is deliberately not renamed with the rest: Stripe holds
+`/api/showcase/billing/webhook` in its dashboard, so renaming it is a
+coordinated change with an external system rather than a tidy-up.
+
+## Stack
+
+Next.js 16 (App Router) · React 19 · Tailwind v4 · TypeScript · Supabase
+(Postgres, Storage, Auth) · OpenAI Agents SDK · Stripe · Resend · Google
+Workspace Admin SDK.
+
+**No SDKs for integrations.** Google, Stripe and Resend are all `fetch` +
+`URLSearchParams` + `crypto.subtle`. Supabase is the one argued exception, on
+auth cookie and refresh safety.
 
 ## Layout
 
 ```
 src/
   app/
-    globals.css          token layer — palette → semantics → Tailwind theme
-    design-system/       the browsable showcase, running on AppShell
-    sign-in/             auth screen
-  components/ui/         the design system itself
-    icons.tsx            generated — do not hand-edit
-  lib/cn.ts              clsx + tailwind-merge
-public/fonts/            Google Sans Flex, self-hosted (see README)
-scripts/gen-icons.py     vendors Material Symbols into components/ui/icons.tsx
+    (app)/               the product — a route group, so it can keep its own
+                         layout without colliding with the root one
+    api/                 route handlers; each is its own front door
+  components/
+    ui/                  the design system
+      icons.tsx          generated — do not hand-edit
+    craig/               product components
+  lib/
+    craig/               the domain: agents, prompts, stores, contract
+    google/ stripe/ email/ supabase/   integrations, no SDKs
+    workflow/library.ts  the block library the builder offers
+  archive/               the pre-Craig demos. In git, compiled by nothing,
+                         served to nobody — outside the router on purpose
+  proxy.ts               Next 16 middleware
+docs/building-a-block.md the brief for adding an integration block
 ```
 
-Routes: `/` (admin home), `/builder` (the workflow builder), `/design-system`
-(the showcase), `/sign-in`.
+## How it fits together
+
+**Two agents, not one with a flag.** `lib/craig/craig-agent.ts` is the admin's
+Craig and carries ten tools that write to workflows and record what he learns.
+`lib/craig/joiner-agent.ts` is the new starter's Craig and carries **one**, a
+document search. That is the access boundary: the tools are what reach the
+employer's data, and a flag that gates them is one refactor away from not
+gating them. A joiner's context is assembled by an allowlist from their own
+record, so a column added to that record later never travels by accident.
+
+**Blocks are rows, not branches.** `lib/craig/blocks.ts` says what each
+integration block needs — which connection, what it produces, what to tell
+somebody when it is not set up. The workflow editor asks it rather than naming
+providers, so adding a block does not mean teaching the editor about it. See
+[`docs/building-a-block.md`](docs/building-a-block.md).
+
+**Documents default to private.** Sharing one with new starters is a separate,
+deliberate act on `/resources`. The rule lives in one column and one SQL
+function, and the joiner-facing code takes a *person* rather than a document id,
+so there is no argument a caller could pass that widens it.
+
+**RLS is deny-all on purpose.** Every table has row-level security on and zero
+policies; all access is the Next server holding the secret key. Policies become
+necessary the day a browser talks to Supabase directly, and today none does.
+
+**State the server can't verify is not trusted.** Sessions and joiner links are
+HMAC-signed and re-checked against the store on every read — a signed cookie
+outlives the thing it names, so a valid signature proves the server issued it
+and nothing about whether that person still has a seat.
 
 ## Design system
-
-Next.js 16 (App Router) · React 19 · Tailwind v4 · TypeScript.
 
 Tokens are layered in `src/app/globals.css`:
 
@@ -69,57 +137,41 @@ Notable choices:
   tan end of the ramp and flips the foreground, keeping the accent's role and
   warmth at both ends.
 - **Base type is 14px**, not 16. App density.
-- **One variable font.** Google Sans Flex, self-hosted, covering 100–1000 from
-  a single 51KB file. Stick to three weights (200/400/600) anyway — the
-  constraint is what keeps the UI legible.
-- **Icons are vendored, not installed.** ~16 Material Symbols (Rounded) inlined
-  as SVG by `scripts/gen-icons.py`, so there's no runtime dependency and no
+- **One variable font.** Google Sans Flex, self-hosted, covering 100–1000 from a
+  single 51KB file. Stick to three weights (200/400/600) anyway — the constraint
+  is what keeps the UI legible.
+- **Icons are vendored, not installed.** Material Symbols (Rounded) inlined as
+  SVG by `scripts/gen-icons.py`, so there's no runtime dependency and no
   thousand-file package. Add one by editing the `ICONS` map and re-running it.
-- **`WorkflowProgress`** renders each stage as a card rather than a row, with a
-  metrics line and an action footer. The connector is dashed inside a card and
-  solid across the gap between cards, so the thread reads as continuous without
-  cutting through content.
-- **Selection controls are native inputs** under the hood — keyboard, form
-  submission and screen-reader behaviour come free; visuals are drawn by a
-  sibling driven off `peer`.
-- **`TASK_STATUS`** (`components/ui/badge.tsx`) is the single definition of the
-  workflow state machine. Both seats read from it so they can't drift apart.
-  It should move to a domain module once one exists.
-- **`AppShell` is the product frame, and the design system runs on it** rather
-  than a bespoke layout — if the frame breaks, it breaks here first. Both
-  panels collapse and persist; the left toggle sits in the brand cell, on the
-  edge it moves. One vertical rule runs from the top of the header to the
-  bottom of the page, so the brand cell and the nav column must stay the same
-  width.
-- **The chat model choice is a data boundary, not a preference.** Craigopilot
-  is in-house and the default and is the only model that sees company data;
-  Claude and GPT are hosted, so anything sent to them leaves the tenancy. The composer states which regime you're in. **This has to be
-  enforced in the API layer — the label is not the control.**
-- **No date library.** Onboarding only needs "pick a day", so `Calendar` uses
-  `Date` + `Intl`. All maths is local-time: a UTC-based `Date` lands on the
-  wrong day for anyone east of Greenwich, which is most of this product's
-  users. Use `toISODate`, never `toISOString`.
 - **The workflow builder is one vertical column, not a canvas.** A free canvas
   would let an admin draw a shape that doesn't correspond to any execution
-  order; a single column can only express what the engine can actually run.
-  The trigger is structural — exactly one, always first, not movable or
-  deletable — and steps are inserted *between* blocks from the connector rather
-  than dragged in from a palette.
+  order; a single column can only express what the engine can actually run. The
+  trigger is structural — exactly one, always first, not movable or deletable.
 - **Panels never carry `overflow: hidden`.** That makes an element a scroll
   container, which then becomes the scrollport for any `sticky` child — the
   child offsets by its `top` immediately and never sticks, because that
   container doesn't scroll. In `AppShell` the `<aside>` owns width (and so the
   collapse animation) and an inner sticky wrapper owns clipping.
+- **Selection controls are native inputs** under the hood — keyboard, form
+  submission and screen-reader behaviour come free; visuals are drawn by a
+  sibling driven off `peer`.
 - **Toasts and notifications are different jobs.** A toast confirms what just
   happened and disappears; a notification persists because it's something the
-  user still has to act on. A missed toast is gone — so anything *owed* to
-  someone belongs in the feed, never in a toast. The panel also never marks
-  anything read on its own: "I opened the list" is not "I dealt with it", and
-  clearing the badge on open destroys the one signal saying an approval is
-  still outstanding.
+  user still has to act on. Anything *owed* to someone belongs in the feed,
+  never in a toast.
+- **No date library.** Onboarding only needs "pick a day", so `Calendar` uses
+  `Date` + `Intl`. All maths is local-time: a UTC-based `Date` lands on the
+  wrong day for anyone east of Greenwich, which is most of this product's users.
+  Use `toISODate`, never `toISOString`. Dates are formatted on the server for
+  the same reason — an ISO instant formatted during render is formatted twice,
+  in two timezones, and either side of midnight those are different days.
+- **The model picker is a data boundary, not a preference.** Where a route is
+  fixed to one model there must be no picker: a control the server ignores is
+  the one control that must never ship. `PromptBar` defaults it *on*, so
+  surfaces that don't want it have to say so.
 - **Auth components render and validate shape, nothing else.** Auth belongs on
-  the server; a component that "signs you in" in the browser is a component
-  that lies. `/sign-in` has no backend behind it yet.
+  the server; a component that "signs you in" in the browser is a component that
+  lies.
 
 ## Fonts and icons
 
@@ -134,8 +186,3 @@ by `scripts/gen-icons.py`. To add an icon, add it to the `ICONS` map and run:
 ```bash
 python3 scripts/gen-icons.py
 ```
-
-Facebook's [astryx](https://github.com/facebook/astryx) was evaluated first —
-it ships an `Icon` component and registry, but its own icons are explicitly
-minimal fallbacks, and its docs point you at a real icon library. Hence
-Material.
