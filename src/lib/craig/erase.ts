@@ -128,6 +128,174 @@ export async function eraseJoiner(
   };
 }
 
+/* --- The whole account ----------------------------------------------------- */
+
+const DOCUMENTS_BUCKET = "documents";
+const LOGO_BUCKET = "logos";
+
+/**
+ * What happened, or why nothing did.
+ *
+ * A refusal is a result rather than an exception because there is exactly one
+ * reason to refuse and the caller has to show it to somebody — an error would
+ * make the ordinary case look like a fault.
+ */
+export type AccountErasure =
+  | {
+      ok: true;
+      email: string;
+      joiners: number;
+      documents: number;
+      workflows: number;
+      threads: number;
+      files: number;
+      /** True when the sign-in was removed too. */
+      signInRemoved: boolean;
+      /** Google was connected; the grant itself still needs revoking by them. */
+      googleStillGranted: boolean;
+    }
+  | { ok: false; reason: string; subscriptionId?: string };
+
+/**
+ * Erase an account and everything under it.
+ *
+ * The cascade does the relational half — joiners, their steps and sealed
+ * answers, workflows, threads, messages, documents, connections, the notebook.
+ * This function exists for the three things it cannot do.
+ *
+ * **Storage, in three buckets.** Signed contracts, uploaded documents and the
+ * company logo are all files with a column pointing at them, and a cascade
+ * reaches none of them. Same order as `eraseJoiner` and for the same reason:
+ * objects first, rows second.
+ *
+ * **The sign-in.** GoTrue holds the other half of an account. Deleting the row
+ * and leaving the auth user makes that email address permanently taken by a
+ * user whose account does not exist — they cannot sign in and cannot sign up
+ * again. `clearAccounts` learned this the same way.
+ *
+ * **Billing, which is why this can refuse.** A live subscription is a
+ * standing instruction at Stripe, and deleting rows here does not touch it:
+ * the charges keep arriving, now with nothing on our side connecting them to
+ * anything. Cancelling it from here would be this function reaching into an
+ * external system and taking somebody's money decision for them, so it does
+ * neither — it stops and says what has to happen first. That is the honest
+ * order anyway: cancel, then erase.
+ */
+export async function eraseAccount(email: string): Promise<AccountErasure> {
+  const address = email.trim().toLowerCase();
+  const client = db();
+
+  const { data: account, error: accountError } = await client
+    .from("accounts")
+    .select("id, owner_id, logo_path")
+    .eq("email", address)
+    .maybeSingle();
+
+  if (accountError)
+    throw new Error(`Finding the account failed: ${accountError.message}`);
+  if (!account) return { ok: false, reason: "There's no account on that address." };
+
+  /* Billing first, before anything is touched. A refusal after the files have
+     gone is not a refusal. */
+  const { data: subscription } = await client
+    .from("subscriptions")
+    .select("subscription_id, status")
+    .eq("account_id", account.id)
+    .maybeSingle();
+
+  const live =
+    subscription &&
+    subscription.status !== "canceled" &&
+    subscription.status !== "incomplete_expired";
+
+  if (live) {
+    return {
+      ok: false,
+      reason:
+        "There's still a live subscription on this account. Cancel it at Stripe first — deleting the account here would not stop the billing, it would only remove the record of what the billing was for.",
+      subscriptionId: subscription.subscription_id ?? undefined,
+    };
+  }
+
+  /* Every path, read while the rows that hold them still exist. */
+  const [{ data: signings }, { data: documents }, { data: joiners }, { data: workflows }, { data: threads }, { data: google }] =
+    await Promise.all([
+      client
+        .from("contract_signings")
+        .select("signed_storage_path")
+        .eq("account_id", account.id),
+      client.from("documents").select("storage_path").eq("account_id", account.id),
+      client.from("joiners").select("id").eq("account_id", account.id),
+      client.from("workflows").select("id").eq("account_id", account.id),
+      client.from("threads").select("id").eq("account_id", account.id),
+      client.from("connections").select("id").eq("account_id", account.id),
+    ]);
+
+  const signedPaths = (signings ?? [])
+    .map((row) => row.signed_storage_path)
+    .filter((path): path is string => Boolean(path));
+  const documentPaths = (documents ?? [])
+    .map((row) => row.storage_path)
+    .filter((path): path is string => Boolean(path));
+  const logoPaths = account.logo_path ? [account.logo_path] : [];
+
+  /* Each bucket separately — `remove` is per-bucket, and a single list of
+     paths across three of them is a silent no-op for two of them. */
+  const removals: Array<[string, string[]]> = [
+    [SIGNED_BUCKET, signedPaths],
+    [DOCUMENTS_BUCKET, documentPaths],
+    [LOGO_BUCKET, logoPaths],
+  ];
+
+  for (const [bucket, paths] of removals) {
+    if (paths.length === 0) continue;
+    const { error } = await client.storage.from(bucket).remove(paths);
+    if (error)
+      throw new Error(
+        `Files in "${bucket}" could not be removed, so nothing was deleted: ${error.message}`,
+      );
+  }
+
+  const { error: deleteError } = await client
+    .from("accounts")
+    .delete()
+    .eq("id", account.id);
+
+  if (deleteError)
+    throw new Error(`Deleting the account failed: ${deleteError.message}`);
+
+  /* The sign-in last: if it fails, the account is gone and the orphan is an
+     auth user with no data, which is recoverable by hand. Failing the other
+     way round would leave the data with no way to reach it. */
+  let signInRemoved = false;
+  if (account.owner_id) {
+    const { error } = await client.auth.admin.deleteUser(account.owner_id);
+    if (error) {
+      console.error(
+        `[erase] account ${address} is gone but its sign-in ${account.owner_id} remains:`,
+        error.message,
+      );
+    } else {
+      signInRemoved = true;
+    }
+  }
+
+  return {
+    ok: true,
+    email: address,
+    joiners: joiners?.length ?? 0,
+    documents: documents?.length ?? 0,
+    workflows: workflows?.length ?? 0,
+    threads: threads?.length ?? 0,
+    files: signedPaths.length + documentPaths.length + logoPaths.length,
+    signInRemoved,
+    /* Forgetting the token is not revoking the grant — that lives at
+       myaccount.google.com and only they can do it. Reported so somebody can
+       be told rather than left assuming we handled it. */
+    googleStillGranted: (google?.length ?? 0) > 0,
+  };
+}
+
 /**
  * Signed contracts in storage that no row points at any more.
  *

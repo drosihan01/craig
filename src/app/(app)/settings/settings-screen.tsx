@@ -13,7 +13,7 @@ import {
   Separator,
   ThemeToggle,
 } from "@/components/ui";
-import { ArrowBack } from "@/components/ui/icons";
+import { ArrowBack, Warning } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { CompanyLogoPanel } from "@/components/craig/company-logo";
 import { GoogleWorkspaceConnect } from "@/components/craig/google-workspace";
@@ -157,6 +157,10 @@ export function SettingsScreen({
         <Separator />
 
         <MissionControlSection />
+
+        <Separator />
+
+        <CloseAccountSection user={user} />
       </div>
     </AppShell>
   );
@@ -558,6 +562,136 @@ function ToolLink({
         {description}
       </span>
     </Link>
+  );
+}
+
+/* --- Closing the account --------------------------------------------------- */
+
+/**
+ * The way out.
+ *
+ * A product that holds somebody's date of birth, home address, bank details
+ * and tax file number and offers no way to be rid of it is not one that can
+ * answer a deletion request, and there is no version of this that is somebody
+ * else's job.
+ *
+ * **The address has to be typed.** Not as authorisation — the session already
+ * did that — but because this is the one action here that cannot be undone or
+ * asked for again, and a confirmation that costs nothing to give is one nobody
+ * reads. Typing your own address is small friction that is impossible to do by
+ * accident.
+ *
+ * It lists what will go before asking, because "delete everything" is an
+ * abstraction and the things it names are not.
+ */
+function CloseAccountSection({ user }: { user: Session }) {
+  const [open, setOpen] = React.useState(false);
+  const [typed, setTyped] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const matches = typed.trim().toLowerCase() === user.email.trim().toLowerCase();
+
+  async function close() {
+    if (!matches || busy) return;
+    setBusy(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: typed.trim() }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setError(payload?.error ?? "That didn't work. Nothing has been deleted.");
+        return;
+      }
+
+      /* A hard navigation rather than the router, deliberately: every cached
+         RSC payload in this tab describes an account that no longer exists,
+         and `router.push` keeps that cache. The rule below is right almost
+         everywhere and wrong here — throwing the document away is the point. */
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = "/";
+    } catch {
+      setError("That didn't reach the server. Nothing has been deleted.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <h2 className="text-xl font-semibold tracking-[-0.01em]">
+          Close this account
+        </h2>
+        <p className="text-md leading-relaxed text-text-muted">
+          Everything goes: every workflow, everyone you&rsquo;ve onboarded and
+          what they told you, the documents you&rsquo;ve uploaded, signed
+          contracts, the notebook, and your sign-in. It cannot be undone and we
+          cannot get it back for you.
+        </p>
+      </div>
+
+      {error && (
+        <Callout tone="danger" icon={<Warning />} title="Nothing was deleted">
+          {error}
+        </Callout>
+      )}
+
+      {!open ? (
+        <div>
+          <Button variant="secondary" onClick={() => setOpen(true)}>
+            Close this account
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3 rounded-lg bg-danger-subtle p-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium">
+              Type <span className="font-semibold">{user.email}</span> to
+              confirm.
+            </span>
+            <input
+              type="email"
+              autoComplete="off"
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+              className="rounded-md border border-border bg-surface px-3 py-2 text-md focus:border-border-strong focus:outline-none"
+              aria-label={`Type ${user.email} to confirm`}
+            />
+          </label>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="danger"
+              disabled={!matches}
+              loading={busy}
+              onClick={() => void close()}
+            >
+              Delete everything
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setOpen(false);
+                setTyped("");
+                setError(null);
+              }}
+            >
+              Keep my account
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
