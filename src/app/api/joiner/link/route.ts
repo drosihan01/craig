@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logoForAccount } from "@/lib/craig/accounts";
 import { JOIN_PATH } from "@/lib/craig/contract";
 import { createJoinerToken } from "@/lib/craig/joiner-session";
 import { latestJoinerByEmail } from "@/lib/craig/joiners";
@@ -145,17 +146,31 @@ export async function POST(request: Request) {
            and this message is sent to an address somebody typed. The person it
            is really for already knows them; anybody else must not learn them
            from us. */
-        const { subject, html, text } = renderEmail(template, {
-          first_name: joiner.name.split(" ")[0] || joiner.name,
-          full_name: joiner.name,
-          company: joiner.company,
-          role: "",
-          start_date: "",
-          sender: "",
-          step: "",
-          owner: "",
-          link,
-        });
+        /* Their employer's logo, from the joiner's own record.
+         *
+         * This route answers identically whether or not the address it was
+         * given belongs to anybody, and the logo does not change that: it is
+         * only read inside the branch where a joiner was actually found, and it
+         * only ever reaches that joiner's own inbox. Nothing about it is
+         * observable from the response, which is the one property this route
+         * exists to protect. */
+        const logo = await logoForAccount(joiner.accountEmail);
+
+        const { subject, html, text } = renderEmail(
+          template,
+          {
+            first_name: joiner.name.split(" ")[0] || joiner.name,
+            full_name: joiner.name,
+            company: joiner.company,
+            role: "",
+            start_date: "",
+            sender: "",
+            step: "",
+            owner: "",
+            link,
+          },
+          logo,
+        );
 
         const sent = await sendEmail({
           to: joiner.email,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logoForAccount } from "@/lib/craig/accounts";
 import { currentUser } from "@/lib/craig/current-user";
 import { rateLimit } from "@/lib/craig/rate-limit";
 import { findTemplate, render, SENDER } from "@/lib/email";
@@ -92,8 +93,22 @@ export async function POST(request: Request) {
 
   /* No merge values, which means the defaults: the same fixture names the
      preview fills in. A test that substituted different values would be testing
-     something nobody has looked at. */
-  const { subject, html, text } = renderEmail(template);
+     something nobody has looked at.
+
+     The logo is the one exception, and it is real rather than fixture. This
+     route exists because a preview cannot tell you what a real client does with
+     the markup, and a remote `<img>` is now the single most client-dependent
+     thing in the message — whether Gmail proxies it, whether Outlook draws it
+     at the right size, what Apple Mail does when images are off. None of that
+     can be answered by an account with no logo, so the account's own one goes
+     on. The copy underneath stays fixture, which does mean a real letterhead
+     over Katalis's words; that mismatch is the harness being honest about what
+     each half is for rather than an oversight. */
+  const { subject, html, text } = renderEmail(
+    template,
+    undefined,
+    await logoForAccount(session.email),
+  );
   const company = render("{{company}}");
   const fromName = SENDER.name(company);
 

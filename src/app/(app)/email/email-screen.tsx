@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { Mail, Warning } from "@/components/ui/icons";
 import { NEW_HIRE } from "@/lib/demo";
-import type { Session } from "@/lib/craig/contract";
+import type { CompanyLogo, Session } from "@/lib/craig/contract";
 import {
   AUDIENCE,
   MERGE_FIELDS,
@@ -40,6 +40,7 @@ import { NavStat } from "@/components/app-nav";
 
 export function EmailScreen({
   user,
+  logo,
 }: {
   /**
    * Who is signed in, read on the server by `page.tsx`.
@@ -52,6 +53,16 @@ export function EmailScreen({
    * the real person out.
    */
   user: Session;
+  /**
+   * The account's logo, read on the server beside the session.
+   *
+   * Every preview on this screen gets it, which is the point: this is where
+   * somebody comes to check what a new starter will receive, and the letterhead
+   * is now part of that. Uploaded in Settings, not here — this screen edits the
+   * words, and the mark is a fact about the account rather than about any one
+   * template.
+   */
+  logo: CompanyLogo | null;
 }) {
   const [drafts, setDrafts] = React.useState<EmailTemplate[]>(TEMPLATES);
   const [selectedId, setSelectedId] = React.useState(TEMPLATES[0].id);
@@ -156,11 +167,11 @@ export function EmailScreen({
               <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
                 As it lands
               </p>
-              <EmailPreview template={template} />
+              <EmailPreview template={template} logo={logo} />
             </div>
           </div>
         ) : (
-          <EmailPreview template={template} />
+          <EmailPreview template={template} logo={logo} />
         )}
       </div>
     </AppShell>
