@@ -1063,3 +1063,24 @@ export async function clearAccounts(): Promise<void> {
     if (data.users.length < 50) break;
   }
 }
+
+/**
+ * The account row's id for an email, or `null`.
+ *
+ * Exported because three modules had grown their own private copy of it —
+ * `documents.ts`, `contract-signing.ts` and, nearly, `notebook.ts`. Each was
+ * identical and each was one edit away from not being: the normalisation is
+ * the load-bearing part (an address is user input, and a lookup that forgets
+ * to lowercase it silently finds nothing), and three places to remember that
+ * is two too many.
+ */
+export async function accountIdFor(email: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("accounts")
+    .select("id")
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
+
+  if (error) throw new Error(`Looking up the account failed: ${error.message}`);
+  return data?.id ?? null;
+}

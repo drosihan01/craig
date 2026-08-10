@@ -1,5 +1,7 @@
 import "server-only";
 
+import { accountIdFor } from "./accounts";
+
 /* Static rather than dynamic. Both parsers were behind `await import(...)` to
    keep them out of the bundle unless a file needed them — which read as
    prudent and cost an afternoon: inside the server bundle the dynamic
@@ -95,16 +97,6 @@ function toDocument(row: DocumentRow): StoredDocument {
   };
 }
 
-/** The account's row id, or null because there isn't one. */
-async function accountIdFor(email: string): Promise<string | null> {
-  const { data, error } = await db()
-    .from("accounts")
-    .select("id")
-    .eq("email", email.trim().toLowerCase())
-    .maybeSingle();
-  if (error) throw new Error(`Looking up the account failed: ${error.message}`);
-  return data?.id ?? null;
-}
 
 /* --- The employer's view -------------------------------------------------- */
 

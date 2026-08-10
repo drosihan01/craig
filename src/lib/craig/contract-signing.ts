@@ -1,5 +1,7 @@
 import "server-only";
 
+import { accountIdFor } from "./accounts";
+
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Tables } from "@/lib/supabase/types";
 import { CONTRACT_CONSENT, type Joiner, type JoinerStep } from "./contract";
@@ -958,15 +960,6 @@ export async function signingsForJoiner(
   return data ?? [];
 }
 
-async function accountIdFor(email: string): Promise<string | null> {
-  const { data, error } = await db()
-    .from("accounts")
-    .select("id")
-    .eq("email", email.trim().toLowerCase())
-    .maybeSingle();
-  if (error) throw new Error(`Looking up the account failed: ${error.message}`);
-  return data?.id ?? null;
-}
 
 /* --- Input ------------------------------------------------------------------ */
 

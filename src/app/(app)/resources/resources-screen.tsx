@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AppShell,
@@ -496,6 +497,20 @@ export function ResourcesScreen({
               if (file) void upload(file);
             }}
           />
+          {/* The notebook lives behind Resources rather than beside it in the
+              nav, because the two are one idea from two sides: this screen
+              holds the *files* a company has, the notebook holds what Craig has
+              understood. A separate top-level tab would imply they are
+              unrelated, and somebody who found one would have no reason to look
+              for the other. */}
+          <Link
+            href="/resources/notebook"
+            className={buttonVariants({ variant: "secondary" })}
+          >
+            <MenuBook aria-hidden />
+            Notebook
+          </Link>
+
           <Button onClick={() => inputRef.current?.click()} loading={uploading}>
             {!uploading && <UploadFile aria-hidden />}
             Upload

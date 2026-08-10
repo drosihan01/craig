@@ -409,14 +409,20 @@ export function AppShell({
                   onClick={() => setDrawer("aside")}
                 />
               ))}
-            {bell.length > 0 && (
-              <NotificationBell
-                items={bell}
-                onSelect={onNotificationSelect}
-                onMarkAllRead={onMarkAllRead}
-                className="ml-auto shrink-0"
-              />
-            )}
+            {/* Always drawn, never conditional on having something to say.
+                Hiding it when the list is empty moved every other control in
+                the header sideways the moment a notification arrived, and it
+                took away the one place somebody could go to check — a bell
+                that is missing reads as "this app has no notifications", not
+                as "you have none right now". The panel already has a proper
+                empty state, and the dot inside only appears when something is
+                unread, which is the actual signal. */}
+            <NotificationBell
+              items={bell}
+              onSelect={onNotificationSelect}
+              onMarkAllRead={onMarkAllRead}
+              className="ml-auto shrink-0"
+            />
           </div>
         </div>
       </header>
