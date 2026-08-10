@@ -239,7 +239,12 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
           Below `lg` the column collapses and he returns to exactly where he
           was — under the plan, above the way out. */}
       <div className="lg:grid lg:min-h-screen lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-5 pb-16 pt-6 sm:px-8 lg:mx-0 lg:max-w-none lg:px-10">
+        {/* The column is full-height; its *contents* are not full-width. Losing
+            the max-width when this became a column let the plan run the whole
+            1200px, and a checklist read across that distance is a paragraph you
+            lose your place in. Centred in the column so the page still balances
+            when the window is wider than the two of them need. */}
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-5 pb-16 pt-6 sm:px-8 lg:px-10 lg:py-10">
         {/* The mark and the theme switch, and nothing else. There is nowhere
             else for this person to go, so a header with links in it would be a
             navigation bar that navigates nowhere. */}
