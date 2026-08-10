@@ -520,6 +520,48 @@ export async function signedUrlForJoiner(
   return { name: row.name, url: signed.signedUrl };
 }
 
+/**
+ * A link to one document *this account* owns, good for a minute.
+ *
+ * The admin's counterpart to `signedUrlForJoiner`, and deliberately a separate
+ * function rather than a flag on that one. The two answer different questions
+ * — "may this new starter read this" and "does this belong to you" — and the
+ * difference between them is the `visibility` filter, which is the single most
+ * important line in the joiner's version. A shared `options.asAdmin` would put
+ * the rule that protects every private document behind a boolean somebody
+ * could pass wrongly from a route that never thought about it.
+ *
+ * Scoped to the account and nothing else: an admin may read anything on their
+ * own account, shared or not, because it is theirs and they uploaded it. What
+ * they may not do is read another account's, which is what the `account_id`
+ * match is for — and `null` covers both "not yours" and "does not exist",
+ * because telling those apart confirms somebody else's document is real.
+ */
+export async function signedUrlForAccount(
+  accountEmail: string,
+  documentId: string,
+): Promise<{ name: string; contentType: string; url: string } | null> {
+  const accountId = await accountIdFor(accountEmail);
+  if (!accountId) return null;
+
+  const { data: row, error } = await db()
+    .from("documents")
+    .select("name, content_type, storage_path")
+    .eq("id", documentId)
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Reading the document failed: ${error.message}`);
+  if (!row) return null;
+
+  const { data: signed, error: signError } = await db()
+    .storage.from(BUCKET)
+    .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS);
+
+  if (signError || !signed) return null;
+  return { name: row.name, contentType: row.content_type, url: signed.signedUrl };
+}
+
 export interface ResourceHit {
   id: string;
   name: string;
