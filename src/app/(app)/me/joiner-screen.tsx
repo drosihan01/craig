@@ -221,17 +221,25 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
           Stacked, every question meant scrolling past everything you had
           already read; beside it, both are on screen at once.
 
-          The right side, not the left, because that is Craig's seat everywhere
-          else in the product — the workflow editor keeps him in the right
-          column too, and a person who later becomes an admin should find him
-          where they left him. The plan keeps the wider column: it is still the
-          thing with a deadline on it, and the panel being narrower is what
-          keeps answering a question from looking like the first task.
+          Built as a **column of the page** rather than a card floating in the
+          margin, which is the second thing Dzaky asked for and the one that
+          decides whether it reads as its own space. `AppShell`'s aside — the
+          builder's Craig — is a full-height column with a rule down its edge
+          and its own surface, and a card with rounded corners beside a plan is
+          a widget by comparison. This screen cannot use `AppShell` (there is
+          no nav: nowhere else for this person to go), so it borrows the
+          treatment rather than the component.
 
-          Below `lg` the grid stacks and he returns to exactly where he was —
-          under the plan, above the way out. */}
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-8 px-5 pb-16 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start lg:gap-x-10">
-        <div className="flex min-w-0 flex-col gap-8">
+          The right side, not the left, because that is Craig's seat everywhere
+          else in the product, and a person who later becomes an admin should
+          find him where they left him. The plan keeps the wider column: it is
+          still the thing with a deadline on it, and the panel being narrower is
+          what keeps answering a question from looking like the first task.
+
+          Below `lg` the column collapses and he returns to exactly where he
+          was — under the plan, above the way out. */}
+      <div className="lg:grid lg:min-h-screen lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-5 pb-16 pt-6 sm:px-8 lg:mx-0 lg:max-w-none lg:px-10">
         {/* The mark and the theme switch, and nothing else. There is nowhere
             else for this person to go, so a header with links in it would be a
             navigation bar that navigates nowhere. */}
@@ -375,27 +383,37 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
           </section>
         )}
 
+          {/* The way out, and the only one there is. This person cannot raise a
+              ticket, and nothing on this screen can correct a name somebody
+              else typed — so the last line is a route back to a human rather
+              than a legal notice about why they are receiving this. Craig
+              beside it does not replace it: he can answer questions and change
+              nothing.
+
+              Inside the plan's column rather than spanning both, now that the
+              panel is a full-height column: a line running under a column that
+              reaches the bottom of the window has nothing to sit under. */}
+          <p className="text-xs leading-relaxed text-text-subtle">
+            You&apos;re seeing this because {company} gave you a seat. If
+            something here looks wrong, reply to the email that brought you — it
+            reaches a person.
+          </p>
         </div>
 
-        {/* His own column. Sticky so he stays reachable while somebody scrolls
-            a long plan — the conversation keeps its place on screen the way it
-            keeps its thread. On a narrow screen this is simply the next thing
-            after the plan, where he has always been. */}
-        <div className="lg:sticky lg:top-6">
-          <JoinerCraig firstName={firstName} />
-        </div>
+        {/* His column. The rule down the left edge and the panel surface are
+            what `AppShell` gives the builder's aside, and they are the whole
+            difference between a room and a widget.
 
-        {/* The way out, and the only one there is. This person cannot raise a
-            ticket, and nothing on this screen can correct a name somebody else
-            typed — so the last line is a route back to a human rather than a
-            legal notice about why they are receiving this. Craig beside it does
-            not replace it: he can answer questions and change nothing. Spans
-            both columns so it stays the last line of the whole screen. */}
-        <p className="text-xs leading-relaxed text-text-subtle lg:col-span-2">
-          You&apos;re seeing this because {company} gave you a seat. If
-          something here looks wrong, reply to the email that brought you — it
-          reaches a person.
-        </p>
+            `overflow` is deliberately not on this element. Making it a scroll
+            container would make it the scrollport for the sticky child inside,
+            which would then offset by `top` once and never stick again — the
+            same trap `app-shell.tsx` documents at length. This owns the edge;
+            the inner element owns sticking and scrolling. */}
+        <div className="border-border bg-surface lg:h-full lg:border-l">
+          <div className="lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+            <JoinerCraig firstName={firstName} />
+          </div>
+        </div>
       </div>
     </main>
   );

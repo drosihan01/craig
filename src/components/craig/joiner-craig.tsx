@@ -193,13 +193,16 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
   const empty = turns.length === 0;
 
   return (
-    /* A panel rather than a section since Dzaky moved him beside the plan: the
-       border is what makes "his column" read as a place rather than as leftover
-       margin. `max-h` only ever binds inside the sticky column on a wide
-       screen — stacked on a phone there is no height to be viewport-relative
-       to, and the page scrolls as it always did. */
+    /* No border and no radius of its own: the column it sits in owns the edge
+       now, and a card inside a panel is two frames drawn around one thing.
+       Stacked below `lg` it is a plain block in the page flow, which is where
+       it has always been.
+
+       `h-full` so the conversation can claim the column's height and scroll
+       within it — the parent is what is `h-screen`, and without this the
+       composer would float wherever the content happened to end. */
     <section
-      className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 lg:max-h-[calc(100vh-3rem)]"
+      className="flex flex-col gap-4 p-5 lg:h-full lg:min-h-0 lg:p-6"
       aria-label="Ask Craig"
     >
       <div className="flex flex-col gap-1">
