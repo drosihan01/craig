@@ -367,22 +367,31 @@ function IntegrationsSection({
 /* --- Mission control ------------------------------------------------------- */
 
 /**
- * The two internal tools, and the only place either is linked from.
+ * One door to the internal tools, rather than one row each.
  *
  * Both existed for months with no way in: they sat outside the router entirely,
  * so the only way to look at the design system was to know it was there and
  * type the path — and the path did not resolve. Routing them without linking
- * them would have reproduced the same problem more quietly.
+ * them would have reproduced the same problem more quietly, which is why this
+ * section was written at the same time as their URLs.
  *
  * In Settings rather than the main nav on the argument the nav itself makes:
  * it lists what the product *does*, and these are not that. They are for
  * whoever is building it. Settings is already the room for things about the
- * account rather than about onboarding, which is the closest existing shelf.
+ * account rather than about onboarding, which is the closest existing shelf —
+ * and it stays the entrance now that the tools have a hub, because this is
+ * where people have already learned to look for them.
  *
- * Behind the same door as everything else in `(app)`. They were unguarded while
- * unreachable, which was fine; the guard went on in the same change that gave
- * them URLs, because a route reachable for even one deploy before it is guarded
- * is a route somebody can find.
+ * What changed is the number of destinations. It listed both tools directly and
+ * described each in a sentence, which meant the only description either one had
+ * lived at the bottom of a page about billing and Google Workspace — and every
+ * tool added afterwards would have made this section longer than the account's
+ * own details. `/mission-control` is where that belongs: it names them, says
+ * what they are with room to do it, and holds the way back to here. So this is
+ * a single link now, and the sentence under it says what is behind the door
+ * rather than repeating both descriptions in miniature.
+ *
+ * Behind the same door as everything else in `(app)` — all three of them.
  */
 function MissionControlSection() {
   return (
@@ -397,18 +406,11 @@ function MissionControlSection() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <ToolLink
-          href="/design-system"
-          title="Design system"
-          description="Every component the product is made of, live, on the product's own shell — so if the frame breaks it breaks here first."
-        />
-        <ToolLink
-          href="/email"
-          title="Mailmaker"
-          description="Compose and preview the emails Craig sends, against the same templates the invite route uses."
-        />
-      </div>
+      <ToolLink
+        href="/mission-control"
+        title="Open mission control"
+        description="The design system and the mailmaker, and whatever gets built next — with the way back to here."
+      />
     </section>
   );
 }
