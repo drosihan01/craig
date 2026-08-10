@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import { currentJoiner, requireJoiner } from "@/lib/craig/current-joiner";
 import { progressOf } from "@/lib/craig/joiners";
-import type { Joiner } from "@/lib/craig/contract";
+import type { Joiner, PersonalDetails } from "@/lib/craig/contract";
 import { dueDateFrom } from "@/lib/workflow/library";
 import { listDocumentsForJoiner } from "@/lib/craig/documents";
 import type { StoredDocument } from "@/lib/craig/documents";
+import {
+  canSealPersonalDetails,
+  readPersonalDetails,
+  summariseDetails,
+} from "@/lib/craig/personal-details";
 import {
   JoinerScreen,
   type JoinerView,
@@ -64,6 +69,24 @@ export default async function JoinerHomePage() {
      and the plan below still shows them the order everything happens in. */
   const currentId = progress.next?.id ?? null;
 
+  /* Their own sealed answers, opened here because this is the server and this
+     is their own record. Nothing of what comes out reaches the browser whole —
+     `readableAnswer` turns it into one line naming them and acknowledging the
+     rest, for the reasons `summariseDetails` sets out. One query for the plan
+     rather than one per step, and no query at all for the plans that have no
+     such step, which is most of them. */
+  const wantsDetails = joiner.steps.some((s) => s.field === "personal-details");
+  const details = wantsDetails
+    ? await readPersonalDetails(joiner.id)
+    : new Map<string, PersonalDetails>();
+
+  /* Whether this deployment can encrypt an answer at all. Asked before the
+     form is drawn rather than after it is filled in: somebody who types twelve
+     boxes and is then told the server won't take them has been wasted, and the
+     honest alternative — storing it in the clear "just this once" — is the one
+     thing this feature exists to prevent. */
+  const canCollect = canSealPersonalDetails();
+
   const view: JoinerView = {
     firstName: joiner.name.split(" ")[0] || joiner.name,
     company: joiner.company,
@@ -72,7 +95,10 @@ export default async function JoinerHomePage() {
       ? readableDate(joiner.startDate)
       : null,
     steps: joiner.steps.map((step) =>
-      toPlanStep(step, step.id === currentId, joiner),
+      toPlanStep(step, step.id === currentId, joiner, {
+        details: details.get(step.id),
+        canCollect,
+      }),
     ),
     done: progress.done,
     total: progress.total,
@@ -143,6 +169,12 @@ function toPlanStep(
   step: Joiner["steps"][number],
   current: boolean,
   joiner: Joiner,
+  sealed: {
+    /** Their own answer, already opened, when this step holds one. */
+    details?: PersonalDetails;
+    /** Whether a sealed answer can be taken at all on this deployment. */
+    canCollect: boolean;
+  },
 ): PlanStep {
   const { startDate } = joiner;
 
@@ -166,15 +198,28 @@ function toPlanStep(
 
   const automated = step.actor === "craig" ? craigWords(step, joiner) : null;
 
+  /* A step this deployment cannot take an answer for. It keeps its place in
+     the plan and loses its form: a box that refuses everything typed into it
+     is worse than no box, and this person cannot set an environment variable.
+     The sentence says whose problem it is without naming the problem, which is
+     the same rule every automated step's wording follows. */
+  const uncollectable =
+    step.field === "personal-details" && !step.completedAt && !sealed.canCollect;
+
   return {
     id: step.id,
     title: step.title,
     actor: step.actor,
     doneOn: (step.completedAt && readableDay(step.completedAt)) || undefined,
-    answer: step.value ? readableAnswer(step) : undefined,
-    field: current ? step.field : undefined,
+    answer: readableAnswer(step, sealed.details),
+    field: current && !uncollectable ? step.field : undefined,
+    askEmergencyContact: step.askEmergencyContact,
     dueOn,
-    detail: automated?.detail,
+    detail:
+      automated?.detail ??
+      (uncollectable
+        ? `I can't collect this safely just yet, so I'm not going to ask for it. Nothing here is waiting on you — ${joiner.company} has something to sort out at their end first.`
+        : undefined),
     badge: automated?.badge,
   };
 }
@@ -242,9 +287,29 @@ function craigWords(
  * weekday, which nobody remembers about the day they were born. Anything the
  * pattern does not recognise is shown exactly as it was typed rather than
  * quietly reformatted: this is the record of what they said.
+ *
+ * The personal details block is the one that arrives as a document rather than
+ * a string, and it is deliberately *not* printed out field by field. A row in
+ * a plan cannot hold twelve values, and a screen that could would be putting a
+ * home address and a date of birth on a page somebody is likely to be reading
+ * in an office on their first week. `summariseDetails` is the whole argument;
+ * what comes back is their name and an acknowledgement of the rest.
+ *
+ * It is a sentence rather than a lookup because the answer never travels on the
+ * step: `JoinerStep.value` is empty for a sealed step, so the details have to
+ * be handed in from the one place allowed to open them.
  */
-function readableAnswer(step: Joiner["steps"][number]): string {
-  if (step.field !== "date-of-birth" || !step.value) return step.value ?? "";
+function readableAnswer(
+  step: Joiner["steps"][number],
+  details: PersonalDetails | undefined,
+): string | undefined {
+  if (step.field === "personal-details") {
+    return details ? summariseDetails(details) : undefined;
+  }
+
+  if (!step.value) return undefined;
+  if (step.field !== "date-of-birth") return step.value;
+
   const date = fromParts(step.value);
   if (!date) return step.value;
 

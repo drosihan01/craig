@@ -4,6 +4,7 @@ import type { Json, Tables } from "@/lib/supabase/types";
 import {
   ADMIN_TICK_PRESETS,
   AUTOMATION_BY_PRESET,
+  EMERGENCY_CONTACT_EXTRA,
   JOINER_FIELD_BY_PRESET,
   type Joiner,
   type JoinerField,
@@ -79,6 +80,14 @@ function toStep(row: StepRow): JoinerStep {
     automation: (row.automation as StepAutomation | null) ?? undefined,
     run: (row.run as StepRun | null) ?? undefined,
     due: row.due ?? undefined,
+    /* Only ever true on a personal-details step, but read unconditionally —
+       the column has a `false` default, so this is a fact about the row rather
+       than a branch on what the row happens to be. */
+    askEmergencyContact: row.ask_emergency_contact || undefined,
+    /* Deliberately only the plaintext column. A sealed answer's envelope has
+       no field on `JoinerStep` to travel in, so a `Joiner` handed to a screen,
+       to the joiner's own Craig, or to anything anybody writes next simply
+       does not carry it. `personal-details.ts` is the one way in. */
     value: row.value ?? undefined,
     /* Normalised to the `toISOString` shape the run documents inside `run`
        already use, so a date written by this layer and a date written by an
@@ -162,6 +171,17 @@ export function stepsFromBlocks(
     kind: string;
     preset?: string;
     due?: number;
+    /**
+     * Ids ticked in the block's one multiselect that changes what the *new
+     * starter* is asked, rather than what the admin has to supply.
+     *
+     * A list of strings rather than the block's whole config, and that is the
+     * seam: the invite route sanitises a list of ids without having to know
+     * what any of them mean, and what they mean is decided here, once, beside
+     * the field that reads them. Handing this function a whole config would
+     * make every future block's settings its business.
+     */
+    extras?: string[];
   }[],
 ): JoinerStep[] {
   return blocks
@@ -193,6 +213,16 @@ export function stepsFromBlocks(
         automation,
         run: automation ? ({ state: "waiting" } satisfies StepRun) : undefined,
         due: b.due,
+        /* Only meaningful on the one field that has an emergency contact to
+           ask for. Tested against the field rather than against the preset so
+           that ticking that option on some other block — which the picker
+           does not offer, but a hand-built request could claim — cannot put a
+           flag on a step that has no form to show it on. */
+        askEmergencyContact:
+          field === "personal-details" &&
+          (b.extras ?? []).includes(EMERGENCY_CONTACT_EXTRA)
+            ? true
+            : undefined,
       };
     });
 }
@@ -258,6 +288,7 @@ export async function createJoiner(
         value: s.value ?? null,
         completed_at: s.completedAt ?? null,
         run: (s.run ?? null) as Json,
+        ask_emergency_contact: s.askEmergencyContact ?? false,
       })),
     );
   if (stepsError) {
@@ -360,6 +391,13 @@ export async function completeStep(
     .eq("step_id", stepId)
     .eq("actor", "joiner")
     .not("field", "is", null)
+    /* The one field this function must never touch. Its answer is a sealed
+       document written by `completeSealedStep`, and a string arriving here for
+       it would land somebody's address in the plaintext column — quietly, and
+       looking exactly like a step that worked. In the statement rather than in
+       a guard above it, so it refuses by matching zero rows rather than by
+       being remembered. */
+    .neq("field", "personal-details")
     .select("joiner_id");
   if (error) throw new Error(`Writing steps failed: ${error.message}`);
   if (data.length === 0) return null;

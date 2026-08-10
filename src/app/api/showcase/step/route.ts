@@ -1,7 +1,17 @@
 import { after, NextResponse } from "next/server";
 import { currentJoiner } from "@/lib/craig/current-joiner";
 import { fireNextAutomatedStep } from "@/lib/craig/automation";
-import { completeStep } from "@/lib/craig/joiners";
+import { completeStep, getJoiner } from "@/lib/craig/joiners";
+/* The date rule lives beside the personal details now, because two fields want
+   it — the standalone date-of-birth block and the one inside that form — and
+   two copies of "what counts as a birthday" is two answers waiting to
+   disagree. */
+import {
+  birthDateProblem,
+  completeSealedStep,
+  parsePersonalDetails,
+  sealPersonalDetails,
+} from "@/lib/craig/personal-details";
 import { rateLimit } from "@/lib/craig/rate-limit";
 
 /**
@@ -27,6 +37,12 @@ import { rateLimit } from "@/lib/craig/rate-limit";
  * 2. **The value has to fit the field.** A date of birth is checked as a date,
  *    because "next Thursday" typed into a field payroll reads is a mistake
  *    worth catching on the way in rather than in three weeks.
+ * 3. **A structured answer is rebuilt rather than accepted.** The personal
+ *    details block posts a dozen fields at once, and not one of them is taken
+ *    as given: `parsePersonalDetails` reads only the keys the shape names,
+ *    checks each against its kind, and drops everything else. The result is
+ *    then sealed before it goes anywhere near a row — see
+ *    `personal-details.ts` for why that is not optional.
  *
  * Limited, and deliberately not against the model budget — see `spend` below.
  *
@@ -72,40 +88,6 @@ function oneLine(value: unknown, max: number): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, max);
-}
-
-/**
- * A date of birth, or why it isn't one.
- *
- * Built from the parts rather than `new Date(string)`, which reads a bare date
- * as UTC midnight and then compares it in the server's timezone — west of
- * Greenwich that turns today's date into tomorrow's and refuses somebody's
- * birthday for being in the future.
- *
- * The floor is a sanity check, not a policy about age. Nobody filling in an
- * onboarding form was born in 1723, so a year that far out is a slip of the
- * calendar rather than a person, and saying so is kinder than storing it.
- */
-function dateProblem(value: string): string | null {
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!parts) return "Pick that one from the calendar.";
-
-  const [year, month, day] = parts.slice(1).map(Number);
-  const date = new Date(year, month - 1, day);
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return "That isn't a real date. Pick it from the calendar.";
-  }
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (date.getTime() > today.getTime()) return "That date is in the future.";
-  if (year < 1900) return "Have a look at the year on that one.";
-
-  return null;
 }
 
 /* Every message here can end up in front of the new starter, so every message
@@ -164,11 +146,66 @@ export async function POST(request: Request) {
     return refuse("That one isn't yours to fill in.", 400);
   }
 
+  /* The one field whose answer is a document rather than a line, and the one
+     that never touches the plaintext column. It leaves through its own store
+     function, so there is no path where a `PersonalDetails` reaches
+     `completeStep` and gets stringified into `value`.
+
+     `askEmergencyContact` is read off *their snapshot*, never off the request.
+     It decides which three fields are required and — more to the point —
+     whether they are stored at all, so a client that could set it would be a
+     client that could opt a company into holding a third party's phone number
+     nobody asked for. */
+  if (step.field === "personal-details") {
+    const parsed = parsePersonalDetails(input.details, {
+      emergencyContact: Boolean(step.askEmergencyContact),
+    });
+    if (!parsed.ok) return refuse(parsed.problem, 400);
+
+    const sealed = sealPersonalDetails(parsed.details, joiner.id, stepId);
+    if (!sealed.ok) {
+      /* The deployment cannot encrypt this, so it does not take it. The
+         message the key check produces names an environment variable and is
+         written for whoever can set it, which is not the person on the other
+         end of this request — so they get a sentence of their own and the real
+         one goes to the log, where somebody who can act will find it. */
+      console.error(`[personal-details] ${sealed.message}`);
+      return refuse(
+        "I can't store this safely just yet, so I haven't stored it at all. Nothing you typed has been kept — tell whoever invited you, and try again once they've sorted it.",
+        503,
+      );
+    }
+
+    const written = await completeSealedStep(joiner.id, stepId, sealed.sealed);
+    if (!written) {
+      return refuse(
+        "That didn't save. Reload the page and try once more.",
+        409,
+      );
+    }
+
+    /* Re-read rather than patched, for the same reason the plain path returns
+       the store's copy: what happens next is decided by the record as it is
+       now, and a copy read at the top of this handler predates the write. */
+    const settled = await getJoiner(joiner.id);
+    if (settled) await fireNextAutomatedStep(settled, stepId, after);
+
+    /* The record back, minus the answer — `toStep` never carries the sealed
+       envelope, so this is a joiner whose personal-details step is finished
+       and holds nothing. That is the right shape to hand a browser: the screen
+       re-reads itself from the server anyway, and the one thing it does not
+       need is twelve fields of PII travelling back to be thrown away. */
+    return NextResponse.json(
+      { ok: true, joiner: settled ?? joiner },
+      { headers: noStore },
+    );
+  }
+
   const value = oneLine(input.value, MAX_VALUE);
   if (!value) return refuse("There's nothing in that one yet.", 400);
 
   if (step.field === "date-of-birth") {
-    const problem = dateProblem(value);
+    const problem = birthDateProblem(value);
     if (problem) return refuse(problem, 400);
   }
 

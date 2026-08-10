@@ -368,19 +368,372 @@ export const DRAFT_REQUEST =
 /**
  * What a step actually asks the person who's arriving.
  *
- * Two, because two are wired end to end. A workflow block can say "collect
+ * Three, because three are wired end to end. A workflow block can say "collect
  * their details" in a dozen ways, but a form can only be rendered for a field
  * somebody has written a form for — so this names the ones that exist rather
- * than pretending the set is open. A block that maps to neither is real work
- * that simply isn't the new starter's to do here, and it says so.
+ * than pretending the set is open. A block that maps to none of them is real
+ * work that simply isn't the new starter's to do here, and it says so.
+ *
+ * `personal-details` is the odd one and the reason the two below it no longer
+ * describe the shape. The first two name one input each and are answered with
+ * one string; this one is a form with a dozen boxes on it, answered with a
+ * structured payload that is sealed before it touches the database. See
+ * `PersonalDetails` below, and `personal-details.ts` for the sealing.
  */
-export type JoinerField = "middle-name" | "date-of-birth";
+export type JoinerField = "middle-name" | "date-of-birth" | "personal-details";
 
 /** Preset ids that produce a step the new starter can actually answer. */
 export const JOINER_FIELD_BY_PRESET: Record<string, JoinerField> = {
   "middle-name": "middle-name",
   "date-of-birth": "date-of-birth",
+  "personal-details": "personal-details",
 };
+
+/* --- Personal details ----------------------------------------------------- */
+
+/**
+ * Everything the "Personal details" block collects, as one answer.
+ *
+ * **Why one step and not twelve.** `joiner_steps.value` holds a single string
+ * and `JoinerField` names a single input, so the obvious way to collect twelve
+ * things was twelve steps — and it would have been a terrible product. A new
+ * starter's screen shows one plan in the order it happens; twelve rows reading
+ * "Provide your suburb", "Provide your postcode" is not a plan, it is a form
+ * torn into strips and dealt out as chores, each with its own round trip and
+ * its own tick. Worse, half of them only make sense together: an address is
+ * one fact about somebody, not four, and a workflow that can be half-way
+ * through an address is a workflow that can hold half an address.
+ *
+ * So the step keeps one answer and the answer has parts. `joiner_steps.run`
+ * already puts a typed document in a column for the same reason — a run has
+ * eight fields nobody queries individually — so this is the schema's own
+ * precedent rather than a new idea. The difference is that a run is written by
+ * us and this is written by a stranger's browser, which is why nothing that
+ * arrives is trusted: `parsePersonalDetails` rebuilds this object field by
+ * field from the request rather than casting it.
+ *
+ * **Flat, deliberately.** An address and an emergency contact are each a
+ * grouping a person would draw, and nesting them would read better right here
+ * and cost three special cases in every loop that touches the shape —
+ * validating, sealing, masking, listing, rendering the form. `group` on the
+ * field descriptor below carries the grouping for the one place that wants it,
+ * which is the screen.
+ *
+ * **Australian, and it says so.** `state` is a state or territory and
+ * `postcode` is four digits, because the spec this was built from says
+ * "state/territory" and every date in this product is already formatted
+ * `en-AU`. That is a real limit rather than an oversight: the day somebody
+ * onboards in Auckland or Austin, this needs a country on it and the two
+ * fields become "region" and "postal code" with per-country rules. Better to
+ * name the assumption than to pretend a free-text address was universal.
+ */
+export interface PersonalDetails {
+  /** As written on their passport or licence, not what they go by. */
+  legalFirstName: string;
+  /** Plural, and optional. Plenty of people have none and some have three. */
+  middleNames?: string;
+  legalSurname: string;
+  /** What they'd like to be called, when that isn't their legal first name. */
+  preferredName?: string;
+  /** `YYYY-MM-DD`, same as every other date this product stores. */
+  dateOfBirth: string;
+  /** Their own address, not the one being created for them at work. */
+  personalEmail: string;
+  mobile: string;
+  street: string;
+  suburb: string;
+  /** One of `AU_STATES`. Stored as the code, shown as the label. */
+  state: string;
+  postcode: string;
+  /** Only when the admin asked for one — see `askEmergencyContact`. */
+  emergencyName?: string;
+  emergencyRelationship?: string;
+  emergencyPhone?: string;
+}
+
+export type PersonalDetailKey = keyof PersonalDetails;
+
+/**
+ * How a field is entered, and — because the two are the same question asked
+ * twice — how what comes back is checked.
+ *
+ * Not `FieldKind` from the block library. That vocabulary is for the *admin*
+ * configuring a block ("person", "file", "when"); this one is for the new
+ * starter answering one, and the overlap is two words out of six. Sharing them
+ * would put the picker's file-upload kind in a union that has to be exhaustive
+ * over a form that has no uploads.
+ */
+export type PersonalDetailKind =
+  | "text"
+  /** `YYYY-MM-DD` from a calendar, checked as a real date in the past. */
+  | "date"
+  | "email"
+  /** Digits and the punctuation people put between them. */
+  | "phone"
+  /** A choice from `AU_STATES`. */
+  | "state"
+  /** Four digits. */
+  | "postcode";
+
+/** The heading a field sits under, on both screens. */
+export type PersonalDetailGroup = "name" | "contact" | "address" | "emergency";
+
+export interface PersonalDetailField {
+  key: PersonalDetailKey;
+  group: PersonalDetailGroup;
+  kind: PersonalDetailKind;
+  /** What the new starter is asked. Second person, because they're reading it. */
+  label: string;
+  /** What the admin's screen calls it. Third person, for the same reason. */
+  adminLabel: string;
+  hint?: string;
+  /** Refused when empty. Absent means genuinely optional, not "nice to have". */
+  required?: boolean;
+  /**
+   * Longest we'll store. Generous, because a name that doesn't fit is an
+   * insult and the storage is a sealed blob rather than a column per field —
+   * but bounded, because the payload is written by a stranger's browser.
+   */
+  max: number;
+  /** The browser's own autofill hint. Filling this in from a saved profile is
+      the one bit of this form nobody should have to type. */
+  autoComplete?: string;
+  /** Only asked when the admin ticked the emergency contact option. */
+  emergency?: boolean;
+}
+
+/**
+ * The whole form, once, as data.
+ *
+ * One list feeding five things — the joiner's form, the validator, the sealed
+ * payload, the admin's masked summary and the revealed one — because the
+ * alternative is five lists that agree until somebody adds a field to four of
+ * them. The compiler catches a `key` that isn't on `PersonalDetails`; nothing
+ * would have caught a field the form asks for and the validator drops.
+ */
+export const PERSONAL_DETAIL_FIELDS: readonly PersonalDetailField[] = [
+  {
+    key: "legalFirstName",
+    group: "name",
+    kind: "text",
+    label: "Legal first name",
+    adminLabel: "Legal first name",
+    hint: "As it's written on your passport or licence.",
+    required: true,
+    max: 60,
+    autoComplete: "given-name",
+  },
+  {
+    key: "middleNames",
+    group: "name",
+    kind: "text",
+    label: "Middle name or names",
+    adminLabel: "Middle names",
+    hint: "Leave it empty if you haven't got one.",
+    max: 80,
+    autoComplete: "additional-name",
+  },
+  {
+    key: "legalSurname",
+    group: "name",
+    kind: "text",
+    label: "Legal surname",
+    adminLabel: "Legal surname",
+    required: true,
+    max: 60,
+    autoComplete: "family-name",
+  },
+  {
+    key: "preferredName",
+    group: "name",
+    kind: "text",
+    label: "Preferred name",
+    adminLabel: "Goes by",
+    hint: "What you'd like to be called day to day, if it isn't the above.",
+    max: 60,
+    autoComplete: "nickname",
+  },
+  {
+    key: "dateOfBirth",
+    group: "name",
+    kind: "date",
+    label: "Date of birth",
+    adminLabel: "Date of birth",
+    hint: "Payroll needs this to match your ID exactly.",
+    required: true,
+    max: 10,
+    autoComplete: "bday",
+  },
+  {
+    key: "personalEmail",
+    group: "contact",
+    kind: "email",
+    label: "Personal email",
+    adminLabel: "Personal email",
+    hint: "Your own address — not the work one being set up for you.",
+    required: true,
+    max: 120,
+    autoComplete: "email",
+  },
+  {
+    key: "mobile",
+    group: "contact",
+    kind: "phone",
+    label: "Mobile number",
+    adminLabel: "Mobile",
+    required: true,
+    max: 24,
+    autoComplete: "tel",
+  },
+  {
+    key: "street",
+    group: "address",
+    kind: "text",
+    label: "Street address",
+    adminLabel: "Street",
+    hint: "Unit or apartment number too, if you have one.",
+    required: true,
+    max: 120,
+    autoComplete: "street-address",
+  },
+  {
+    key: "suburb",
+    group: "address",
+    kind: "text",
+    label: "Suburb",
+    adminLabel: "Suburb",
+    required: true,
+    max: 80,
+    autoComplete: "address-level2",
+  },
+  {
+    key: "state",
+    group: "address",
+    kind: "state",
+    label: "State or territory",
+    adminLabel: "State",
+    required: true,
+    max: 3,
+    autoComplete: "address-level1",
+  },
+  {
+    key: "postcode",
+    group: "address",
+    kind: "postcode",
+    label: "Postcode",
+    adminLabel: "Postcode",
+    required: true,
+    max: 4,
+    autoComplete: "postal-code",
+  },
+  {
+    key: "emergencyName",
+    group: "emergency",
+    kind: "text",
+    label: "Their name",
+    adminLabel: "Emergency contact",
+    required: true,
+    emergency: true,
+    max: 80,
+  },
+  {
+    key: "emergencyRelationship",
+    group: "emergency",
+    kind: "text",
+    label: "Their relationship to you",
+    adminLabel: "Relationship",
+    hint: "Partner, parent, friend — whatever they are to you.",
+    required: true,
+    emergency: true,
+    max: 40,
+  },
+  {
+    key: "emergencyPhone",
+    group: "emergency",
+    kind: "phone",
+    label: "Their phone number",
+    adminLabel: "Emergency phone",
+    required: true,
+    emergency: true,
+    max: 24,
+  },
+];
+
+/** The headings, in the order the form asks for them. */
+export const PERSONAL_DETAIL_GROUPS: {
+  id: PersonalDetailGroup;
+  label: string;
+}[] = [
+  { id: "name", label: "Who you are" },
+  { id: "contact", label: "How to reach you" },
+  { id: "address", label: "Where you live" },
+  { id: "emergency", label: "Who to call if something happens" },
+];
+
+/**
+ * States and territories, as codes.
+ *
+ * A select rather than a text box, because "NSW", "N.S.W.", "New South Wales"
+ * and "nsw" are one fact typed four ways, and whoever eventually pushes this
+ * into a payroll system will have to reconcile them. The code is stored and the
+ * label is shown, which is the same rule the block library's `when` fields
+ * follow: ids persist, labels are for reading.
+ */
+export const AU_STATES: { id: string; label: string }[] = [
+  { id: "ACT", label: "Australian Capital Territory" },
+  { id: "NSW", label: "New South Wales" },
+  { id: "NT", label: "Northern Territory" },
+  { id: "QLD", label: "Queensland" },
+  { id: "SA", label: "South Australia" },
+  { id: "TAS", label: "Tasmania" },
+  { id: "VIC", label: "Victoria" },
+  { id: "WA", label: "Western Australia" },
+];
+
+/**
+ * The setup field the admin ticks to also ask for an emergency contact, and
+ * the option inside it.
+ *
+ * Named here rather than typed into the preset, the invite route and the
+ * snapshot separately, because those three have to agree on the string and a
+ * literal in each is three chances to typo one. The symptom of a typo would be
+ * a tick box that changes nothing — the worst kind, because the admin can see
+ * they ticked it.
+ *
+ * **Why it is configurable at all.** Every other field on this block is
+ * something an employer must have: you cannot pay somebody without their legal
+ * name and you cannot verify them without a date of birth. An emergency
+ * contact is different. It is a *third party's* name and phone number, given by
+ * somebody who was not asked and cannot object, and plenty of companies have
+ * no business holding one — a fully remote contractor's next of kin is not
+ * their client's information. So it is asked when somebody decides to ask,
+ * which is also the shape the law tends to want: collect what you need for a
+ * stated purpose, and no more.
+ */
+export const PERSONAL_DETAILS_EXTRAS_FIELD = "extras";
+export const EMERGENCY_CONTACT_EXTRA = "emergency-contact";
+
+/**
+ * One line of the answer as a screen shows it, either masked or in full.
+ *
+ * The same shape both ways round on purpose. The admin's page renders a list of
+ * these masked, presses Reveal, and renders the same list with real values in
+ * it — one component, one layout, and no chance of the revealed view showing a
+ * field the masked view didn't admit existed.
+ */
+export interface DetailLine {
+  key: PersonalDetailKey;
+  group: PersonalDetailGroup;
+  label: string;
+  /** Masked or plain, depending on which way it was built. */
+  value: string;
+  /** Whether `value` has been through the mask. Drives nothing but the styling
+      — a masked line is set in a mono face so the dots line up. */
+  masked: boolean;
+}
+
+/** Where the admin asks to see somebody's details in full. */
+export const DETAILS_ENDPOINT = "/api/showcase/details";
 
 /**
  * Preset ids the admin ticks off themselves.
@@ -555,6 +908,21 @@ export interface JoinerStep {
   actor?: StepActor;
   /** Only on `actor: "joiner"` steps. Which form they're shown. */
   field?: JoinerField;
+  /**
+   * Only on `field: "personal-details"`. Whether that form also asks who to
+   * call in an emergency.
+   *
+   * Snapshotted off the block's setup when the invitation went out, for exactly
+   * the reason the steps themselves are snapshotted: the admin can untick that
+   * option afterwards, and somebody half-way through the form must not have a
+   * question vanish under them — nor have one appear the morning after they
+   * finished. It is stored per step rather than looked up from the workflow for
+   * the same reason `title` and `due` are.
+   *
+   * Absent reads as false, which is what every step written before this
+   * existed means.
+   */
+  askEmergencyContact?: boolean;
   /** Only on `actor: "craig"` steps. Which job it is Craig goes and does. */
   automation?: StepAutomation;
   /**
@@ -574,7 +942,17 @@ export interface JoinerStep {
    * which is most of them.
    */
   due?: number;
-  /** What they gave, once they've given it. */
+  /**
+   * What they gave, once they've given it.
+   *
+   * Plaintext, and it stays that way for the two fields that are one short
+   * string. A `personal-details` step has **nothing here even when it is
+   * finished**: its answer is sealed into columns of its own and never travels
+   * on this record, so everything that reads a `Joiner` — the admin's page, the
+   * joiner's own Craig, a future export — gets silence rather than an identity
+   * bundle it never asked for. `completedAt` is what says the step is done;
+   * `personal-details.ts` is the only door to what was said.
+   */
   value?: string;
   /**
    * ISO. The one field that means "this step is finished", whoever finished it.

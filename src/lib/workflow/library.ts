@@ -40,6 +40,14 @@ import {
   Zoom,
 } from "@/components/ui/brand-icons";
 import type { BlockKind, WorkflowBlock } from "@/components/ui";
+/* Two strings the personal-details preset shares with the invite route and the
+   new starter's form. Values rather than types, so this is a real import — but
+   the contract holds no React and no `server-only`, which is what makes it
+   safe for a module the block picker pulls into the browser. */
+import {
+  EMERGENCY_CONTACT_EXTRA,
+  PERSONAL_DETAILS_EXTRAS_FIELD,
+} from "@/lib/craig/contract";
 
 /**
  * The block library — what an admin actually picks from.
@@ -272,6 +280,17 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
           },
         ],
       },
+      /*
+       * Kept whole, and deliberately not trimmed now that `personal-details`
+       * below collects the identity half of it. This one is unwired — it is
+       * not in `SHOWCASE_PRESETS`, so the picker greys it out and no workflow
+       * holds a config for it — and the honest move when somebody does wire it
+       * is to *drop* `legal-name`, `address`, `emergency` and `dob` from the
+       * options here and leave it as bank and tax. The argument for that split
+       * is written out on `personal-details`; the argument for not doing it
+       * today is that editing a preset nobody can pick, to tidy a duplication
+       * nobody can hit, is a change with a merge conflict and no user.
+       */
       {
         id: "payroll-details",
         label: "Personal & payroll details",
@@ -373,6 +392,75 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         title: "Make their name tag",
         summary: "Somebody here does this and ticks it off",
         setup: [],
+      },
+      /*
+       * The one block on this list that is a form rather than a question, and
+       * the one that had to decide where it ends.
+       *
+       * **What it takes and what it leaves.** `payroll-details` above claims
+       * "legal name, address, bank and tax details, emergency contact" — the
+       * whole of the paperwork, in one card. That was the right sketch and is
+       * the wrong block, because the two halves of it are not the same kind of
+       * thing. Identity and contact details are facts about a person: their
+       * employer needs them to know who has turned up, to reach them, and to
+       * write the right name on a contract. Bank and tax details are
+       * instructions to a payment system, they only mean anything alongside a
+       * payroll provider, and they are the half where being wrong costs
+       * somebody a pay cycle rather than a re-typed form.
+       *
+       * So this block takes the identity half, whole, and takes nothing else.
+       * No bank account, no tax file number, no super fund — the later payroll
+       * block does the financial half, against whichever provider it ends up
+       * talking to, and it will read this block's answers rather than asking
+       * for a legal name a second time. A person asked for their legal name
+       * twice in one onboarding has learned something true about how joined-up
+       * the company is.
+       *
+       * **The one setup field, and why it isn't the objection the trio above
+       * makes.** Those three have no setup at all, on the argument that an
+       * optional field is a control that changes nothing and a required one
+       * would hold Publish shut over a question only the new starter can
+       * answer. Both still hold here, which is why this has exactly one
+       * optional tick and nothing else: it changes *what the new starter is
+       * asked* rather than what the admin has to supply, so it is not an inert
+       * control — and it is not required, so a workflow with this block on it
+       * is Ready the moment it lands, exactly like the trio.
+       *
+       * `emergency-contact` is a tick rather than a given because it is
+       * somebody else's name and number, volunteered by a person who was not
+       * asked. See `EMERGENCY_CONTACT_EXTRA` in the contract for that argument
+       * in full.
+       *
+       * **The id is load-bearing**, the same way the trio's are:
+       * `JOINER_FIELD_BY_PRESET` keys off this exact string to decide which
+       * form the new starter is shown, and `PERSONAL_DETAILS_EXTRAS_FIELD`
+       * names the setup field below so the invite route can find the tick.
+       */
+      {
+        id: "personal-details",
+        label: "Personal details",
+        description:
+          "Legal name, date of birth, contact details and where they live. They fill it in themselves.",
+        kind: "document",
+        icon: Person,
+        title: "Provide your personal details",
+        summary: "Name, date of birth, contact details and address",
+        /* Fixed behaviour, said out loud where the admin is choosing. Sealing
+           is not a feature they can turn off, and it is the reason this block
+           can be dropped into a workflow without anybody having a conversation
+           about where a stranger's date of birth is going to sit. */
+        note: "Encrypted the moment they send it. You'll see it masked, with a button to reveal it.",
+        setup: [
+          {
+            id: PERSONAL_DETAILS_EXTRAS_FIELD,
+            label: "Also ask for",
+            kind: "multiselect",
+            hint: "Only tick what you actually need to hold",
+            options: [
+              { id: EMERGENCY_CONTACT_EXTRA, label: "Emergency contact" },
+            ],
+          },
+        ],
       },
       {
         id: "verify-identity",
@@ -1388,6 +1476,7 @@ export const SHOWCASE_PRESETS = new Set<string>([
   "middle-name",
   "name-tag",
   "date-of-birth",
+  "personal-details",
   GOOGLE_WORKSPACE_PRESET,
 ]);
 

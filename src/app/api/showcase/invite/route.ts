@@ -4,6 +4,7 @@ import {
   AUTOMATION_BY_PRESET,
   JOIN_PATH,
   JOINER_FIELD_BY_PRESET,
+  PERSONAL_DETAILS_EXTRAS_FIELD,
 } from "@/lib/craig/contract";
 import { currentUser } from "@/lib/craig/current-user";
 import { getAccount } from "@/lib/craig/accounts";
@@ -390,6 +391,7 @@ function blocksFrom(value: unknown) {
     kind: string;
     preset?: string;
     due?: number;
+    extras?: string[];
   }[] = [];
 
   for (const entry of value.slice(0, MAX_BLOCKS)) {
@@ -421,6 +423,7 @@ function blocksFrom(value: unknown) {
       id,
       title,
       due,
+      extras: extrasFrom(raw.config),
       kind: oneLine(raw.kind, MAX_ID),
       preset:
         Object.hasOwn(JOINER_FIELD_BY_PRESET, preset) ||
@@ -432,6 +435,35 @@ function blocksFrom(value: unknown) {
   }
 
   return blocks;
+}
+
+/**
+ * The ticks on a block that change what the *new starter* is asked.
+ *
+ * Exactly one multiselect qualifies today — the emergency contact on the
+ * personal details block — and this reads it without knowing that. It takes ids
+ * from one named field, drops anything that isn't a short string, and caps the
+ * list; what any of them mean is decided in `stepsFromBlocks`, which is where
+ * the field they belong to is also decided.
+ *
+ * The rest of `config` deliberately does not travel. A block's setup is the
+ * admin's own working — which template, who countersigns, which channels — and
+ * it belongs to the workflow rather than to the snapshot of somebody's
+ * onboarding. Copying all of it "in case" would put values nobody has thought
+ * about into a row that a stranger's screen renders.
+ */
+function extrasFrom(value: unknown): string[] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const raw = (value as Record<string, unknown>)[PERSONAL_DETAILS_EXTRAS_FIELD];
+  if (!Array.isArray(raw)) return undefined;
+
+  const ids = raw
+    .slice(0, 8)
+    .map((entry) => oneLine(entry, MAX_ID))
+    .filter(Boolean);
+
+  return ids.length > 0 ? ids : undefined;
 }
 
 /**
