@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/craig/current-user";
 import { listDocuments } from "@/lib/craig/documents";
+import { pendingNotes } from "@/lib/craig/notebook";
 import { ResourcesScreen, type ResourceRow } from "./resources-screen";
 
 export const metadata = {
@@ -29,7 +30,18 @@ export const metadata = {
  */
 export default async function ResourcesPage() {
   const user = await requireUser();
-  const documents = await listDocuments(user.email);
+
+  /* The documents, and how many questions Craig is waiting on an answer to.
+  
+     The count belongs on this screen rather than only on the notebook, because
+     the notebook is where the answers go and this is where somebody actually
+     is. Craig's questions were reachable in exactly one place: the screen you
+     had to already be on to know there was a reason to go there. A notebook
+     that only grows when somebody happens to open it does not grow. */
+  const [documents, notes] = await Promise.all([
+    listDocuments(user.email),
+    pendingNotes(user.email),
+  ]);
 
   /* Two of these travel twice, formatted and raw. The reason is on
      `ResourceRow`: the words are what the row draws, and neither set of words
@@ -46,7 +58,7 @@ export default async function ResourcesPage() {
     uploadedAt: document.uploadedAt,
   }));
 
-  return <ResourcesScreen user={user} rows={rows} />;
+  return <ResourcesScreen user={user} rows={rows} waiting={notes.length} />;
 }
 
 /**
