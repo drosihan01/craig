@@ -1068,6 +1068,25 @@ export const PAYROLL_DETAIL_GROUPS: {
  * option outright is the recommendation.
  */
 export const PAYROLL_DETAILS_EXTRAS_FIELD = "payroll-extras";
+
+/**
+ * Every block config key that carries "which extra fields did the admin tick".
+ *
+ * One list, because the two places that read it are a browser and a server and
+ * the failure mode when they disagree is silence. The invite client strips
+ * anything not named here before the request is sent; the invite route accepts
+ * only what is named here after it arrives. A key present in one list and
+ * absent from the other means the admin ticks a box, publishes, invites, and
+ * the new starter is never asked — with nothing thrown, nothing logged, and a
+ * step that renders correctly with the field simply missing.
+ *
+ * That has now happened twice, once per block that added a multiselect. Adding
+ * a third means adding its id here and nowhere else.
+ */
+export const EXTRAS_FIELDS = [
+  PERSONAL_DETAILS_EXTRAS_FIELD,
+  PAYROLL_DETAILS_EXTRAS_FIELD,
+] as const;
 export const SUPER_FUND_EXTRA: PayrollExtra = "super-fund";
 export const TAX_FILE_NUMBER_EXTRA: PayrollExtra = "tax-file-number";
 

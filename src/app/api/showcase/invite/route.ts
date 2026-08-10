@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import {
   ADMIN_TICK_PRESETS,
   AUTOMATION_BY_PRESET,
+  EXTRAS_FIELDS,
   JOIN_PATH,
   JOINER_FIELD_BY_PRESET,
-  PAYROLL_DETAILS_EXTRAS_FIELD,
-  PERSONAL_DETAILS_EXTRAS_FIELD,
   type Joiner,
 } from "@/lib/craig/contract";
 import { currentUser } from "@/lib/craig/current-user";
@@ -490,10 +489,7 @@ function extrasFrom(value: unknown): string[] | undefined {
   const config = value as Record<string, unknown>;
   const ids: string[] = [];
 
-  for (const key of [
-    PERSONAL_DETAILS_EXTRAS_FIELD,
-    PAYROLL_DETAILS_EXTRAS_FIELD,
-  ]) {
+  for (const key of EXTRAS_FIELDS) {
     const raw = config[key];
     if (!Array.isArray(raw)) continue;
 
