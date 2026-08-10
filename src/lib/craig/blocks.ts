@@ -1,8 +1,11 @@
 import { AUTOMATION_BY_PRESET, type StepAutomation } from "@/lib/craig/contract";
 import {
+  DOCUSIGN_SIGNING_METHOD,
   GITHUB_PRESET,
   GOOGLE_WORKSPACE_PRESET,
   LINEAR_PRESET,
+  SIGNING_METHOD_FIELD,
+  SIGN_CONTRACT_PRESET,
   SLACK_PRESET,
 } from "@/lib/workflow/library";
 
@@ -46,7 +49,8 @@ import {
  * A provider in the `connections` table. Each member matches a store's own
  * constant — `GOOGLE_PROVIDER` in `accounts.ts`, `SLACK_PROVIDER` in
  * `src/lib/slack/store.ts`, `LINEAR_PROVIDER` in `src/lib/linear/store.ts`,
- * `GITHUB_PROVIDER` in `src/lib/github/store.ts`. The table's `provider`
+ * `GITHUB_PROVIDER` in `src/lib/github/store.ts`, `DOCUSIGN_PROVIDER` in
+ * `src/lib/docusign/store.ts`. The table's `provider`
  * column is an open string, so this union is the one place the set is actually
  * closed: a row stored under a spelling this type does not name is a row
  * nothing will ever read, and a name here that no store recognises makes the
@@ -56,7 +60,8 @@ export type ConnectionProvider =
   | "google-workspace"
   | "slack"
   | "linear"
-  | "github";
+  | "github"
+  | "docusign";
 
 /**
  * The only thing this module needs to know about a step.
@@ -75,16 +80,57 @@ export interface HasPreset {
    * no connection" is true, and it is this module's answer to give.
    */
   preset?: string;
+  /**
+   * The admin's answers to the preset's setup fields, keyed by field id — the
+   * same `config` a `WorkflowBlock` carries, restated structurally for the
+   * reason `preset` is.
+   *
+   * Added for `sign-contract`, whose connection requirement depends on an
+   * answer rather than on the block's identity, and optional because most
+   * callers have never needed to hand one over. A step with no config asks for
+   * no config-dependent connection, which is the right answer for a block
+   * nobody has configured yet: it is already unpublishable for its missing
+   * required fields, and stacking a second complaint on top of that would tell
+   * somebody to go and connect DocuSign before they had said they wanted it.
+   */
+  config?: Record<string, string | string[]>;
 }
 
 export interface BlockDefinition {
   /** The preset id the admin picks in the block library. */
   preset: string;
   /**
-   * The connection this block cannot run without, or `null` for a block that
-   * needs nothing set up.
+   * The connection this block cannot run without *whatever it is set to*, or
+   * `null` for a block that needs nothing set up.
+   *
+   * Unconditional on purpose, and it has to stay that way: `workflow-editor.tsx`
+   * reads this field directly, off nothing but a preset id, to decide what
+   * warning a block wears on the canvas. Anything here that depended on a
+   * step's configuration would be a question that call site cannot ask.
    */
   provider: ConnectionProvider | null;
+  /**
+   * A connection this block needs only for *some* of its configurations.
+   *
+   * `sign-contract` is why this exists. It is one preset offering four signing
+   * methods, and exactly one of them — DocuSign — reaches outside Craig. A flat
+   * `provider: "docusign"` on that row would hold Publish shut on every
+   * workflow containing a contract step, including the great majority signing
+   * in Craig, and demand a connection those workflows will never use. That is a
+   * **false gate**, and a false gate is worse than no gate: a missing
+   * requirement fails once, loudly, when somebody first tries to use the thing;
+   * a false one fails constantly, for everybody, and teaches people that the
+   * publish gate is noise to be worked around.
+   *
+   * The alternative to this field was to leave `sign-contract` off the registry
+   * entirely and let a DocuSign workflow publish with no connection. That fails
+   * in the worst possible place — a real starter's employment contract, silently
+   * never sent — so the conditional requirement is worth the extra field.
+   *
+   * Returns `null` when this particular step needs nothing, which is most of
+   * them. Called with whatever shape the caller holds; see `HasPreset`.
+   */
+  providerWhen?: (step: HasPreset) => ConnectionProvider | null;
   /** The automation it produces on a joiner's step, if it produces one. */
   automation: StepAutomation | null;
   /**
@@ -190,7 +236,86 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     automation: null,
     blockedReason: "Connect GitHub before publishing this.",
   },
+
+  /**
+   * The fifth row, and the first whose requirement is a *decision* rather than
+   * an identity.
+   *
+   * "Sign contract" is one preset with a Signing method field offering four
+   * answers. Craig's own signing and "email a PDF back" need nothing from
+   * anybody; Dropbox Sign has no module here and so cannot be required; and
+   * DocuSign is the one that needs a connection. `provider` is therefore null
+   * — a contract step in the abstract needs nothing — and `providerWhen`
+   * carries the real rule.
+   *
+   * Why DocuSign is offered for this block at all, since Craig can already
+   * collect a signature: the employment contract is the document that gets
+   * disputed, and what DocuSign sells is exactly what a dispute needs — a
+   * tamper-evident seal, a certificate of completion, an audit trail that
+   * stands up when somebody's lawyer reads it. Craig's own signing is the
+   * right tool for the handbook acknowledgement and the code of conduct, where
+   * a tick and a timestamp are proportionate and the cost of a heavier process
+   * is real. Neither is a lesser version of the other.
+   *
+   * `automation: null` is a fact, not a placeholder: no runner exists, so a
+   * joiner's contract step behaves exactly like an unwired task, and nothing
+   * anywhere may claim otherwise. Nothing in this repo has ever sent a DocuSign
+   * envelope, and the integration cannot serve a real customer at all until the
+   * integration key passes DocuSign's Go-Live review — which for a product in
+   * Craig's shape means joining their partner program. See
+   * `src/lib/docusign/config.ts`; it is a commercial gate, not a code one.
+   *
+   * ## What this row cannot fix, stated because it will look like a bug
+   *
+   * `workflow-editor.tsx` asks two questions off a bare preset id — which
+   * warning badge a block wears on the canvas, and which step an unmet
+   * prerequisite in the attention list should scroll to — and neither can see a
+   * step's config. So a contract step set to DocuSign, in an account with no
+   * DocuSign connection, is correctly refused by the publish gate and correctly
+   * named in the attention list, and wears **no badge on the canvas**; the
+   * attention-list entry has nothing to scroll to.
+   *
+   * That is a worse gap than it sounds — the editor's own comment says a block
+   * must never look publishable on the canvas and be refused by the button —
+   * and it is deliberate anyway, because the alternatives are worse. Making
+   * `provider` config-dependent would break both of those call sites' types.
+   * Setting `provider: "docusign"` outright would badge and block every
+   * contract step in the product, which is the false gate this file exists to
+   * argue against. The honest fix is one line in the editor — pass the block,
+   * not just its preset — and it belongs in a change that is allowed to touch
+   * that file.
+   */
+  [SIGN_CONTRACT_PRESET]: {
+    preset: SIGN_CONTRACT_PRESET,
+    provider: null,
+    providerWhen: (step) =>
+      step.config?.[SIGNING_METHOD_FIELD] === DOCUSIGN_SIGNING_METHOD
+        ? "docusign"
+        : null,
+    automation: null,
+    blockedReason:
+      "This contract is set to be signed with DocuSign — connect DocuSign before publishing, or change the signing method.",
+  },
 };
+
+/**
+ * What connection this particular step needs, given how it is configured.
+ *
+ * The question every caller below actually has, and the one place the two
+ * halves of a block's requirement — the unconditional one and the
+ * configuration-dependent one — are put back together. Taking the step rather
+ * than the preset id is the whole difference: `blockFor` answers about a *kind*
+ * of block, this answers about a block somebody has filled in.
+ *
+ * The unconditional requirement wins when both are present. Nothing uses both
+ * today; the ordering is stated so that the first block which does inherits a
+ * decision rather than making one by accident.
+ */
+export function providerNeededBy(step: HasPreset): ConnectionProvider | null {
+  const block = blockFor(step.preset);
+  if (!block) return null;
+  return block.provider ?? block.providerWhen?.(step) ?? null;
+}
 
 /** The definition for a preset, or `null` for one that is not a block. */
 export function blockFor(preset: string | undefined): BlockDefinition | null {
@@ -210,8 +335,8 @@ export function providersNeededBy(
 ): ConnectionProvider[] {
   const needed = new Set<ConnectionProvider>();
   for (const step of steps) {
-    const block = blockFor(step.preset);
-    if (block?.provider) needed.add(block.provider);
+    const provider = providerNeededBy(step);
+    if (provider) needed.add(provider);
   }
   return [...needed];
 }
@@ -231,9 +356,20 @@ export function unmetPrerequisites(
   connected: ReadonlySet<ConnectionProvider>,
 ): string[] {
   const reasons: string[] = [];
-  for (const provider of providersNeededBy(steps)) {
-    if (connected.has(provider)) continue;
-    const block = Object.values(BLOCKS).find((b) => b.provider === provider);
+  /* Deduplicated by provider rather than by sentence: two Google steps are one
+     connection and so one complaint. Walked over the steps rather than over
+     `BLOCKS`, which is the change `sign-contract` forced — the old version
+     found each provider's sentence by searching the registry for the block that
+     names it, and a block whose requirement is conditional does not name it.
+     Reading the sentence off the step that raised the requirement is also
+     simply more correct: it is the block in front of somebody that has to
+     explain itself. */
+  const seen = new Set<ConnectionProvider>();
+  for (const step of steps) {
+    const provider = providerNeededBy(step);
+    if (!provider || seen.has(provider) || connected.has(provider)) continue;
+    seen.add(provider);
+    const block = blockFor(step.preset);
     if (block) reasons.push(block.blockedReason);
   }
   return reasons;
