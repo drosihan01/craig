@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthSplit, Button } from "@/components/ui";
 import { JoinerLinkForm } from "@/components/craig/joiner-link-form";
+import { JoiningMarketing } from "@/components/craig/joining-marketing";
 import { JOIN_PATH, JOINER_HOME, SIGN_IN_PATH } from "@/lib/craig/contract";
 import { getJoiner, progressOf } from "@/lib/craig/joiners";
 import {
@@ -63,15 +64,16 @@ export const metadata = {
  * the top corner and nothing else. That is the same register this page was
  * asking for, so the two can now be the one layout without the cost.
  *
- * `aside` is an empty panel rather than the default. What lives there otherwise
- * is `AuthMarketing` — claims aimed at somebody deciding whether to buy Craig,
- * and this person is not buying anything. They were hired. The dot grid stays
- * because it is the product's own texture; the pitch goes because they are not
- * the audience for it.
+ * `aside` is `JoiningMarketing` rather than the default. What lives there
+ * otherwise is `AuthMarketing` — claims aimed at somebody deciding whether to
+ * buy Craig, and this person is not buying anything. They were hired. It was
+ * an empty panel for a while, which was honest and was also a large expanse of
+ * nothing beside a two-field form; the fix was not to remove the panel but to
+ * write for the person in front of it.
  */
 function Screen({ children }: { children: React.ReactNode }) {
   return (
-    <AuthSplit aside={<span aria-hidden />}>
+    <AuthSplit aside={<JoiningMarketing />}>
       <div className="flex flex-col gap-5">{children}</div>
     </AuthSplit>
   );
