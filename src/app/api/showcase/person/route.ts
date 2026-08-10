@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/craig/current-user";
-import { deleteJoiner, getJoiner } from "@/lib/craig/joiners";
+import { getJoiner } from "@/lib/craig/joiners";
+import { eraseJoiner } from "@/lib/craig/erase";
 import { rateLimit } from "@/lib/craig/rate-limit";
 
 /**
@@ -88,12 +89,18 @@ export async function DELETE(request: Request) {
     return refuse("That person isn't on this account.", 404);
   }
 
-  /* `deleteJoiner` returning false here means the record went between the read
-     above and this line — two tabs on the same account, most likely. Removing
-     somebody who is already removed is the outcome the caller asked for, so it
-     is reported as success rather than as an error about a race the person
-     pressing the button had no part in. */
-  await deleteJoiner(joiner.id);
+  /* `eraseJoiner` rather than a row delete, because Postgres cascades and
+     object storage does not: their signed contract is a file with only a
+     column pointing at it, and deleting the row would leave the PDF — their
+     name, their signature, the address on the contract, the IPs they signed
+     from — sitting in the bucket with nothing referencing it. See `erase.ts`.
+
+     A `null` here means the record went between the read above and this line —
+     two tabs on the same account, most likely. Removing somebody who is
+     already removed is the outcome the caller asked for, so it is reported as
+     success rather than as an error about a race the person pressing the
+     button had no part in. */
+  await eraseJoiner(session.email, joiner.id);
 
   return NextResponse.json({ ok: true, id: joiner.id }, { headers: noStore });
 }
