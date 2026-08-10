@@ -93,7 +93,6 @@ import {
   ComposerSizeDemo,
   ControlledComposerDemo,
 } from "./_components/composer-demo";
-import { ModalFamilyDemo } from "./_components/modal-demo";
 import { SignUpDemo } from "./_components/signup-demo";
 import {
   ActivityDemo,
@@ -2081,9 +2080,11 @@ export default function DesignSystemPage() {
         title="Modal family"
         description="Six dialogs sit on the one Dialog primitive, and they're not interchangeable. A modal is the right shape for a decision that has to be made now and can't be made anywhere else — it stops the page precisely so nothing else competes. That's also why it's usually the wrong answer: most of what a product wants to say isn't urgent enough to earn a blocked screen."
       >
-        <Demo title="Three of them, live" note="AddSeat, celebration, paywall">
-          <ModalFamilyDemo />
-        </Demo>
+        {/* The live demo of AddSeat, CelebrateDialog and PaywallDialog left
+            with them: all three were product dialogs from the pre-Craig
+            prototype rather than pieces of this design system, and they now
+            live in the craig-archive repo. The family below still documents
+            the shape, which is the part that generalises. */}
 
         <Demo title="The family" className="items-stretch">
           <List className="w-full">
@@ -2091,7 +2092,7 @@ export default function DesignSystemPage() {
               overline="Form"
               title="AddSeat"
               description="Name, email, start, workflow — and a live panel saying exactly what pressing the button does to a real person. “Here is what happens” is a better question than “are you sure?”"
-              meta="src/components/add-seat.tsx"
+              meta="craig-archive: src/components/add-seat.tsx"
               trailing={
                 <Badge tone="neutral" size="sm">
                   Home
@@ -2102,7 +2103,7 @@ export default function DesignSystemPage() {
               overline="Form"
               title="V3AddSeat"
               description="The demo twin, pre-filled. Its one real argument is the personal email address: everything after the contract goes to her work account, which signing the contract is what creates."
-              meta="src/components/v3/v3-add-seat.tsx"
+              meta="craig-archive: src/components/v3/v3-add-seat.tsx"
               trailing={
                 <Badge tone="neutral" size="sm">
                   v3
@@ -2135,7 +2136,7 @@ export default function DesignSystemPage() {
               overline="Moment"
               title="CelebrateDialog"
               description="Two dates and no confetti."
-              meta="src/components/v3/celebrate-dialog.tsx"
+              meta="craig-archive: src/components/v3/celebrate-dialog.tsx"
               trailing={
                 <Badge tone="neutral" size="sm">
                   v3
@@ -2146,7 +2147,7 @@ export default function DesignSystemPage() {
               overline="Moment"
               title="PaywallDialog"
               description="A price, and what you keep if you say no."
-              meta="src/components/v3/paywall-dialog.tsx"
+              meta="craig-archive: src/components/v3/paywall-dialog.tsx"
               trailing={
                 <Badge tone="neutral" size="sm">
                   v3
@@ -2167,7 +2168,7 @@ export default function DesignSystemPage() {
           </List>
         </Demo>
 
-        <Usage>{`import { Dialog, DialogClose, BlockPicker, TestRun, ChatModal } from "@/components/ui";\nimport { AddSeat } from "@/components/add-seat";`}</Usage>
+        <Usage>{`import { Dialog, DialogClose, BlockPicker, TestRun, ChatModal } from "@/components/ui";`}</Usage>
 
         <Callout
           tone="warning"
