@@ -46,6 +46,7 @@ import { blockSettingsFor } from "@/components/craig/block-settings";
 import type { Session } from "@/lib/craig/contract";
 import {
   blockFor,
+  providerNeededBy,
   unmetPrerequisites,
   type ConnectionProvider,
 } from "@/lib/craig/blocks";
@@ -770,7 +771,11 @@ function Editor({
                       longer knows which blocks exist, only that a block may
                       bring its own panel. `block-settings.tsx` is the list. */}
                   {(() => {
-                    const Panel = blockSettingsFor(selected.preset);
+                    /* Given the block so the panel can decide on its own
+                       settings, not just its preset. The contract block's
+                       panel is a DocuSign connection card, and it has no
+                       business appearing on a contract Craig signs himself. */
+                    const Panel = blockSettingsFor(selected);
                     return Panel ? (
                       <Panel
                         account={{
@@ -943,10 +948,22 @@ function Editor({
                      sentence on the canvas while the publish gate underneath
                      named Slack correctly. One block, two different accounts of
                      what is wrong with it. */
-                  const definition = blockFor(block.preset);
-                  const provider = definition?.provider;
+                  /* The whole block, not its preset id. `providerNeededBy`
+                     is the same resolver the publish gate uses, and it is the
+                     only one that can answer for a block whose requirement
+                     depends on its own settings — a contract step needs
+                     DocuSign when its signing method says DocuSign and nothing
+                     at all when Craig signs it.
+
+                     Reading `definition.provider` directly was correct while
+                     every requirement was unconditional, and silently wrong the
+                     moment one was not: a DocuSign contract with no connection
+                     was refused by the button while wearing no badge on the
+                     canvas — the exact "publishable-looking and refused" state
+                     the note above forbids. */
+                  const provider = providerNeededBy(block);
                   return provider && !connected.has(provider)
-                    ? definition.blockedReason
+                    ? (blockFor(block.preset)?.blockedReason ?? null)
                     : null;
                 }}
                 reveal={revealing}
