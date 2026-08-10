@@ -68,6 +68,29 @@ export const MESSAGE_MAX_WIDTH = WIDTH;
  */
 const MADE_WITH = "Made with Craig";
 
+/**
+ * Where the mark actually lives, absolutely.
+ *
+ * An email is read somewhere else, later, by a client with no notion of "this
+ * site" — so a root-relative `/craig-mark.png` resolves against nothing and
+ * arrives broken. It has to be a whole URL, and this module has no request to
+ * take an origin from: `renderEmail` is called from a cron sweep and from a
+ * preview screen as well as from routes.
+ *
+ * The default is the **stable alias**, not a per-build deployment URL. That
+ * distinction is the whole reason this is safe to hardcode a default for —
+ * `GOOGLE_OAUTH_REDIRECT_URI` once held a `craig-<hash>-…vercel.app` and
+ * re-broke on every single deploy. An alias does not move.
+ *
+ * Overridable because a deployment on another domain would otherwise serve a
+ * competitor's-looking URL in its footer, and because white-labelling is the
+ * direction this product is going.
+ */
+const MARK_URL = `${
+  process.env.NEXT_PUBLIC_CRAIG_APP_ORIGIN?.trim().replace(/\/$/, "") ??
+  "https://craig-alpha.vercel.app"
+}/craig-mark.png`;
+
 const INK = "#33302b";
 const MUTED = "#8a8279";
 const PAPER = "#ffffff";
@@ -152,8 +175,15 @@ function button(label: string, href: string) {
  * different reason worth writing down so nobody reopens one:
  *
  * - **A hosted `<img>`** needs a public URL, and this project has no asset host.
- *   Inventing one is a decision about somebody's infrastructure, not a thing to
- *   quietly bake into a template.
+ *   Inventing one was, at the time, a decision about somebody's infrastructure
+ *   rather than a thing to quietly bake into a template. **That is no longer
+ *   true, and this drawing is the consequence.** The logo work gave this
+ *   product a proven pattern for putting a picture in an email — an ordinary
+ *   `https://` URL a mail client can fetch with no session — and the app is
+ *   served from a public origin, so there has been somewhere to put our own
+ *   mark since the day that landed. The letter below was the honest answer to
+ *   "we have nowhere to host an image"; keeping it after that stopped being
+ *   true would have been a placeholder pretending to be a design.
  * - **A `data:` URI** is stripped by Gmail and several others. It looks perfect
  *   in every client anybody tests in and arrives as a broken-image icon for a
  *   large share of real recipients — worse than no mark, because a broken image
@@ -163,11 +193,22 @@ function button(label: string, href: string) {
  *   different logo, rendered differently on every platform, and on most of them
  *   a joke.
  *
- * What is left is type and a coloured box, which is what this is: a rounded
- * chip carrying the wordmark's initial, then the wordmark. Word doesn't do
- * `border-radius`, so in Outlook the chip is a square — a deliberate-looking
- * square rather than a failure, which is the only kind of degradation worth
- * accepting.
+ * So it is the actual drawing, as a PNG, at twice the size it is drawn — 72px
+ * for an 18px slot, because the mark is fine line-art and a 1:1 raster of it
+ * is mud on every retina screen, which is most of them.
+ *
+ * **`alt` is deliberately empty.** The word "Craig" sits immediately to its
+ * right in the very next cell, so a mark announcing itself as "Craig" would
+ * have a screen reader — and every client with images turned off — say the
+ * name twice. It is decorative in the strict sense: the meaning is already in
+ * the text beside it, which is also why images-off degrades to exactly the
+ * wordmark and no gap worth noticing.
+ *
+ * Both `width` and `height` are set, which the company logo above deliberately
+ * does not do. The reason they differ is the alt text: a fixed height clips
+ * alt text to the size of an absent picture, so the logo — whose alt is a
+ * company name that must stay readable — takes a width only. This one has no
+ * alt to protect, and pinning both stops Word reflowing the row.
  *
  * The nested table is not decoration either. A chip and a word need to sit on
  * one line with a gap between them, and the two CSS ways to do that —
@@ -181,10 +222,9 @@ function button(label: string, href: string) {
  * nothing after it to disturb.
  */
 function watermark() {
-  const chip = `font-family:${FONT};font-size:11px;font-weight:700;line-height:18px;`;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" style="margin-left:auto;">
 <tr>
-<td width="18" height="18" bgcolor="${MUTED}" align="center" style="width:18px;height:18px;border-radius:5px;text-align:center;vertical-align:middle;${chip}color:${PAPER};">C</td>
+<td width="18" height="18" align="center" style="width:18px;height:18px;text-align:center;vertical-align:middle;"><img src="${MARK_URL}" width="18" height="18" alt="" style="display:block;width:18px;height:18px;border:0;outline:none;text-decoration:none;"></td>
 <td style="padding-left:6px;font-family:${FONT};font-size:11px;line-height:18px;color:${MUTED};white-space:nowrap;">Made with <span style="font-weight:600;letter-spacing:-0.01em;">Craig</span></td>
 </tr>
 </table>`;
