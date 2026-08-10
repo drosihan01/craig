@@ -116,7 +116,7 @@ export async function POST(request: Request) {
      one office router are two people working through their own onboarding, and
      counting them together would have the second one told to slow down for
      something the first did. */
-  const limit = rateLimit(`showcase-step:${joiner.id}`, LIMIT_OPTIONS);
+  const limit = await rateLimit(`showcase-step:${joiner.id}`, LIMIT_OPTIONS);
   if (!limit.ok) {
     /* The limiter's own wording, passed through. It is written for whoever
        reads it rather than for the chat it started on, so there is nothing here

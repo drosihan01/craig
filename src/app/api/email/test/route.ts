@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const limit = rateLimit(`email-test:${session.email}`, LIMIT_OPTIONS);
+  const limit = await rateLimit(`email-test:${session.email}`, LIMIT_OPTIONS);
   if (!limit.ok) {
     return NextResponse.json(
       {

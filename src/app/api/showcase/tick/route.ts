@@ -80,7 +80,7 @@ export async function POST(request: Request) {
   const session = await currentUser();
   if (!session) return refuse("Not signed in.", 401);
 
-  const limit = rateLimit(`showcase-tick:${session.email}`, LIMIT_OPTIONS);
+  const limit = await rateLimit(`showcase-tick:${session.email}`, LIMIT_OPTIONS);
   if (!limit.ok) {
     /* The limiter's own wording, passed through. It used to be replaced here:
        the message talked about messages, which is the wrong noun in front of
