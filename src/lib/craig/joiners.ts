@@ -251,6 +251,22 @@ export function stepsFromBlocks(
     });
 }
 
+/**
+ * Somebody already holds this seat.
+ *
+ * Its own type rather than a string match on a message, because the caller has
+ * to branch on it: a duplicate is a normal thing for an admin to try — they
+ * forgot, or the person said the email never arrived — and it deserves an
+ * offer to resend rather than a red box. Everything else that can go wrong
+ * here genuinely is a failure.
+ */
+export class AlreadyInvitedError extends Error {
+  constructor(readonly email: string) {
+    super(`${email} already has a seat on this account.`);
+    this.name = "AlreadyInvitedError";
+  }
+}
+
 export async function createJoiner(
   input: Omit<Joiner, "id" | "invitedAt">,
 ): Promise<Joiner> {
@@ -288,6 +304,14 @@ export async function createJoiner(
     .select()
     .single();
 
+  /* 23505 is Postgres' unique violation, and the only unique index on this
+     table is one seat per person per account. So this is not a fault to shout
+     about — it is somebody inviting a person who already has a seat, which is
+     a normal thing to try and a thing the caller has to be able to tell apart
+     from a real failure. The route turns it into an offer to resend rather
+     than an error, because the useful answer to "they never got it" is another
+     email, not a second checklist. */
+  if (error?.code === "23505") throw new AlreadyInvitedError(input.email);
   if (error) throw new Error(`Creating the invitation failed: ${error.message}`);
 
   /* The snapshot, taken exactly once. Two inserts rather than one because the
@@ -329,6 +353,28 @@ export async function getJoiner(id: string): Promise<Joiner | null> {
 }
 
 /** Everyone one account has invited, newest last. */
+/**
+ * The seat this account already gave to this address, if there is one.
+ *
+ * Matched the way the unique index matches — lowercased and trimmed — so that
+ * "what would the database refuse" and "what does this find" are the same
+ * question. Two answers to that would mean an admin being told somebody
+ * already has a seat and then being unable to find them.
+ *
+ * Scoped to the account, because the index is: two companies onboarding the
+ * same contractor are two unrelated seats, and this must never reach across.
+ */
+export async function joinerByEmail(
+  accountEmail: string,
+  email: string,
+): Promise<Joiner | null> {
+  const wanted = email.trim().toLowerCase();
+  const everyone = await listJoiners(accountEmail);
+  return (
+    everyone.find((j) => j.email.trim().toLowerCase() === wanted) ?? null
+  );
+}
+
 export async function listJoiners(accountEmail: string): Promise<Joiner[]> {
   const { data, error } = await db()
     .from("joiners")
