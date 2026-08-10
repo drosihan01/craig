@@ -346,7 +346,7 @@ export default function DesignSystemPage() {
             Admin home →
           </Link>
           <Link
-            href="/builder"
+            href="/workflows"
             className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-sunken px-2 text-xs font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover"
           >
             Workflow builder →
@@ -1217,7 +1217,7 @@ export default function DesignSystemPage() {
             />
             <NavTreeItem
               label="Workflow builder"
-              href="/builder"
+              href="/workflows"
               icon={<AltRoute />}
             />
             <NavTreeItem label="Sign in" href="/sign-in" icon={<Person />} />
@@ -1879,7 +1879,7 @@ export default function DesignSystemPage() {
         <Callout tone="info" icon={<Info />} title="The full builder space">
           <p>
             <Link
-              href="/builder/engineer"
+              href="/workflows"
               className="font-medium underline underline-offset-4"
             >
               Open the builder

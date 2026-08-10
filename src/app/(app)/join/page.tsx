@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthSplit, Button } from "@/components/ui";
 import { JoinerLinkForm } from "@/components/craig/joiner-link-form";
-import { JOIN_PATH, JOINER_HOME } from "@/lib/craig/contract";
+import { JoiningMarketing } from "@/components/craig/joining-marketing";
+import { JOIN_PATH, JOINER_HOME, SIGN_IN_PATH } from "@/lib/craig/contract";
 import { getJoiner, progressOf } from "@/lib/craig/joiners";
 import {
   JOINER_COOKIE_OPTIONS,
@@ -62,15 +64,16 @@ export const metadata = {
  * the top corner and nothing else. That is the same register this page was
  * asking for, so the two can now be the one layout without the cost.
  *
- * `aside` is an empty panel rather than the default. What lives there otherwise
- * is `AuthMarketing` — claims aimed at somebody deciding whether to buy Craig,
- * and this person is not buying anything. They were hired. The dot grid stays
- * because it is the product's own texture; the pitch goes because they are not
- * the audience for it.
+ * `aside` is `JoiningMarketing` rather than the default. What lives there
+ * otherwise is `AuthMarketing` — claims aimed at somebody deciding whether to
+ * buy Craig, and this person is not buying anything. They were hired. It was
+ * an empty panel for a while, which was honest and was also a large expanse of
+ * nothing beside a two-field form; the fix was not to remove the panel but to
+ * write for the person in front of it.
  */
 function Screen({ children }: { children: React.ReactNode }) {
   return (
-    <AuthSplit aside={<span aria-hidden />}>
+    <AuthSplit aside={<JoiningMarketing />}>
       <div className="flex flex-col gap-5">{children}</div>
     </AuthSplit>
   );
@@ -120,6 +123,27 @@ export default async function JoinPage(props: PageProps<"/join">) {
             of it are gone: they explained a field that explains itself, and the
             heading already says which of the two situations this is. */}
         <JoinerLinkForm />
+
+        {/* The way back, and the mirror of the line sign-in carries pointing
+            here. Both screens are reachable by somebody who wanted the other
+            one: an admin who followed a joiner's link out of curiosity, or
+            anybody who typed the wrong address. Until now that traffic only
+            flowed one way — sign-in offered "Joining a company? Get your
+            link", and this offered nothing back, so arriving here by mistake
+            meant editing the URL.
+
+            Under the form rather than above it, because this page is addressed
+            to the new starter and they are still the likelier reader. It is an
+            exit for somebody on the wrong screen, not a second front door. */}
+        <p className="text-sm text-text-subtle">
+          Work here already?{" "}
+          <Link
+            href={SIGN_IN_PATH}
+            className="text-accent underline-offset-4 hover:underline"
+          >
+            Sign in
+          </Link>
+        </p>
       </Screen>
     );
   }
