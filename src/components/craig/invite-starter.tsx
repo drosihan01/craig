@@ -126,6 +126,11 @@ export function InviteStarter({
   const [start, setStart] = React.useState<Date | null>(null);
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  /* Set only by the route's 409, never guessed at here. The offer to send
+     again is the route's to make: it is the side that knows a seat exists for
+     this address on *this* account, and a client that decided for itself would
+     be offering to re-send somebody else's invitation on a stale list. */
+  const [canResend, setCanResend] = React.useState(false);
 
   /* Deliberately weaker than the route's check, and only used to decide whether
      the button is worth pressing. Two rulesets that both get to refuse an
@@ -146,6 +151,7 @@ export function InviteStarter({
     setRole("");
     setStart(null);
     setError(null);
+    setCanResend(false);
   }
 
   function close() {
@@ -154,11 +160,18 @@ export function InviteStarter({
     onClose();
   }
 
-  async function send() {
+  /**
+   * @param resend Send this person's link again rather than creating a seat.
+   *   Only ever passed by the button the route's 409 puts on screen, and the
+   *   route asks for it by name — so an admin who simply presses Invite twice
+   *   gets the refusal, not a silent second email.
+   */
+  async function send({ resend = false }: { resend?: boolean } = {}) {
     if (!ready || sending || !start) return;
 
     setSending(true);
     setError(null);
+    setCanResend(false);
 
     const startDate = toISODate(start);
     const person = {
@@ -174,6 +187,7 @@ export function InviteStarter({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...person,
+          resend,
           workflowId: workflow?.id,
           workflowName: workflow?.name,
           /* The steps go with the invitation, because the server has no way to
@@ -209,6 +223,7 @@ export function InviteStarter({
         ok?: boolean;
         id?: string;
         error?: string;
+        resend?: boolean;
       } | null;
 
       if (!response.ok || !payload?.ok || !payload.id) {
@@ -216,6 +231,7 @@ export function InviteStarter({
           payload?.error ??
             "The invitation didn't send. Nothing was sent twice.",
         );
+        setCanResend(payload?.resend === true);
         return;
       }
 
@@ -225,10 +241,17 @@ export function InviteStarter({
          carry — so it is written here, where the send is known to have
          succeeded, rather than lost along with the seat list that used to be
          kept beside it. */
-      logActivity({
-        verb: "Invited",
-        what: `${person.name} and sent their first step`,
-      });
+      logActivity(
+        resend
+          ? {
+              verb: "Sent again",
+              what: `${person.name}'s invitation — their answers were kept`,
+            }
+          : {
+              verb: "Invited",
+              what: `${person.name} and sent their first step`,
+            },
+      );
       onInvited?.({ ...person, messageId: payload.id });
       reset();
       onClose();
@@ -265,7 +288,15 @@ export function InviteStarter({
           <Button variant="ghost" size="sm" onClick={close} disabled={sending}>
             Cancel
           </Button>
-          <Button size="sm" onClick={send} disabled={!ready} loading={sending}>
+          {/* Wrapped rather than passed by reference: `send` now takes options,
+              and handing it straight to `onClick` would feed it a MouseEvent
+              as its options object. */}
+          <Button
+            size="sm"
+            onClick={() => void send()}
+            disabled={!ready}
+            loading={sending}
+          >
             {sending ? "Sending" : "Send invite"}
           </Button>
         </>
@@ -377,8 +408,34 @@ export function InviteStarter({
         </div>
 
         {error && (
-          <Callout tone="danger" icon={<Warning />} title="It didn't send">
+          <Callout
+            tone={canResend ? "warning" : "danger"}
+            icon={<Warning />}
+            title={canResend ? "They already have a seat" : "It didn't send"}
+          >
             {error}
+            {canResend && (
+              <div className="mt-3">
+                {/* The way out of the dead end this used to be. Before this
+                    button the only route to a second email was deleting the
+                    seat and inviting again, which threw away every answer the
+                    new starter had already given — so the admin whose hire
+                    said "I never got it" had to choose between chasing them
+                    and keeping their work. */}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={sending}
+                  onClick={() => void send({ resend: true })}
+                >
+                  {sending ? "Sending…" : "Send their link again"}
+                </Button>
+                <p className="mt-2 text-sm opacity-80">
+                  A fresh link to the same onboarding. Nothing they have
+                  already filled in is touched.
+                </p>
+              </div>
+            )}
           </Callout>
         )}
       </div>
