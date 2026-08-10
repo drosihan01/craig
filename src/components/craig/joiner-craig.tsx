@@ -193,28 +193,23 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
   const empty = turns.length === 0;
 
   return (
-    /* No border and no radius of its own: the column it sits in owns the edge
-       now, and a card inside a panel is two frames drawn around one thing.
-       Stacked below `lg` it is a plain block in the page flow, which is where
-       it has always been.
+    /* No frame of its own. It fills a room now rather than sitting in a
+       corner of one: the shell draws the edges, and a card inside a panel is
+       two frames around one thing.
 
-       `h-full` so the conversation can claim the column's height and scroll
-       within it — the parent is what is `h-screen`, and without this the
-       composer would float wherever the content happened to end. */
+       `min-h-0` on a flex child that scrolls is the load-bearing bit — the
+       default `min-height: auto` floors it at its content, so without it this
+       grows with the transcript instead of scrolling inside it, and the
+       composer walks off the bottom of the window.
+
+       The heading and the scope line went with the panel. A room whose nav row
+       says "Ask Craig" does not also need a heading saying "Ask me", and the
+       scope now lives in the nav where it can be read before you type rather
+       than only while the screen is empty. */
     <section
-      className="flex flex-col gap-4 p-5 lg:h-full lg:min-h-0 lg:p-6"
+      className="flex min-h-0 flex-1 flex-col gap-4"
       aria-label="Ask Craig"
     >
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold tracking-[-0.01em]">Ask me</h2>
-        <p className="text-sm text-text-muted">
-          {/* Scoped on purpose, and in his voice rather than as a disclaimer.
-              Somebody who knows what he can see asks him things he can answer;
-              somebody who does not spends their first question finding out. */}
-          I know your plan, your start date and what you&apos;ve sent so far. For
-          anything else, the person who invited you is the one to ask.
-        </p>
-      </div>
 
       {/* The body, and it is always here — that is the fix rather than an
           incidental tidy-up. This region used to render only once there were
