@@ -14,9 +14,10 @@ export const metadata = {
  * the account behind it still exists.
  *
  * The list is read here and handed down flattened, matching `/people`. What the
- * screen needs is a name, a size in words and one switch; the storage path is
- * the server's business and never travels — a path is the one field on this row
- * that would tell a browser something about how the bucket is laid out.
+ * screen needs is a name, a size in words, one switch, and the two raw values it
+ * puts the list in order by; the storage path is the server's business and never
+ * travels — a path is the one field on this row that would tell a browser
+ * something about how the bucket is laid out.
  *
  * The session travels too, and only so the shell can draw the account cell at
  * the foot of the nav. That is the same trip `people/page.tsx` makes for the
@@ -30,6 +31,9 @@ export default async function ResourcesPage() {
   const user = await requireUser();
   const documents = await listDocuments(user.email);
 
+  /* Two of these travel twice, formatted and raw. The reason is on
+     `ResourceRow`: the words are what the row draws, and neither set of words
+     can be put in order. */
   const rows: ResourceRow[] = documents.map((document) => ({
     id: document.id,
     name: document.name,
@@ -37,6 +41,8 @@ export default async function ResourcesPage() {
     size: readableSize(document.sizeBytes),
     shared: document.visibility === "shared",
     uploadedOn: readableDay(document.uploadedAt),
+    sizeBytes: document.sizeBytes,
+    uploadedAt: document.uploadedAt,
   }));
 
   return <ResourcesScreen user={user} rows={rows} />;
