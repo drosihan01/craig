@@ -8,10 +8,17 @@ import { completeStep, getJoiner } from "@/lib/craig/joiners";
    disagree. */
 import {
   birthDateProblem,
-  completeSealedStep,
   parsePersonalDetails,
   sealPersonalDetails,
 } from "@/lib/craig/personal-details";
+import {
+  parsePayrollDetails,
+  sealPayrollDetails,
+} from "@/lib/craig/payroll-details";
+import {
+  completeSealedStep,
+  type SealResult,
+} from "@/lib/craig/sealed-answer";
 import { rateLimit } from "@/lib/craig/rate-limit";
 
 /**
@@ -38,11 +45,12 @@ import { rateLimit } from "@/lib/craig/rate-limit";
  *    because "next Thursday" typed into a field payroll reads is a mistake
  *    worth catching on the way in rather than in three weeks.
  * 3. **A structured answer is rebuilt rather than accepted.** The personal
- *    details block posts a dozen fields at once, and not one of them is taken
- *    as given: `parsePersonalDetails` reads only the keys the shape names,
- *    checks each against its kind, and drops everything else. The result is
- *    then sealed before it goes anywhere near a row — see
- *    `personal-details.ts` for why that is not optional.
+ *    details and payroll details blocks each post a form's worth of fields at
+ *    once, and not one of them is taken as given: the parser reads only the
+ *    keys its shape names, checks each against its kind, and drops everything
+ *    else. The result is then sealed before it goes anywhere near a row — see
+ *    `sealed-answer.ts` for why that is not optional, and `payroll-details.ts`
+ *    for the one field on either form that is regulated in its own right.
  *
  * Limited, and deliberately not against the model budget — see `spend` below.
  *
@@ -146,37 +154,63 @@ export async function POST(request: Request) {
     return refuse("That one isn't yours to fill in.", 400);
   }
 
-  /* The one field whose answer is a document rather than a line, and the one
-     that never touches the plaintext column. It leaves through its own store
-     function, so there is no path where a `PersonalDetails` reaches
-     `completeStep` and gets stringified into `value`.
+  /* The two fields whose answer is a document rather than a line, and the two
+     that never touch the plaintext column. They leave through their own store
+     function, so there is no path where a `PersonalDetails` or a
+     `PayrollDetails` reaches `completeStep` and gets stringified into `value`.
 
-     `askEmergencyContact` is read off *their snapshot*, never off the request.
-     It decides which three fields are required and — more to the point —
-     whether they are stored at all, so a client that could set it would be a
-     client that could opt a company into holding a third party's phone number
-     nobody asked for. */
-  if (step.field === "personal-details") {
-    const parsed = parsePersonalDetails(input.details, {
-      emergencyContact: Boolean(step.askEmergencyContact),
-    });
-    if (!parsed.ok) return refuse(parsed.problem, 400);
+     **Every "was this asked for" flag is read off *their snapshot*, never off
+     the request.** `askEmergencyContact`, `askSuperFund` and `askTaxFileNumber`
+     each decide whether a group of fields is stored *at all* rather than merely
+     whether it is required, so a client that could set one would be a client
+     that could opt a company into holding a third party's phone number, or a
+     tax file number, that nobody decided to collect. The last of those is not
+     only rude — collecting a TFN without an authorised purpose is an offence
+     under the Taxation Administration Act, and "the browser said to" is not a
+     purpose. See `payroll-details.ts`. */
+  if (step.field === "personal-details" || step.field === "payroll-details") {
+    let sealed: SealResult;
 
-    const sealed = sealPersonalDetails(parsed.details, joiner.id, stepId);
+    if (step.field === "personal-details") {
+      const parsed = parsePersonalDetails(input.details, {
+        emergencyContact: Boolean(step.askEmergencyContact),
+      });
+      if (!parsed.ok) return refuse(parsed.problem, 400);
+      sealed = sealPersonalDetails(parsed.details, joiner.id, stepId);
+    } else {
+      const parsed = parsePayrollDetails(input.details, {
+        superFund: Boolean(step.askSuperFund),
+        taxFileNumber: Boolean(step.askTaxFileNumber),
+      });
+      if (!parsed.ok) return refuse(parsed.problem, 400);
+      sealed = sealPayrollDetails(parsed.details, joiner.id, stepId);
+    }
+
     if (!sealed.ok) {
       /* The deployment cannot encrypt this, so it does not take it. The
          message the key check produces names an environment variable and is
          written for whoever can set it, which is not the person on the other
          end of this request — so they get a sentence of their own and the real
-         one goes to the log, where somebody who can act will find it. */
-      console.error(`[personal-details] ${sealed.message}`);
+         one goes to the log, where somebody who can act will find it.
+
+         The log line carries the key check's message and the field, and
+         nothing the person typed. That is not squeamishness about a failed
+         write: this branch is reached with a fully parsed bank account or tax
+         file number in scope, and a `console.error` that included the payload
+         "for debugging" is exactly how one ends up in a log aggregator. */
+      console.error(`[${step.field}] ${sealed.message}`);
       return refuse(
         "I can't store this safely just yet, so I haven't stored it at all. Nothing you typed has been kept — tell whoever invited you, and try again once they've sorted it.",
         503,
       );
     }
 
-    const written = await completeSealedStep(joiner.id, stepId, sealed.sealed);
+    const written = await completeSealedStep(
+      joiner.id,
+      stepId,
+      step.field,
+      sealed.sealed,
+    );
     if (!written) {
       return refuse(
         "That didn't save. Reload the page and try once more.",
@@ -191,10 +225,10 @@ export async function POST(request: Request) {
     if (settled) await fireNextAutomatedStep(settled, stepId, after);
 
     /* The record back, minus the answer — `toStep` never carries the sealed
-       envelope, so this is a joiner whose personal-details step is finished
-       and holds nothing. That is the right shape to hand a browser: the screen
-       re-reads itself from the server anyway, and the one thing it does not
-       need is twelve fields of PII travelling back to be thrown away. */
+       envelope, so this is a joiner whose sealed step is finished and holds
+       nothing. That is the right shape to hand a browser: the screen re-reads
+       itself from the server anyway, and the one thing it does not need is a
+       form's worth of PII travelling back to be thrown away. */
     return NextResponse.json(
       { ok: true, joiner: settled ?? joiner },
       { headers: noStore },

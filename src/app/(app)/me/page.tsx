@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
 import { currentJoiner, requireJoiner } from "@/lib/craig/current-joiner";
 import { progressOf } from "@/lib/craig/joiners";
-import type { Joiner, PersonalDetails } from "@/lib/craig/contract";
+import type {
+  Joiner,
+  PayrollDetails,
+  PersonalDetails,
+} from "@/lib/craig/contract";
 import { dueDateFrom } from "@/lib/workflow/library";
 import { listDocumentsForJoiner } from "@/lib/craig/documents";
 import type { StoredDocument } from "@/lib/craig/documents";
 import {
-  canSealPersonalDetails,
   readPersonalDetails,
   summariseDetails,
 } from "@/lib/craig/personal-details";
+import {
+  readPayrollDetails,
+  summarisePayroll,
+} from "@/lib/craig/payroll-details";
+import { canSealJoinerAnswers } from "@/lib/craig/sealed-answer";
 import {
   JoinerScreen,
   type JoinerView,
@@ -71,21 +79,32 @@ export default async function JoinerHomePage() {
 
   /* Their own sealed answers, opened here because this is the server and this
      is their own record. Nothing of what comes out reaches the browser whole —
-     `readableAnswer` turns it into one line naming them and acknowledging the
-     rest, for the reasons `summariseDetails` sets out. One query for the plan
+     `readableAnswer` turns each into one line, for the reasons `summariseDetails`
+     and `summarisePayroll` set out. One query per block for the whole plan
      rather than one per step, and no query at all for the plans that have no
-     such step, which is most of them. */
+     such step, which is most of them.
+
+     Two reads rather than one because they are two different envelopes with two
+     different AADs, and a single sweep would have to try each row both ways —
+     which is a decrypt-and-fail per row, to save a round trip that the great
+     majority of plans do not make at all. */
   const wantsDetails = joiner.steps.some((s) => s.field === "personal-details");
   const details = wantsDetails
     ? await readPersonalDetails(joiner.id)
     : new Map<string, PersonalDetails>();
 
+  const wantsPayroll = joiner.steps.some((s) => s.field === "payroll-details");
+  const payroll = wantsPayroll
+    ? await readPayrollDetails(joiner.id)
+    : new Map<string, PayrollDetails>();
+
   /* Whether this deployment can encrypt an answer at all. Asked before the
      form is drawn rather than after it is filled in: somebody who types twelve
      boxes and is then told the server won't take them has been wasted, and the
      honest alternative — storing it in the clear "just this once" — is the one
-     thing this feature exists to prevent. */
-  const canCollect = canSealPersonalDetails();
+     thing this feature exists to prevent. One question for both blocks, because
+     there is one key. */
+  const canCollect = canSealJoinerAnswers();
 
   const view: JoinerView = {
     firstName: joiner.name.split(" ")[0] || joiner.name,
@@ -97,6 +116,7 @@ export default async function JoinerHomePage() {
     steps: joiner.steps.map((step) =>
       toPlanStep(step, step.id === currentId, joiner, {
         details: details.get(step.id),
+        payroll: payroll.get(step.id),
         canCollect,
       }),
     ),
@@ -172,6 +192,10 @@ function toPlanStep(
   sealed: {
     /** Their own answer, already opened, when this step holds one. */
     details?: PersonalDetails;
+    /** The same, for the payroll block. Separate rather than a union, because
+        a step is one or the other and a caller passing the wrong one should be
+        a compile error rather than a summary about the wrong form. */
+    payroll?: PayrollDetails;
     /** Whether a sealed answer can be taken at all on this deployment. */
     canCollect: boolean;
   },
@@ -204,16 +228,20 @@ function toPlanStep(
      The sentence says whose problem it is without naming the problem, which is
      the same rule every automated step's wording follows. */
   const uncollectable =
-    step.field === "personal-details" && !step.completedAt && !sealed.canCollect;
+    (step.field === "personal-details" || step.field === "payroll-details") &&
+    !step.completedAt &&
+    !sealed.canCollect;
 
   return {
     id: step.id,
     title: step.title,
     actor: step.actor,
     doneOn: (step.completedAt && readableDay(step.completedAt)) || undefined,
-    answer: readableAnswer(step, sealed.details),
+    answer: readableAnswer(step, sealed.details, sealed.payroll),
     field: current && !uncollectable ? step.field : undefined,
     askEmergencyContact: step.askEmergencyContact,
+    askSuperFund: step.askSuperFund,
+    askTaxFileNumber: step.askTaxFileNumber,
     dueOn,
     detail:
       automated?.detail ??
@@ -288,23 +316,30 @@ function craigWords(
  * pattern does not recognise is shown exactly as it was typed rather than
  * quietly reformatted: this is the record of what they said.
  *
- * The personal details block is the one that arrives as a document rather than
- * a string, and it is deliberately *not* printed out field by field. A row in
- * a plan cannot hold twelve values, and a screen that could would be putting a
- * home address and a date of birth on a page somebody is likely to be reading
- * in an office on their first week. `summariseDetails` is the whole argument;
- * what comes back is their name and an acknowledgement of the rest.
+ * The two sealed blocks arrive as documents rather than strings, and neither is
+ * printed out field by field. A row in a plan cannot hold twelve values, and a
+ * screen that could would be putting a home address, a date of birth or a bank
+ * account on a page somebody is likely to be reading in an office in their first
+ * week. `summariseDetails` and `summarisePayroll` are the arguments; the first
+ * gives back their name and an acknowledgement of the rest, and the second gives
+ * back no value at all, because nothing on that form is a fact this screen
+ * should put in front of whoever is standing behind them.
  *
- * It is a sentence rather than a lookup because the answer never travels on the
- * step: `JoinerStep.value` is empty for a sealed step, so the details have to
+ * They are sentences rather than lookups because the answers never travel on the
+ * step: `JoinerStep.value` is empty for a sealed step, so the documents have to
  * be handed in from the one place allowed to open them.
  */
 function readableAnswer(
   step: Joiner["steps"][number],
   details: PersonalDetails | undefined,
+  payroll: PayrollDetails | undefined,
 ): string | undefined {
   if (step.field === "personal-details") {
     return details ? summariseDetails(details) : undefined;
+  }
+
+  if (step.field === "payroll-details") {
+    return payroll ? summarisePayroll(payroll) : undefined;
   }
 
   if (!step.value) return undefined;

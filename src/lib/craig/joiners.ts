@@ -6,6 +6,8 @@ import {
   AUTOMATION_BY_PRESET,
   EMERGENCY_CONTACT_EXTRA,
   JOINER_FIELD_BY_PRESET,
+  SUPER_FUND_EXTRA,
+  TAX_FILE_NUMBER_EXTRA,
   type Joiner,
   type JoinerField,
   type JoinerStep,
@@ -84,10 +86,12 @@ function toStep(row: StepRow): JoinerStep {
     requireMfa: row.require_mfa || undefined,
     run: (row.run as StepRun | null) ?? undefined,
     due: row.due ?? undefined,
-    /* Only ever true on a personal-details step, but read unconditionally —
-       the column has a `false` default, so this is a fact about the row rather
-       than a branch on what the row happens to be. */
+    /* Only ever true on the step whose form has the question, but read
+       unconditionally — the columns have a `false` default, so these are facts
+       about the row rather than branches on what the row happens to be. */
     askEmergencyContact: row.ask_emergency_contact || undefined,
+    askSuperFund: row.ask_super_fund || undefined,
+    askTaxFileNumber: row.ask_tax_file_number || undefined,
     /* Deliberately only the plaintext column. A sealed answer's envelope has
        no field on `JoinerStep` to travel in, so a `Joiner` handed to a screen,
        to the joiner's own Craig, or to anything anybody writes next simply
@@ -247,6 +251,23 @@ export function stepsFromBlocks(
           (b.extras ?? []).includes(EMERGENCY_CONTACT_EXTRA)
             ? true
             : undefined,
+        /* The same rule, twice more, for the payroll block's two ticks — and
+           the field test earns its keep hardest on the second one. A hand-built
+           request claiming `tax-file-number` against a middle-name block must
+           not be able to mark any step as one that collects a regulated
+           identifier: the flag is what the form, the validator and the admin's
+           screen all branch on, so a flag on the wrong step is a question asked
+           by nobody's decision. */
+        askSuperFund:
+          field === "payroll-details" &&
+          (b.extras ?? []).includes(SUPER_FUND_EXTRA)
+            ? true
+            : undefined,
+        askTaxFileNumber:
+          field === "payroll-details" &&
+          (b.extras ?? []).includes(TAX_FILE_NUMBER_EXTRA)
+            ? true
+            : undefined,
       };
     });
 }
@@ -338,6 +359,8 @@ export async function createJoiner(
         completed_at: s.completedAt ?? null,
         run: (s.run ?? null) as Json,
         ask_emergency_contact: s.askEmergencyContact ?? false,
+        ask_super_fund: s.askSuperFund ?? false,
+        ask_tax_file_number: s.askTaxFileNumber ?? false,
       })),
     );
   if (stepsError) {
@@ -462,13 +485,17 @@ export async function completeStep(
     .eq("step_id", stepId)
     .eq("actor", "joiner")
     .not("field", "is", null)
-    /* The one field this function must never touch. Its answer is a sealed
-       document written by `completeSealedStep`, and a string arriving here for
-       it would land somebody's address in the plaintext column — quietly, and
-       looking exactly like a step that worked. In the statement rather than in
-       a guard above it, so it refuses by matching zero rows rather than by
-       being remembered. */
-    .neq("field", "personal-details")
+    /* The two fields this function must never touch. Their answers are sealed
+       documents written by `completeSealedStep`, and a string arriving here for
+       one of them would land somebody's address or bank account in the
+       plaintext column — quietly, and looking exactly like a step that worked.
+       In the statement rather than in a guard above it, so it refuses by
+       matching zero rows rather than by being remembered.
+
+       `not(...in...)` rather than two `neq`s: a third sealed block is a string
+       added to one list, and the failure mode of forgetting is that a regulated
+       value goes in the clear. */
+    .not("field", "in", "(personal-details,payroll-details)")
     .select("joiner_id");
   if (error) throw new Error(`Writing steps failed: ${error.message}`);
   if (data.length === 0) return null;

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { PERSONAL_DETAILS_EXTRAS_FIELD } from "@/lib/craig/contract";
+import { EXTRAS_FIELDS } from "@/lib/craig/contract";
 import {
   Badge,
   Button,
@@ -56,10 +56,25 @@ export interface InvitedPerson {
  *
  * Everything else a block holds is either working notes or a value only the
  * editor renders, and copying it onto a person would put settings nobody
- * consults into a record about them. These two are read by the invite route,
- * which allowlists the same pair again on its own side — a client is not a
- * place to enforce anything.
+ * consults into a record about them. These are read by the invite route, which
+ * allowlists the same set again on its own side — a client is not a place to
+ * enforce anything.
+ *
+ * **Every extras field belongs in `EXTRAS_FIELDS`, and the failure mode for
+ * forgetting one is silence.** This has now cost twice. A key the route reads
+ * and this list omits is stripped here, in the browser, before the request is
+ * sent: the admin ticks "Ask for their super fund", publishes, invites, and
+ * the new starter is simply never asked. Nothing throws, nothing logs, the
+ * step renders correctly with the field missing, and the only way to notice is
+ * for somebody to compare a workflow against a real onboarding. The route
+ * cannot catch it either — an absent key and a key nobody ticked are the same
+ * request.
+ *
+ * So the list lives in `contract.ts` and both sides import it — `extrasFrom` in
+ * the invite route iterates the same constant. Adding a block with a new
+ * multiselect means adding its field id there, and nowhere else.
  */
+
 function pickRunConfig(
   config: Record<string, string | string[]> | undefined,
 ): Record<string, string | string[]> | undefined {
@@ -67,8 +82,10 @@ function pickRunConfig(
 
   const picked: Record<string, string | string[]> = {};
   if (config["require-mfa"]) picked["require-mfa"] = config["require-mfa"];
-  if (Array.isArray(config[PERSONAL_DETAILS_EXTRAS_FIELD])) {
-    picked[PERSONAL_DETAILS_EXTRAS_FIELD] = config[PERSONAL_DETAILS_EXTRAS_FIELD];
+
+  for (const field of EXTRAS_FIELDS) {
+    const value = config[field];
+    if (Array.isArray(value)) picked[field] = value;
   }
 
   return Object.keys(picked).length > 0 ? picked : undefined;

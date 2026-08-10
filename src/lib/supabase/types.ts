@@ -199,6 +199,8 @@ export type Database = {
         Row: {
           actor: string | null
           ask_emergency_contact: boolean
+          ask_super_fund: boolean
+          ask_tax_file_number: boolean
           automation: string | null
           completed_at: string | null
           due: number | null
@@ -219,6 +221,8 @@ export type Database = {
         Insert: {
           actor?: string | null
           ask_emergency_contact?: boolean
+          ask_super_fund?: boolean
+          ask_tax_file_number?: boolean
           automation?: string | null
           completed_at?: string | null
           due?: number | null
@@ -238,6 +242,8 @@ export type Database = {
         Update: {
           actor?: string | null
           ask_emergency_contact?: boolean
+          ask_super_fund?: boolean
+          ask_tax_file_number?: boolean
           automation?: string | null
           completed_at?: string | null
           due?: number | null

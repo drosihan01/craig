@@ -4,12 +4,14 @@ import {
   isRunInterrupted,
   progressOf,
 } from "@/lib/craig/joiners";
-import type { DetailLine, Joiner } from "@/lib/craig/contract";
-import {
-  maskDetails,
-  readPersonalDetails,
-  sealingProblem,
-} from "@/lib/craig/personal-details";
+import type {
+  DetailLine,
+  Joiner,
+  PayrollDetailLine,
+} from "@/lib/craig/contract";
+import { maskDetails, readPersonalDetails } from "@/lib/craig/personal-details";
+import { maskPayroll, readPayrollDetails } from "@/lib/craig/payroll-details";
+import { sealingProblem } from "@/lib/craig/sealed-answer";
 import { NoPerson, PersonProgress } from "./person-progress";
 
 /**
@@ -144,11 +146,24 @@ export default async function ShowcasePersonPage(
    * card says so rather than drawing an empty panel. `sealingProblem()` names
    * the one cause that has a fix — the key is not set on this deployment — and
    * is null when there is nothing useful to say.
+   *
+   * The payroll block gets its own map for the same reason it gets its own
+   * envelope: a step is one kind or the other, the two mask by different rules,
+   * and one record keyed by step id with a union in it would be a record the
+   * dialog has to guess about. Neither is read at all when the plan has no such
+   * step, which is most plans.
    */
   const details: Record<string, DetailLine[]> = {};
   if (joiner.steps.some((step) => step.field === "personal-details")) {
     for (const [stepId, answer] of await readPersonalDetails(joiner.id)) {
       details[stepId] = maskDetails(answer);
+    }
+  }
+
+  const payroll: Record<string, PayrollDetailLine[]> = {};
+  if (joiner.steps.some((step) => step.field === "payroll-details")) {
+    for (const [stepId, answer] of await readPayrollDetails(joiner.id)) {
+      payroll[stepId] = maskPayroll(answer);
     }
   }
 
@@ -167,6 +182,7 @@ export default async function ShowcasePersonPage(
         steps: joiner.steps,
         interrupted,
         details,
+        payroll,
         sealingProblem: sealingProblem(),
       }}
       progress={{

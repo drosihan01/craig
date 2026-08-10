@@ -1,7 +1,5 @@
 import "server-only";
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   AU_STATES,
   PERSONAL_DETAIL_FIELDS,
@@ -9,28 +7,33 @@ import {
   type PersonalDetailField,
   type PersonalDetails,
 } from "./contract";
+/* The envelope, shared with the payroll block. This file owns what an address
+   is; it deliberately owns no cipher — see the header on `sealed-answer.ts` for
+   why one AES-GCM implementation serving both is the whole point. */
+import {
+  DOTS,
+  digitsOf,
+  oneLine,
+  readSealedAnswers,
+  sealAnswer,
+  type SealResult,
+} from "./sealed-answer";
 
 /**
  * The only door to what a new starter typed into the personal details block.
  *
- * **Why any of this exists.** Date of birth, residential address and mobile
- * number, held together with a legal name, is not a form — it is the bundle
- * somebody opens a credit account with. Two doors down, in `connections`, an
- * OAuth refresh token gets AES-256-GCM before it is allowed near a row, on the
- * argument that anybody who can read the table (a leaked secret key, a
- * misconfigured policy, an old backup) must find something useless. Every word
- * of that argument applies here and one word applies harder: a stolen token can
- * be revoked, and a stolen date of birth is a fact about a person for the rest
- * of their life.
+ * **What this file is and is not.** It is the *shape*: what a legal name, an
+ * address and an emergency contact are, what counts as a valid one, and how much
+ * of each an admin gets to see without asking. The sealing itself lives in
+ * `sealed-answer.ts` and is shared with the payroll block, which arrived hours
+ * later wanting exactly the same envelope around a different document — one
+ * cipher, one key, one place to get GCM wrong.
  *
- * `joiner_steps.value` is plaintext and stays plaintext, because a middle name
- * is not this. The sealed columns are separate — `value_ciphertext`,
- * `value_iv`, `value_tag`, named after `token_ciphertext`/`token_iv`/
- * `token_tag` because they are the same idea in the same schema — and a step
- * that uses them leaves `value` null. Nothing that reads a `Joiner` therefore
- * carries this data around by accident: the admin's page, the joiner's own
- * Craig and anything anybody adds later all see an answered step with no
- * answer on it, and have to come here on purpose.
+ * **Why any of this is encrypted at all** is argued in full over there, and the
+ * short version is that a date of birth, a residential address and a mobile
+ * number held together with a legal name is not a form, it is the bundle
+ * somebody opens a credit account with. A stolen token can be revoked; a stolen
+ * date of birth is a fact about a person for the rest of their life.
  *
  * **Why now rather than later.** Retrofitting encryption onto data already
  * collected is the expensive version of this: it means a migration that reads
@@ -38,197 +41,26 @@ import {
  * what to tell the people whose details sat in the clear in the meantime.
  * There is no real customer data on this deployment yet. This is the cheapest
  * hour this will ever cost.
- *
- * **What this deliberately is not.** It is not protection from us. The server
- * holds the key and the admin can read every field — that is the product, and
- * Dzaky's stated reason for collecting an address at all is to pay somebody by
- * bank transfer. What it buys is that the database alone is not enough: a dump
- * of `joiner_steps` without `JOINER_PII_ENCRYPTION_KEY` is a column of hex.
  */
 
-/* --- The key ---------------------------------------------------------------- */
-
-/**
- * `JOINER_PII_ENCRYPTION_KEY`, 32 bytes, as 64 hex characters or as base64 that
- * decodes to 32. Generate one with:
- *
- *   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
- *
- * Its own variable, and deliberately not `GOOGLE_TOKEN_ENCRYPTION_KEY` even
- * though the algorithm is identical. One key, one job — the same rule Slack and
- * Linear followed when they each took their own. It matters more here than
- * there: rotating a provider's key breaks connections that can be re-made by
- * pressing Connect, and rotating this one destroys answers that only exist
- * because somebody typed them once, and would have to be asked for again.
- *
- * With it unset, nothing is collected. Not stored in the clear, not stored
- * half-way, not queued — the form is withheld from the new starter and the
- * route refuses. A deployment that quietly fell back to plaintext the day
- * somebody forgot a variable would be worse than one with no encryption at
- * all, because it would still be described as encrypted everywhere else.
- */
-const KEY_VAR = "JOINER_PII_ENCRYPTION_KEY";
-const KEY_BYTES = 32;
-/** 96 bits, which is the size GCM is specified around. */
-const IV_BYTES = 12;
-
-type KeyResult = { ok: true; key: Buffer } | { ok: false; message: string };
-
-function encryptionKey(): KeyResult {
-  const raw = process.env[KEY_VAR]?.trim() ?? "";
-
-  if (!raw) {
-    return {
-      ok: false,
-      message: `Personal details can't be collected on this deployment yet: ${KEY_VAR} isn't set, and it is what the answers are encrypted with. Rather than write somebody's date of birth and home address down in the clear, nothing is stored at all. Generate 32 bytes — node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" — put it in the environment, and redeploy so the value is re-read.`,
-    };
-  }
-
-  /* Hex first because that is what the command above prints, then base64,
-     because somebody will paste `openssl rand -base64 32` and be entirely
-     reasonable to expect it to work. Anything else fails the length check
-     rather than being silently truncated into something weaker. */
-  const key = /^[0-9a-fA-F]{64}$/.test(raw)
-    ? Buffer.from(raw, "hex")
-    : Buffer.from(raw, "base64");
-
-  if (key.length !== KEY_BYTES) {
-    return {
-      ok: false,
-      message: `${KEY_VAR} has to be exactly 32 bytes — 64 hex characters, or base64 that decodes to 32 bytes. What's set decodes to ${key.length}, so it was rejected rather than padded into something weaker.`,
-    };
-  }
-
-  return { ok: true, key };
-}
-
-/**
- * Whether this deployment can collect personal details at all.
- *
- * Asked by the screens *before* they draw a form, so a new starter never fills
- * in twelve boxes and then finds out the server won't take them. Cheap — it
- * reads an environment variable — so it costs nothing to ask on every render.
- */
-export const canSealPersonalDetails = (): boolean => encryptionKey().ok;
-
-/** The sentence to show whoever can act, when it can't. Never shown to the
-    joiner: it names an environment variable they have no access to. */
-export function sealingProblem(): string | null {
-  const key = encryptionKey();
-  return key.ok ? null : key.message;
-}
-
-/* --- Sealing ---------------------------------------------------------------- */
-
-/**
- * What the ciphertext is bound to, beyond being ciphertext.
- *
- * GCM's additional authenticated data isn't encrypted; it is mixed into the tag,
- * so decryption fails unless the same value is supplied again. Binding to the
- * joiner *and* the step means a sealed answer is that person's answer to that
- * question: a row copied between people, or between two personal-details steps
- * in one plan, simply fails to open rather than quietly reading as somebody
- * else's address. `accounts.ts` binds to the account email for the same reason
- * and says so at length.
- *
- * Versioned in the string, so a future change to what is sealed can be told
- * apart from a corrupt row rather than being indistinguishable from one.
- */
-const aad = (joinerId: string, stepId: string) =>
-  Buffer.from(`craig.joiner.personal-details.v1:${joinerId}:${stepId}`, "utf8");
-
-interface SealedValue {
-  /** Hex. */
-  ciphertext: string;
-  /** Hex, 12 bytes. */
-  iv: string;
-  /** Hex, 16 bytes. GCM's authentication tag. */
-  tag: string;
-}
-
-export type SealResult =
-  | { ok: true; sealed: SealedValue }
-  | { ok: false; message: string };
+/** Which envelope these answers travel in. Its own constant so the string that
+    is both the `field` column and half the AAD is typed once. */
+const KIND = "personal-details" as const;
 
 /**
  * The answer, sealed and ready to be written.
  *
- * JSON inside the envelope rather than a field-per-column, because the whole
- * point is that the database holds one opaque thing: twelve encrypted columns
- * would leak the shape of the answer (which optional fields were given, how
- * long the street is) through nothing but the presence and length of the
- * ciphertext, and would need twelve IVs to be safe about it.
+ * A named wrapper rather than a bare `sealAnswer` call at each site, because
+ * this is the one place the shape and the kind are bound together — and binding
+ * them once is what stops a payroll document being sealed under the identity
+ * AAD by a caller who passed the wrong string.
  */
 export function sealPersonalDetails(
   details: PersonalDetails,
   joinerId: string,
   stepId: string,
 ): SealResult {
-  const key = encryptionKey();
-  if (!key.ok) return { ok: false, message: key.message };
-
-  /* Fresh per seal, never derived from the person or a counter. An IV reused
-     under one key takes GCM from "authenticated encryption" to "the plaintexts
-     XOR to each other" — and answering twice to fix a typo is explicitly
-     allowed here, so the same person sealing the same fields under the same key
-     is the ordinary case rather than the exotic one. */
-  const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv("aes-256-gcm", key.key, iv);
-  cipher.setAAD(aad(joinerId, stepId));
-
-  const ciphertext = Buffer.concat([
-    cipher.update(JSON.stringify(details), "utf8"),
-    cipher.final(),
-  ]);
-
-  return {
-    ok: true,
-    sealed: {
-      ciphertext: ciphertext.toString("hex"),
-      iv: iv.toString("hex"),
-      tag: cipher.getAuthTag().toString("hex"),
-    },
-  };
-}
-
-/**
- * The answer back, or `null` for every way it can fail to come back.
- *
- * A rotated key, a hand-edited row, a record moved between people and a
- * truncated write all land here, and none of them is distinguishable from the
- * others without saying something about the key — so all of them are `null` and
- * the caller turns that into one honest sentence. Nothing is logged: the only
- * interesting values in scope are the key and somebody's address.
- */
-function unseal(
-  sealed: SealedValue,
-  key: Buffer,
-  joinerId: string,
-  stepId: string,
-): PersonalDetails | null {
-  try {
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      key,
-      Buffer.from(sealed.iv, "hex"),
-    );
-    decipher.setAAD(aad(joinerId, stepId));
-    decipher.setAuthTag(Buffer.from(sealed.tag, "hex"));
-
-    const plaintext = Buffer.concat([
-      decipher.update(Buffer.from(sealed.ciphertext, "hex")),
-      decipher.final(),
-    ]).toString("utf8");
-
-    const parsed: unknown = JSON.parse(plaintext);
-    if (!parsed || typeof parsed !== "object") return null;
-
-    return fromStored(parsed as Record<string, unknown>);
-  } catch {
-    /* `final()` throws when the tag doesn't check out, which is the case this
-       whole design exists to catch. It is a refusal, not a crash. */
-    return null;
-  }
+  return sealAnswer(details, KIND, joinerId, stepId);
 }
 
 /**
@@ -259,102 +91,26 @@ function fromStored(raw: Record<string, unknown>): PersonalDetails {
 
 /* --- Reading ---------------------------------------------------------------- */
 
-const db = () => supabaseAdmin();
-
 /**
- * Every sealed answer this person has given, opened, keyed by step.
+ * Every sealed answer this person has given to *this* block, opened, by step.
  *
- * One query for the whole plan rather than one per step: a workflow could
- * legitimately hold two of these blocks — details before signing and again
- * before the first pay run is a real thing people do — and a screen that asked
- * per step would do a round trip per row it renders.
- *
- * Steps that cannot be opened are simply absent from the map, which is the
- * behaviour every caller wants: a page renders "these can't be read" for a
- * missing entry, and that is true whether the key was rotated, the row was
- * edited or the answer was never given.
- *
- * **The caller is responsible for having established who is asking.** This
- * takes a joiner id, not a session, and it will open anybody's answers — the
- * ownership check belongs at the door (`requireJoiner`, or `belongsTo` on the
- * admin's page), where the question "whose is this" can actually be answered.
- * A function that took a session and re-derived the answer would be a second
- * copy of that rule, and the two would disagree the day one of them changed.
+ * The query, the key and the failure modes are `readSealedAnswers`'; what is
+ * added here is `fromStored`, which is the reason this is not simply that
+ * function called at the call site. A document that comes out of an envelope is
+ * still a document that went in under an older version of this file, and it has
+ * to be reshaped to the fields this one knows about before anything treats it
+ * as a `PersonalDetails`.
  */
 export async function readPersonalDetails(
   joinerId: string,
 ): Promise<Map<string, PersonalDetails>> {
   const opened = new Map<string, PersonalDetails>();
 
-  const key = encryptionKey();
-  if (!key.ok) return opened;
-
-  const { data, error } = await db()
-    .from("joiner_steps")
-    .select("step_id, value_ciphertext, value_iv, value_tag")
-    .eq("joiner_id", joinerId)
-    .not("value_ciphertext", "is", null);
-  if (error) {
-    throw new Error(`Reading personal details failed: ${error.message}`);
-  }
-
-  for (const row of data) {
-    const { value_ciphertext: ciphertext, value_iv: iv, value_tag: tag } = row;
-    if (!ciphertext || !iv || !tag) continue;
-
-    const details = unseal(
-      { ciphertext, iv, tag },
-      key.key,
-      joinerId,
-      row.step_id,
-    );
-    if (details) opened.set(row.step_id, details);
+  for (const [stepId, document] of await readSealedAnswers(joinerId, KIND)) {
+    opened.set(stepId, fromStored(document));
   }
 
   return opened;
-}
-
-/**
- * Record an answer, sealed.
- *
- * A sibling of `completeStep` rather than a flag on it, because the two write
- * different columns and one of them must never write the other's: a bug that
- * put a `PersonalDetails` through `completeStep` would `JSON.stringify` an
- * address into a plaintext column and every screen would carry on working.
- * Separate functions make that a compile error instead.
- *
- * `value` is written null explicitly. In an UPDATE an absent column means
- * "leave it alone", and a step answered as plain text and then re-answered as
- * details would otherwise keep the old string sitting beside the new envelope,
- * where something would eventually print it.
- *
- * Answering twice overwrites, exactly as it does for a middle name, and for the
- * same reason: correcting your own address is a thing people do, nothing
- * downstream has consumed it, and the only thing two racing submissions can
- * disagree about is which of this person's own answers survives.
- */
-export async function completeSealedStep(
-  joinerId: string,
-  stepId: string,
-  sealed: SealedValue,
-): Promise<boolean> {
-  const { data, error } = await db()
-    .from("joiner_steps")
-    .update({
-      value: null,
-      value_ciphertext: sealed.ciphertext,
-      value_iv: sealed.iv,
-      value_tag: sealed.tag,
-      completed_at: new Date().toISOString(),
-    })
-    .eq("joiner_id", joinerId)
-    .eq("step_id", stepId)
-    .eq("actor", "joiner")
-    .eq("field", "personal-details")
-    .select("joiner_id");
-  if (error) throw new Error(`Writing steps failed: ${error.message}`);
-
-  return data.length > 0;
 }
 
 /* --- Validation ------------------------------------------------------------- */
@@ -397,29 +153,7 @@ export function birthDateProblem(value: string): string | null {
   return null;
 }
 
-/**
- * One submitted value as one harmless line.
- *
- * Control characters first, whitespace second — the same order and the same
- * reasoning as the step and invite routes: a newline is caught by either, but
- * the unprintable characters around it survive a naive trim, and these values
- * are shown back to two different people. `\p{Cc}` is that whole category by
- * name, which is easier to be sure of than a hand-typed range of things that
- * are invisible in a diff.
- */
-function oneLine(value: unknown, max: number): string {
-  if (typeof value !== "string") return "";
-  return value
-    .replace(/\p{Cc}/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-}
-
 const STATE_CODES = new Set(AU_STATES.map((s) => s.id));
-
-/** Digits, once everything people put between them is taken out. */
-const digitsOf = (value: string) => value.replace(/\D/g, "");
 
 export type ParseResult =
   | { ok: true; details: PersonalDetails }
@@ -619,11 +353,6 @@ export function maskDetails(details: PersonalDetails): DetailLine[] {
   });
 }
 
-/** Enough dots to read as "there is something here", never enough to count the
-    characters of what is behind them. Fixed-width on purpose: a mask whose
-    length tracked the value would leak the length of the value. */
-const DOTS = "••••••••";
-
 function masked(field: PersonalDetailField, value: string): string {
   switch (field.key) {
     case "legalFirstName":
@@ -689,27 +418,4 @@ export function summariseDetails(details: PersonalDetails): string {
     : "your contact details and address";
 
   return `${name} — with ${rest}`;
-}
-
-/**
- * Who asked to see whose details, written to the runtime log.
- *
- * Not an audit trail. An audit trail is a table with a retention policy and a
- * screen somebody can read, and this product has neither — saying otherwise in
- * a comment would be the kind of security theatre this codebase argues against
- * everywhere else. What it is, is the difference between "only the admin can
- * read these" being a claim and being something anybody can check afterwards
- * against the logs Vercel already keeps.
- *
- * Ids and addresses only. Nothing that was revealed is ever logged, which would
- * put the whole point of this file into a log aggregator.
- */
-export function noteReveal(
-  joinerId: string,
-  stepId: string,
-  by: string,
-): void {
-  console.info(
-    `[personal-details] revealed joiner=${joinerId} step=${stepId} by=${by}`,
-  );
 }
