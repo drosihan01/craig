@@ -1,5 +1,4 @@
 import {
-  AltRoute,
   Apps,
   Badge,
   CalendarMonth,
@@ -11,14 +10,10 @@ import {
   Handshake,
   HowToReg,
   Link,
-  LaptopMac,
-  Lock,
-  Mail,
   Person,
   Quiz,
   RocketLaunch,
   School,
-  TaskAlt,
   VerifiedUser,
 } from "@/components/ui/icons";
 /* Real marks where a freely licensed one exists. Slack and AWS get the same
@@ -607,50 +602,6 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             options: [
               { id: EMERGENCY_CONTACT_EXTRA, label: "Emergency contact" },
             ],
-          },
-        ],
-      },
-      {
-        id: "verify-identity",
-        label: "Verify employment eligibility",
-        description:
-          "Right to work or identity check. Which one applies depends on the country.",
-        kind: "document",
-        icon: HowToReg,
-        title: "Verify employment eligibility",
-        setup: [
-          {
-            id: "check",
-            label: "Which check",
-            kind: "select",
-            hint: "Set by where they're employed, not where you are",
-            options: [
-              { id: "uk-rtw", label: "UK right to work" },
-              { id: "us-i9", label: "US Form I-9" },
-              {
-                id: "de-aufenthalt",
-                label: "Germany — residence and work permit",
-              },
-              { id: "au-vevo", label: "Australia — VEVO check" },
-              { id: "other", label: "Something else" },
-            ],
-            required: true,
-          },
-          {
-            id: "verifier",
-            label: "Who verifies it",
-            kind: "person",
-            required: true,
-          },
-          {
-            id: "deadline",
-            label: "Must clear by",
-            kind: "when",
-            options: [
-              { id: "before-start", label: "Before day one" },
-              { id: "day-one", label: "Day one" },
-            ],
-            required: true,
           },
         ],
       },
@@ -1291,89 +1242,6 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
     ],
   },
   {
-    id: "security",
-    label: "Security & kit",
-    description:
-      "Multi-factor before the accounts get used in anger, and something to use them on.",
-    presets: [
-      {
-        id: "mfa",
-        label: "Set up MFA",
-        description:
-          "Multi-factor on email, files and remote access. Phishing-resistant where it's offered.",
-        kind: "task",
-        icon: Lock,
-        title: "Set up MFA",
-        summary: "Before any of the accounts get used in anger",
-        setup: [
-          {
-            id: "systems",
-            label: "Which systems",
-            kind: "multiselect",
-            options: [
-              { id: "email", label: "Email" },
-              { id: "files", label: "File storage" },
-              { id: "vpn", label: "Remote access / VPN" },
-              { id: "code", label: "Source control" },
-              { id: "cloud", label: "Cloud console" },
-            ],
-            required: true,
-          },
-          {
-            id: "method",
-            label: "Method",
-            kind: "select",
-            hint: "A passkey or hardware key resists phishing; SMS doesn't",
-            options: [
-              { id: "passkey", label: "Passkey" },
-              { id: "hardware", label: "Hardware key" },
-              { id: "totp", label: "Authenticator app" },
-            ],
-            required: true,
-          },
-          { id: "deadline", label: "Done by", kind: "when", required: true },
-        ],
-      },
-      {
-        id: "laptop",
-        label: "Issue laptop",
-        description:
-          "Order it, ship it, and get it back at the end. Lead time is usually the long pole.",
-        kind: "task",
-        icon: LaptopMac,
-        title: "Issue laptop",
-        setup: [
-          {
-            id: "spec",
-            label: "Model and spec",
-            kind: "text",
-            hint: "MacBook Pro 14, M4, 24GB",
-            required: true,
-          },
-          {
-            id: "ship",
-            label: "Ship to",
-            kind: "text",
-            hint: "Their home address, usually",
-            required: true,
-          },
-          WHO_PROVISIONS,
-          {
-            id: "when",
-            label: "Order",
-            kind: "when",
-            hint: "Lead time is why this goes first",
-            options: [
-              { id: "on-signing", label: "The day they sign" },
-              { id: "week-before", label: "A week before day one" },
-            ],
-            required: true,
-          },
-        ],
-      },
-    ],
-  },
-  {
     id: "learning",
     label: "Learning",
     description: "What they have to read, and what they have to be told.",
@@ -1541,14 +1409,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         icon: RocketLaunch,
         title: "First task",
         setup: [
-          {
-            id: "task",
-            label: "The task",
-            kind: "text",
-            hint: "Small enough to finish in the first week",
-            required: true,
-          },
-          {
+              {
             id: "owner",
             label: "Who assigns it",
             kind: "person",
@@ -1575,99 +1436,6 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
               { id: "7", label: "After a week" },
               { id: "30", label: "After 30 days" },
               { id: "90", label: "After 90 days" },
-            ],
-            required: true,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "flow",
-    label: "Flow",
-    description: "Shape, not content. These control when the rest happens.",
-    presets: [
-      {
-        id: "approval",
-        label: "Approval",
-        description:
-          "Hold everything after this until a named person signs off.",
-        kind: "approval",
-        icon: HowToReg,
-        title: "Approval",
-        setup: [
-          {
-            id: "what",
-            label: "What's being approved",
-            kind: "text",
-            required: true,
-          },
-          { id: "approver", label: "Approver", kind: "person", required: true },
-        ],
-      },
-      {
-        id: "condition",
-        label: "Condition",
-        description: "Only run what follows if this is true.",
-        kind: "branch",
-        icon: AltRoute,
-        title: "Condition",
-        setup: [
-          {
-            id: "expression",
-            label: "Run the rest when",
-            kind: "text",
-            hint: "e.g. the role is Engineer",
-            required: true,
-          },
-        ],
-      },
-      {
-        id: "notify",
-        label: "Notification",
-        description: "Email or message someone.",
-        kind: "notify",
-        icon: Mail,
-        title: "Send a message",
-        setup: [
-          { id: "to", label: "To", kind: "person", required: true },
-          { id: "body", label: "Message", kind: "text", required: true },
-        ],
-      },
-      {
-        id: "task",
-        label: "Task",
-        description: "Anything the library doesn't cover.",
-        kind: "task",
-        icon: TaskAlt,
-        title: "New task",
-        setup: [
-          {
-            id: "what",
-            label: "What has to happen",
-            kind: "text",
-            required: true,
-          },
-          WHO_PROVISIONS,
-          { id: "when", label: "When", kind: "when" },
-        ],
-      },
-      {
-        id: "document",
-        label: "Document",
-        description: "Collect or issue a document the library doesn't name.",
-        kind: "document",
-        icon: Description,
-        title: "New document",
-        setup: [
-          { id: "doc", label: "Document", kind: "file", required: true },
-          {
-            id: "direction",
-            label: "Direction",
-            kind: "select",
-            options: [
-              { id: "collect", label: "Collect it from them" },
-              { id: "issue", label: "Issue it to them" },
             ],
             required: true,
           },
