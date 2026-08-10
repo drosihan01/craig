@@ -7,13 +7,14 @@ import {
   BackLink,
   Badge,
   Button,
+  buttonVariants,
   Callout,
   NavRail,
   NavRailItem,
   Separator,
   ThemeToggle,
 } from "@/components/ui";
-import { ArrowBack, Warning } from "@/components/ui/icons";
+import { ArrowBack, ArrowDownward, Warning } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { CompanyLogoPanel } from "@/components/craig/company-logo";
 import { GoogleWorkspaceConnect } from "@/components/craig/google-workspace";
@@ -157,6 +158,10 @@ export function SettingsScreen({
         <Separator />
 
         <MissionControlSection />
+
+        <Separator />
+
+        <YourDataSection />
 
         <Separator />
 
@@ -562,6 +567,49 @@ function ToolLink({
         {description}
       </span>
     </Link>
+  );
+}
+
+/* --- Taking it away -------------------------------------------------------- */
+
+/**
+ * A copy of everything, before deciding anything.
+ *
+ * Deliberately next to closing the account rather than somewhere tidier: the
+ * moment somebody is thinking about leaving is the moment they need to know
+ * they can take their work with them, and finding that out afterwards is
+ * finding out too late.
+ *
+ * A plain link rather than a button with a fetch behind it. The browser's own
+ * download handles a slow response, a large file and where it lands better
+ * than anything written here would, and `Content-Disposition` on the route
+ * does the rest.
+ */
+function YourDataSection() {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <h2 className="text-xl font-semibold tracking-[-0.01em]">Your data</h2>
+        <p className="text-md leading-relaxed text-text-muted">
+          Everything this account holds, as one file: your workflows, everyone
+          you&rsquo;ve onboarded and their answers, your conversations with
+          Craig, and the notebook. Tax file numbers and bank details are listed
+          but not included — those stay encrypted, and are read one at a time on
+          a person&rsquo;s page so each one is logged.
+        </p>
+      </div>
+
+      <div>
+        <a
+          href="/api/account/export"
+          download
+          className={buttonVariants({ variant: "secondary" })}
+        >
+          <ArrowDownward aria-hidden />
+          Download a copy
+        </a>
+      </div>
+    </section>
   );
 }
 
