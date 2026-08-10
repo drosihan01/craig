@@ -7,6 +7,7 @@ import {
   buttonVariants,
   CraigMark,
   Separator,
+  type AppNotification,
 } from "@/components/ui";
 import { NavStat } from "@/components/app-nav";
 import { CraigConversation } from "@/components/craig/craig-conversation";
@@ -120,11 +121,17 @@ export function HomeScreen({
   outstanding,
   workflowCount,
   peopleCount,
+  documentCount,
+  notifications,
 }: {
   user: Session;
   outstanding: OutstandingItem[];
   workflowCount: number;
   peopleCount: number;
+  /** How many documents this account has uploaded, shared or not. */
+  documentCount: number;
+  /** Outstanding items in the bell's shape, mapped on the server. */
+  notifications: AppNotification[];
 }) {
   const greeting = useTimeOfDay();
   const first = user.name.trim().split(/\s+/)[0] || user.name;
@@ -145,15 +152,42 @@ export function HomeScreen({
     <AppShell
       account={{ name: user.name, email: user.email }}
       fill
+      /* The same list the panel below draws, mapped on the server and handed
+         down — so the bell and the page can never disagree about what needs
+         doing. Mapped *there* rather than here because `outstanding.ts` is
+         `server-only`: it reaches accounts, and importing it into a client
+         component drags a Node crypto import into the browser bundle. The
+         type crosses the boundary; the module does not. */
+      notifications={notifications}
       navRail={<ShowcaseNavRail />}
       nav={
         <ShowcaseNav>
-          <div className="flex flex-col gap-1 px-1">
-            {/* Same order as the rows above them, which is People first — a
-                pair of counts that disagrees with the list they sit under is a
-                small thing read many times. */}
+          {/* `gap-2 px-2` with no padding of its own on the eyebrow — the same
+              block People and Resources use. Home had `px-1` on the container
+              and `px-2` on the heading, so the heading sat one step right of
+              the rows it labelled while every other column in the product had
+              them flush. */}
+          <div className="flex flex-col gap-2 px-2">
+            {/* A heading, because the counts were three unlabelled numbers
+                floating under a nav and reading as part of it. Every other
+                column in the product that carries stats names them —
+                Resources says "Documents", People says "Seats" — and Home was
+                the one that assumed you would work it out.
+
+                "Overview" rather than "Account": it describes what the numbers
+                are, not what they belong to, and Account is a word this
+                product already uses for the thing in the bottom-left corner. */}
+            <p className="text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+              Overview
+            </p>
+            {/* Same order as the rows in the nav above them — People first. A
+                set of counts that disagrees with the list they sit under is a
+                small thing read many times. Resources joins them because it
+                joined the nav: a room with a row and no number was the only
+                one of the four you could not see the size of from here. */}
             <NavStat label="People" value={peopleCount} />
             <NavStat label="Workflows" value={workflowCount} />
+            <NavStat label="Resources" value={documentCount} />
           </div>
 
           {/* Ruled off from the counts above it, because the two are different

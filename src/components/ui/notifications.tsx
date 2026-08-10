@@ -50,8 +50,17 @@ export interface AppNotification {
   kind: NotificationKind;
   title: React.ReactNode;
   description?: string;
-  /** Absolute. Rendered as relative text, with the exact time in the tooltip. */
-  timestamp: Date;
+  /**
+   * Absolute. Rendered as relative text, with the exact time in the tooltip.
+   *
+   * Optional, because not every notification is an event. Home's outstanding
+   * items are *states* — "you're out of seats" did not happen at a moment, it
+   * is simply true — and stamping them with `Date.now()` would have the panel
+   * say "just now" on every page load, which is the kind of small confident
+   * lie that teaches somebody to stop reading timestamps. Absent means the row
+   * renders without one.
+   */
+  timestamp?: Date;
   read?: boolean;
   /** Whose action produced this, when there is one. */
   actor?: string;
@@ -134,13 +143,15 @@ export function NotificationItem({
               patch up mismatched attributes — it warns and moves on, which
               in dev is enough noise to bury a real error. The client value
               is the correct one and wins on the next render. */}
-          <time
-            suppressHydrationWarning
-            dateTime={n.timestamp.toISOString()}
-            title={n.timestamp.toLocaleString()}
-          >
-            {relativeTime(n.timestamp)}
-          </time>
+          {n.timestamp && (
+            <time
+              suppressHydrationWarning
+              dateTime={n.timestamp.toISOString()}
+              title={n.timestamp.toLocaleString()}
+            >
+              {relativeTime(n.timestamp)}
+            </time>
+          )}
         </span>
       }
       trailing={

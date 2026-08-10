@@ -175,3 +175,52 @@ export async function outstandingFor(
 
   return items;
 }
+
+
+/* --- As notifications ------------------------------------------------------ */
+
+/**
+ * The same items, in the shape the bell reads.
+ *
+ * The header's corner used to hold a theme switch, and the bell only appeared
+ * on two screens, both feeding it hardcoded demo rows. A bell that can never
+ * ring is decorative, and this codebase has removed three such controls in a
+ * day — a model picker the server ignored, a microphone with no speech behind
+ * it, a Sign out that cleared the wrong cookie. Rather than add a fourth, the
+ * bell now reads the list Home already computes, which is real and is already
+ * the answer to "what needs me".
+ *
+ * A derivation rather than a second store, so the two can never disagree: the
+ * panel and the bell are one list read twice. When "someone finished a step"
+ * joins them it belongs *here*, beside these, for the same reason.
+ *
+ * `timestamp` is deliberately absent. These are states rather than events —
+ * being out of seats did not happen at a moment — and `AppNotification` takes
+ * an optional one precisely so this does not have to invent "just now" every
+ * time the page loads.
+ */
+export function asNotifications(
+  items: OutstandingItem[],
+): {
+  id: string;
+  kind: "overdue" | "approval" | "info";
+  title: string;
+  description: string;
+  href?: string;
+}[] {
+  return items.map((item) => ({
+    id: item.id,
+    /* Three tones onto three kinds, chosen by who has to act rather than by
+       severity: urgent is a thing blocking somebody today, waiting is a thing
+       sitting with you, tidy is neither. */
+    kind:
+      item.tone === "urgent"
+        ? ("overdue" as const)
+        : item.tone === "waiting"
+          ? ("approval" as const)
+          : ("info" as const),
+    title: item.ask,
+    description: item.detail,
+    href: item.href,
+  }));
+}
