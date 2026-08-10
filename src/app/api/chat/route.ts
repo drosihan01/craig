@@ -21,6 +21,8 @@ import {
   REQUEST_TIMEOUT_MS,
   rateLimit,
 } from "@/lib/craig/rate-limit";
+import { notebookFor } from "@/lib/craig/notebook";
+import { headingsOf } from "@/lib/craig/notebook-text";
 import { attachmentNote } from "@/lib/craig/craig-prompt";
 import { STREAM_HEADERS, errorStream, line } from "@/lib/craig/chat-stream";
 import {
@@ -432,6 +434,11 @@ export async function POST(request: Request) {
         };
   });
 
+  /* The account's own notebook — its headings, not its contents. Read once
+     per request beside the rest of the context, so the list Craig is given and
+     the sections he can fetch describe the same document. */
+  const { content: notebookText } = await notebookFor(session.email);
+
   /* Seeded from what the client kept, because this dies with the response. */
   const notebook = seedNotebook(
     session.name?.split(" ")[0] || "there",
@@ -445,6 +452,13 @@ export async function POST(request: Request) {
     parsed.home,
     askedToDraft(parsed.messages),
   );
+
+  /* The seam to memory that outlives the turn. Assigned rather than threaded
+     through `seedNotebook`, which already takes eight positional arguments and
+     would take ten — the next reader would be counting commas to work out
+     which string was which. */
+  notebook.accountEmail = session.email;
+  notebook.headings = headingsOf(notebookText);
 
   /* Cancelling stops the meter when somebody closes the tab or sends again.
      The timer is the third runaway mode: a connection that never closes holds

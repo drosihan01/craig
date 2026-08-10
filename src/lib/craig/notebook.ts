@@ -235,3 +235,8 @@ export async function settleNote(
   if (error) throw new Error(`Settling the note failed: ${error.message}`);
   return (data ?? []).length > 0;
 }
+
+/* The text helpers live in `notebook-text.ts` — pure, and testable without a
+   database. Re-exported so a caller that already holds this module does not
+   need to learn about the split. */
+export { headingsOf, sectionOf } from "./notebook-text";
