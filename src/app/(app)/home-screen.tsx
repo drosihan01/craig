@@ -7,7 +7,6 @@ import {
   buttonVariants,
   CraigMark,
   Separator,
-  type AppNotification,
 } from "@/components/ui";
 import { NavStat } from "@/components/app-nav";
 import { CraigConversation } from "@/components/craig/craig-conversation";
@@ -122,7 +121,6 @@ export function HomeScreen({
   workflowCount,
   peopleCount,
   documentCount,
-  notifications,
 }: {
   user: Session;
   outstanding: OutstandingItem[];
@@ -130,8 +128,6 @@ export function HomeScreen({
   peopleCount: number;
   /** How many documents this account has uploaded, shared or not. */
   documentCount: number;
-  /** Outstanding items in the bell's shape, mapped on the server. */
-  notifications: AppNotification[];
 }) {
   const greeting = useTimeOfDay();
   const first = user.name.trim().split(/\s+/)[0] || user.name;
@@ -152,13 +148,11 @@ export function HomeScreen({
     <AppShell
       account={{ name: user.name, email: user.email }}
       fill
-      /* The same list the panel below draws, mapped on the server and handed
-         down — so the bell and the page can never disagree about what needs
-         doing. Mapped *there* rather than here because `outstanding.ts` is
-         `server-only`: it reaches accounts, and importing it into a client
-         component drags a Node crypto import into the browser bundle. The
-         type crosses the boundary; the module does not. */
-      notifications={notifications}
+      /* No `notifications` prop. The layout resolves the same list for every
+         screen, and Home passing its own meant `outstandingFor` ran twice per
+         load — four extra queries, and two derivations of one fact that could
+         disagree with each other for a request. The panel below still draws
+         from Home's own copy, which is the one this screen actually needs. */
       navRail={<ShowcaseNavRail />}
       nav={
         <ShowcaseNav>

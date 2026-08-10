@@ -6,7 +6,7 @@ import { subscriptionFor } from "@/lib/craig/accounts";
 import { listJoiners } from "@/lib/craig/joiners";
 import { listWorkflows } from "@/lib/craig/workflows";
 import { seatEntitlement } from "@/lib/craig/seats";
-import { asNotifications, outstandingFor } from "@/lib/craig/outstanding";
+import { outstandingFor } from "@/lib/craig/outstanding";
 import { HomeScreen } from "./home-screen";
 
 /**
@@ -66,7 +66,6 @@ export default async function Home() {
       workflowCount={workflows.length}
       peopleCount={joiners.length}
       documentCount={documents.length}
-      notifications={asNotifications(outstanding)}
     />
   );
 }

@@ -1064,58 +1064,107 @@ function Editor({
  * accident and leave half-changed, and a header is not a form.
  */
 function WorkflowTitle({ workflow }: { workflow: ShowcaseWorkflow }) {
-  const [editing, setEditing] = React.useState(false);
-  const [draft, setDraft] = React.useState(workflow.name);
+  const [renaming, setRenaming] = React.useState(false);
 
-  function commit() {
-    /* An empty name is a rename nobody meant. `renameWorkflow` refuses it
-       anyway; this puts the old one back in the box rather than leaving the
-       field blank and the header unchanged, which reads as a lost edit. */
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== workflow.name)
-      renameWorkflow(workflow.id, trimmed);
-    else setDraft(workflow.name);
-    setEditing(false);
-  }
-
-  if (!editing) {
-    return (
+  return (
+    <>
+      {/* Underlined on hover rather than given a background: the header is a
+          row of small controls and a filled hover state made the title look
+          like another one of them. An underline says "this is editable text"
+          without claiming to be a button. */}
       <button
         type="button"
-        onClick={() => {
-          setDraft(workflow.name);
-          setEditing(true);
-        }}
+        onClick={() => setRenaming(true)}
         title="Rename this workflow"
-        className="-mx-1 truncate rounded px-1 text-left transition-colors hover:bg-surface-hover hover:text-text"
+        className="max-w-full truncate text-left underline-offset-4 transition-colors hover:text-text hover:underline"
       >
         {workflow.name}
       </button>
-    );
+
+      <RenameWorkflow
+        workflow={workflow}
+        open={renaming}
+        onClose={() => setRenaming(false)}
+      />
+    </>
+  );
+}
+
+/**
+ * Renaming, in a dialog rather than in place.
+ *
+ * The first version turned the header into an input on click. It worked and it
+ * was wrong for where it sits: the title lives in the app's chrome, beside
+ * Publish and the panel toggles, and a text field opening inside that row put
+ * an editable surface in the one part of the screen that is otherwise all
+ * controls. A dialog also gives the action a name and a way out — "Cancel" is a
+ * clearer promise than "click away and hope it did not save".
+ *
+ * Seeded from the workflow each time it opens rather than held across closes,
+ * so cancelling and reopening starts from the real name instead of last time's
+ * abandoned attempt.
+ */
+function RenameWorkflow({
+  workflow,
+  open,
+  onClose,
+}: {
+  workflow: ShowcaseWorkflow;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [name, setName] = React.useState(workflow.name);
+  const [lastOpen, setLastOpen] = React.useState(open);
+
+  /* Reset during render rather than in an effect — an effect renders the stale
+     name once before correcting it, which on a dialog is a visible flash of the
+     previous attempt. */
+  if (lastOpen !== open) {
+    setLastOpen(open);
+    if (open) setName(workflow.name);
+  }
+
+  function save() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    renameWorkflow(workflow.id, trimmed);
+    onClose();
   }
 
   return (
-    <input
-      autoFocus
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      /* Enter commits, Escape abandons. Both are what somebody expects of a
-         field that appeared under their cursor, and without Escape the only
-         way out of a rename you regret is retyping what was there. */
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          commit();
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          setDraft(workflow.name);
-          setEditing(false);
-        }
-      }}
-      aria-label="Workflow name"
-      className="-mx-1 w-full min-w-0 rounded border border-border bg-surface px-1 text-base text-text outline-none focus:border-border-strong"
-    />
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Rename workflow"
+      description="What this onboarding is for. Everyone on this account sees it."
+      size="sm"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={!name.trim()}>
+            Save
+          </Button>
+        </div>
+      }
+    >
+      <div className="px-5 py-5">
+        <Field label="Workflow name">
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                save();
+              }
+            }}
+          />
+        </Field>
+      </div>
+    </Dialog>
   );
 }
 
