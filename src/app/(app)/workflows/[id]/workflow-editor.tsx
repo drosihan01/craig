@@ -616,13 +616,18 @@ function Editor({
      without a button here a published workflow with nobody on it is a dead end
      on the one screen where wanting to add somebody actually occurs to you —
      the fix for that shouldn't be knowing to walk to People. */
-  const addPerson = React.useCallback(() => {
+  /* A plain function, like its neighbour above, rather than a `useCallback`.
+     It is read once, as an `onClick` on an ordinary element, so memoising it
+     bought nothing — and the dependency list it carried omitted the three
+     setters it calls, which is what `react-hooks` was refusing: a manual list
+     that disagrees with the inferred one is the shape that goes stale. */
+  function addPerson() {
     if (outOfSeats(seats.length, entitlement.limit)) setPaywall(true);
     else {
       setJustPublished(false);
       setInviting(true);
     }
-  }, [seats.length, entitlement.limit]);
+  }
 
   return (
     <AppShell
