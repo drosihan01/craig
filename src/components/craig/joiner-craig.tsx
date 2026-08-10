@@ -216,14 +216,24 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
         </p>
       </div>
 
-      {!empty && (
-        /* The conversation scrolls inside the panel rather than growing it.
-           A sticky panel that outgrows the viewport pins its composer somewhere
-           past the bottom edge — the one control that must never scroll away.
-           `scrollIntoView(nearest)` on the tail already targets the nearest
-           scrolling ancestor, which is now this element. */
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-          {turns.map((turn, i) =>
+      {/* The body, and it is always here — that is the fix rather than an
+          incidental tidy-up. This region used to render only once there were
+          messages, so an empty conversation had nothing between the openers and
+          the composer to take up the slack: the composer sat wherever the
+          content ended and only snapped to the bottom after the first reply,
+          which reads as the panel settling into place a beat late.
+
+          Now the region exists in both states and grows in both, so the
+          composer is against the bottom edge from the first paint.
+
+          It also scrolls rather than growing the panel: a column that outgrows
+          the viewport pins its composer somewhere past the bottom edge — the
+          one control that must never scroll away. `scrollIntoView(nearest)` on
+          the tail targets the nearest scrolling ancestor, which is this. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        {!empty && (
+          <>
+            {turns.map((turn, i) =>
             turn.role === "user" ? (
               <p
                 key={i}
@@ -248,29 +258,35 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
               </div>
             ),
           )}
-          <div ref={endRef} />
-        </div>
-      )}
+            <div ref={endRef} />
+          </>
+        )}
 
+        {/* Inside the scrolling region so a long list of them cannot push the
+            composer off the bottom on a short window. */}
+        {empty && (
+          <div className="flex flex-wrap gap-2">
+            {OPENERS.map((opener) => (
+              <button
+                key={opener}
+                type="button"
+                onClick={() => void send(opener)}
+                className="rounded-full border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-border-strong hover:text-text"
+              >
+                {opener}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Outside the scrolling region, directly above the composer: a failure
+          you have to scroll back up to find is a failure the person never
+          sees. */}
       {error && (
         <p role="status" className="text-sm text-text-muted">
           {error}
         </p>
-      )}
-
-      {empty && (
-        <div className="flex flex-wrap gap-2">
-          {OPENERS.map((opener) => (
-            <button
-              key={opener}
-              type="button"
-              onClick={() => void send(opener)}
-              className="rounded-full border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-border-strong hover:text-text"
-            >
-              {opener}
-            </button>
-          ))}
-        </div>
       )}
 
       <PromptBar
