@@ -3,6 +3,7 @@ import type { ConnectionProvider } from "@/lib/craig/blocks";
 import { requireUser } from "@/lib/craig/current-user";
 import { listJoiners } from "@/lib/craig/joiners";
 import { seatEntitlement } from "@/lib/craig/seats";
+import { docusignViewFor } from "@/lib/docusign/store";
 import { githubViewFor } from "@/lib/github/store";
 import { linearConnectionViewFor } from "@/lib/linear/store";
 import { slackViewFor } from "@/lib/slack/store";
@@ -83,11 +84,18 @@ export default async function ShowcaseWorkflowPage(
 
      GitHub is the third entry in this `Promise.all` and cost exactly one line
      of it, which is the shape working: a provider is a store to read and a
-     ternary to push, not a change to how this page is put together. */
-  const [slack, linear, github] = await Promise.all([
+     ternary to push, not a change to how this page is put together.
+
+     DocuSign is the fourth, and the only one whose block does not always need
+     it: a contract step signed in Craig asks for nothing, so `blocks.ts`
+     decides per step whether this entry is wanted. This list stays what it has
+     always been — which connections exist — and says nothing about which are
+     needed. */
+  const [slack, linear, github, docusign] = await Promise.all([
     slackViewFor(user.email),
     linearConnectionViewFor(user.email),
     githubViewFor(user.email),
+    docusignViewFor(user.email),
   ]);
 
   const connectedProviders: ConnectionProvider[] = [
@@ -97,6 +105,7 @@ export default async function ShowcaseWorkflowPage(
     ...(slack && !slack.needsReconnect ? (["slack"] as const) : []),
     ...(linear && !linear.needsReconnect ? (["linear"] as const) : []),
     ...(github && !github.needsReconnect ? (["github"] as const) : []),
+    ...(docusign && !docusign.needsReconnect ? (["docusign"] as const) : []),
   ];
 
   /**

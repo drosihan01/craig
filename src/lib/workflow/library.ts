@@ -198,6 +198,38 @@ export const SLACK_PRESET = "slack";
 export const LINEAR_PRESET = "linear";
 export const GITHUB_PRESET = "github";
 
+/**
+ * The contract block, and the two strings inside it that decide whether it
+ * needs a DocuSign connection.
+ *
+ * Named for the same reason the three above are, plus one this preset has to
+ * itself. Every other integration block needs its connection by virtue of
+ * *being* that block — a Slack step always wants Slack. This one does not: an
+ * admin picks the signing method from a field, and only one of the four
+ * choices reaches outside Craig to DocuSign. So `blocks.ts` cannot key off the
+ * preset id alone; it has to read a *value* out of the step's config, which
+ * means the field id and the option id are now load-bearing in a second file.
+ *
+ * A literal in each place is the same trap the preset ids carry, one step
+ * worse: a typo in `"provider"` or `"docusign"` fails silently in the safe-
+ * looking direction — the publish gate simply never asks for the connection,
+ * and the first person to notice is whoever wonders why the contract never
+ * arrived.
+ */
+export const SIGN_CONTRACT_PRESET = "sign-contract";
+
+/** The setup field on `sign-contract` holding the signing method. */
+export const SIGNING_METHOD_FIELD = "provider";
+
+/**
+ * The one signing method that needs an outside connection. Craig's own signing
+ * and "email a PDF back" need nothing; Dropbox Sign would need its own block
+ * row and its own module, and deliberately has neither yet — offering the
+ * option in the picker is a claim about onboarding, not a claim that Craig has
+ * been wired to it.
+ */
+export const DOCUSIGN_SIGNING_METHOD = "docusign";
+
 /** An account on a third-party service. */
 function account(
   id: string,
@@ -225,7 +257,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
     description: "The parts that have to happen before anyone can start.",
     presets: [
       {
-        id: "sign-contract",
+        id: SIGN_CONTRACT_PRESET,
         label: "Sign contract",
         description:
           "Employment agreement, offer letter and any acknowledgements that go with it.",
@@ -248,13 +280,13 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             required: true,
           },
           {
-            id: "provider",
+            id: SIGNING_METHOD_FIELD,
             label: "Signing method",
             kind: "select",
             hint: "Signing in Craig is also how they get their account",
             options: [
               { id: "craig", label: "In Craig" },
-              { id: "docusign", label: "DocuSign" },
+              { id: DOCUSIGN_SIGNING_METHOD, label: "DocuSign" },
               { id: "dropbox-sign", label: "Dropbox Sign" },
               { id: "email", label: "Email a PDF back" },
             ],

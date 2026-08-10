@@ -1,5 +1,6 @@
 "use client";
 
+import { DocusignStep } from "@/components/craig/docusign";
 import { GitHubStep } from "@/components/craig/github";
 import { GoogleStep } from "@/components/craig/google-workspace";
 import type { WorkspaceAccount } from "@/components/craig/google-workspace";
@@ -9,6 +10,7 @@ import {
   GITHUB_PRESET,
   GOOGLE_WORKSPACE_PRESET,
   LINEAR_PRESET,
+  SIGN_CONTRACT_PRESET,
   SLACK_PRESET,
 } from "@/lib/workflow/library";
 
@@ -61,6 +63,16 @@ const PANELS: Record<string, BlockSettingsComponent> = {
      clause in the publish gate and a boolean threaded through the component
      tree. */
   [GITHUB_PRESET]: ({ account }) => <GitHubStep account={account} />,
+  /* The fifth, and the first entry whose block does not always need what its
+     panel offers.
+     "Sign contract" needs DocuSign only when its Signing method field says so,
+     and the props above carry no block — the editor looks a panel up by preset
+     id alone, so this map cannot key on an answer. The panel therefore renders
+     for every contract step and says in its first sentence when it applies;
+     `blocks.ts` argues the same distinction for the publish gate, where getting
+     it wrong would be a false requirement rather than a paragraph. Handing the
+     block down would fix both and is one line in `workflow-editor.tsx`. */
+  [SIGN_CONTRACT_PRESET]: ({ account }) => <DocusignStep account={account} />,
 };
 
 /** The panel for a preset, or `null` when the block needs no extra settings. */
