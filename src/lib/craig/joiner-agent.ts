@@ -283,7 +283,7 @@ const readNotebook = tool<typeof readNotebookParams, JoinerContext>({
       "",
       found,
       "",
-      `— That section is titled "${section}". If they asked about something else, this does not answer it: say that isn't written down and you'll pass it on. Never move a figure from one kind of leave, notice or payment to another.`,
+      `— That section is titled "${section}". If it does not answer what they asked, look at the heading list again and read a better one before concluding — the closest heading is often not the first one that came to mind. Only when nothing covers it, say it isn't written down and that you'll pass it on. Never move a figure from one kind of leave, notice or payment to another.`,
     ].join("\n");
   },
 });
