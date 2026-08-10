@@ -1,6 +1,7 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { logoForAccount } from "./accounts";
 import { findTemplate, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
 import { sendEmail } from "@/lib/email/send";
@@ -112,6 +113,7 @@ async function chase(
   const { subject, html, text } = renderEmail(
     template,
     vocabulary(joiner, steps, link, firstNameOf(joiner.name)),
+    await logoForAccount(joiner.accountEmail),
   );
 
   const sent = await sendEmail({
@@ -155,6 +157,7 @@ async function handOver(
       `${origin}/people/${joiner.id}`,
       firstNameOf(joiner.accountEmail.split("@")[0]),
     ),
+    await logoForAccount(joiner.accountEmail),
   );
 
   const sent = await sendEmail({
