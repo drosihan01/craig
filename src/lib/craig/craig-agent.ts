@@ -289,6 +289,23 @@ const recordFactParams = z.object({
             "Short label in plain words, like 'headcount' or 'who owns AWS'. Never snake_case.",
           ),
         value: z.string().describe("The fact itself."),
+        /* What goes in the notebook, as opposed to what goes on a chip.
+        
+           `key`/`value` is the right shape for the builder, where these are
+           shown next to each other and the label is the column heading. It is
+           the wrong shape for a document somebody reads in a year: asked about
+           a switch to Pleo, he produced "expense claims tool — Pleo",
+           "previous expense claims tool — Xero" and "switch date — last
+           month", which is one sentence shattered into three, and the third
+           one is permanently wrong the moment the month turns.
+        
+           So the notebook gets its own field, written as prose. */
+        note: z
+          .string()
+          .describe(
+            "The same fact as one complete sentence for the company notebook — readable a year from now by somebody who wasn't in this conversation. Combine related details into one sentence rather than splitting them. Write dates out in full ('in July 2026', never 'last month'). Omit for a fact about a person rather than the company.",
+          )
+          .optional(),
       }),
     )
     .describe(
@@ -466,7 +483,7 @@ const noteGap = tool<typeof noteGapParams, Notebook>({
 const recordFact = tool<typeof recordFactParams, Notebook>({
   name: "record_fact",
   description:
-    "Record concrete facts about the company: its name, what it sells, headcount, a person's role, a start date, a tool they use, who owns an account. Pass every fact in their message in one call, before replying — not one call each, and not a summary at the end.",
+    "Record concrete facts about the company: its name, what it sells, headcount, a person's role, a start date, a tool they use, who owns an account. Pass every fact in their message in one call, before replying — not one call each, and not a summary at the end. Give each company fact a `note`: the same thing as one sentence, with dates written out in full, for the notebook. Leave `note` off anything about a specific person.",
   parameters: recordFactParams,
   execute: async ({ facts }, context) => {
     const notebook = notebookOf(context);
@@ -474,7 +491,11 @@ const recordFact = tool<typeof recordFactParams, Notebook>({
     notebook.facts.push(...kept);
 
     for (const fact of kept) {
-      await suggestFor(notebook, `${fact.key} — ${fact.value}`, "fact");
+      /* The sentence when he wrote one, the pair when he didn't. No fallback
+         to `key — value` for a fact he deliberately left `note` off: that is
+         how he says "this is about a person", and the notebook must not have
+         it. */
+      if (fact.note?.trim()) await suggestFor(notebook, fact.note, "fact");
     }
 
     return kept.length === 0
@@ -1217,6 +1238,25 @@ function instructionsFor(context: RunContext<Notebook>): string {
   const { facts, gaps, firstName, company, editing, simpleDraft, home, headings } =
     context.context;
 
+  /* What day it is.
+  
+     This was missing entirely, which is a strange thing for an onboarding
+     product: half of what anybody says to Craig is a date relative to now —
+     she starts in a fortnight, we switched last month, that needs doing before
+     the end of the quarter. Without today he cannot resolve any of it, so he
+     either asks a question he should not need to ask or writes "last month"
+     into a document that outlives the month.
+  
+     Australian format because that is where the company is and where the
+     ambiguous ones (03/04) get read wrong. */
+  const today = new Date().toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Australia/Sydney",
+  });
+
   /**
    * What he knows about this company, as a list of headings.
    *
@@ -1276,6 +1316,7 @@ function instructionsFor(context: RunContext<Notebook>): string {
 
   return [
     craigSystemPrompt(firstName, company),
+    `## Today\n\nIt is ${today}. Work out any date somebody gives you relative to that — "in a fortnight", "end of next month" — and say the actual date back to them so a wrong assumption surfaces now rather than on somebody's first day. Never write a relative date into the notebook.`,
     /* The account's notebook first, then what has come up in this
        conversation. Long-term memory before short-term: what the company has
        written down outranks what he inferred twenty minutes ago. */
