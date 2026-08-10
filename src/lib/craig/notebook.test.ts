@@ -80,6 +80,45 @@ describe("sectionOf", () => {
     );
   });
 
+  it("doesn't let a short heading shadow the one that was asked for", () => {
+    /* A real notebook produced this: "The studio" and "How a job gets into the
+       studio" both exist, and the longer name contains the shorter one. Taking
+       the first loose match returned the door-entry paragraph for a question
+       about briefs — retrieval handing Craig the wrong text, which no amount
+       of prompt wording can correct. */
+    const doc = `# Co
+
+## The studio
+
+Door code is in Slack.
+
+## How a job gets into the studio
+
+Brief, then scope.`;
+
+    expect(sectionOf(doc, "How a job gets into the studio")).toContain(
+      "Brief, then scope",
+    );
+    expect(sectionOf(doc, "The studio")).toContain("Door code");
+  });
+
+  it("prefers the exact heading over a longer one containing it", () => {
+    /* "Pay reviews" must not win when "Reviews" was asked for verbatim, and
+       vice versa — these two live side by side in the same document. */
+    const doc = `# Co
+
+## Reviews
+
+Twice a year.
+
+## Pay reviews
+
+Every April.`;
+
+    expect(sectionOf(doc, "Reviews")).toContain("Twice a year");
+    expect(sectionOf(doc, "Pay reviews")).toContain("Every April");
+  });
+
   it("returns null rather than guessing", () => {
     /* The answer that lets him say he does not know — and that is the moment
        worth turning into a note. */

@@ -560,7 +560,7 @@ const readNotebook = tool<typeof readNotebookParams, Notebook>({
       "",
       found,
       "",
-      `— That section is titled "${section}". If the question was about something else, this does not answer it: say the notebook covers "${section}" but not what they asked, and call note_gap. Never move a figure from one kind of leave, notice or payment to another.`,
+      `— That section is titled "${section}". If it does not answer what they asked, do not settle for it: look at the heading list again and read a better one before you conclude anything — a notebook with sixty headings usually has a closer match than the first one you picked. Only when nothing covers it, say the notebook has "${section}" but not what they asked, and call note_gap. Never move a figure from one kind of leave, notice or payment to another.`,
     ].join("\n");
   },
 });
