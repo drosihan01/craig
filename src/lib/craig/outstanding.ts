@@ -1,8 +1,11 @@
 import "server-only";
-import { AUTOMATION_BY_PRESET, type Joiner } from "./contract";
+import { AUTOMATION_BY_PRESET, JOINER_HOME, type Joiner } from "./contract";
 import { getAccount } from "./accounts";
 import { isRunInterrupted, progressOf, runStateOf } from "./joiners";
-import { outOfSeats, type SeatEntitlement } from "./seats";
+import { outOfSeats, seatEntitlement, type SeatEntitlement } from "./seats";
+import { listJoiners } from "./joiners";
+import { subscriptionFor } from "./accounts";
+import { listWorkflows } from "./workflows";
 import type { StoredWorkflow } from "./workflows";
 
 /**
@@ -199,6 +202,93 @@ export async function outstandingFor(
  * an optional one precisely so this does not have to invent "just now" every
  * time the page loads.
  */
+/**
+ * The bell's contents for an account, fetched and mapped in one call.
+ *
+ * Every admin screen wants the same list, and the alternative was each page
+ * assembling the three inputs `outstandingFor` needs — workflows, joiners,
+ * entitlement — before it could ask. That is four queries per screen written
+ * out five times, and the fifth screen is where somebody passes a stale
+ * entitlement and the bell quietly disagrees with the page.
+ *
+ * **Not for joiner screens.** `/me` runs on the same shell, and this list is
+ * the *employer's* — seats, billing, unpublished workflows, other people's
+ * broken steps. A new starter must never be handed it. There is no accidental
+ * path to that here: this takes an account email, and a joiner has none.
+ */
+export async function notificationsFor(accountEmail: string) {
+  const [workflows, joiners, subscription] = await Promise.all([
+    listWorkflows(accountEmail),
+    listJoiners(accountEmail),
+    subscriptionFor(accountEmail),
+  ]);
+
+  const items = await outstandingFor(accountEmail, {
+    workflows,
+    joiners,
+    entitlement: seatEntitlement(subscription, joiners.length),
+  });
+
+  return asNotifications(items);
+}
+
+/**
+ * The bell's contents for a *new starter*, which is a different list entirely.
+ *
+ * `/me` runs on the same shell as the admin's screens, so it would otherwise
+ * inherit `notificationsFor` — seats, billing, unpublished workflows, other
+ * people's broken steps. None of that is theirs. This is the joiner's
+ * equivalent, built from their own record and nothing else, which is the same
+ * rule the whole joiner surface follows: it takes a `Joiner`, so there is no
+ * argument a caller could pass that reaches the employer's account.
+ *
+ * Three things are worth telling somebody being onboarded, and they are all
+ * about *them*: the step waiting on them, an account that is ready and needs a
+ * sign-in, and their start date once it is close. Nothing about how the company
+ * is getting on with its half — that is on their plan already, phrased for
+ * them, and a bell is for things that need you.
+ */
+export function joinerNotifications(joiner: Joiner) {
+  const out: {
+    id: string;
+    kind: "overdue" | "approval" | "complete" | "info";
+    title: string;
+    description: string;
+    href?: string;
+  }[] = [];
+
+  const { next } = progressOf(joiner);
+
+  if (next) {
+    out.push({
+      id: `next:${next.id}`,
+      kind: "approval",
+      title: next.title,
+      description: "This is the next thing waiting on you.",
+      href: JOINER_HOME,
+    });
+  }
+
+  /* The one automated step that needs them to do something. `awaiting` means
+     the account exists and nobody has signed into it yet — see RunState — so
+     it is the only run state a new starter can act on. The others are the
+     company's problem and are already described on their plan. */
+  for (const step of joiner.steps) {
+    if (step.actor !== "craig") continue;
+    if (runStateOf(step) !== "awaiting") continue;
+    out.push({
+      id: `awaiting:${step.id}`,
+      kind: "complete",
+      title: `${step.title} is ready`,
+      description:
+        "Your password is in the email we sent you — sign in once and this one is finished.",
+      href: JOINER_HOME,
+    });
+  }
+
+  return out;
+}
+
 export function asNotifications(
   items: OutstandingItem[],
 ): {

@@ -145,11 +145,6 @@ export function PromptBar({
 
   const lg = size === "lg";
 
-  /* No persistent controls at all, so the send button has to hold the row open
-     on its own. Only the showcase's editor panel asks for this today — a
-     ~300px column where an attach button answers nothing. */
-  const bare = !attachments && !modelPicker && !dictation;
-
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <div
@@ -287,7 +282,15 @@ export function PromptBar({
                 <StopCircle className="size-4" />
               </button>
             ) : (
-              (value.trim() || bare) && (
+              /* Always drawn, disabled until there is something to send.
+                 It used to render only when there was text *or* the bar had no
+                 other controls — so a composer with an attach button showed no
+                 send arrow at all until you typed, while one without it always
+                 did. Two composers in the same product disagreeing about
+                 whether a send button exists, and the one that hid it was Home.
+                 A disabled control says "this is where it will be"; an absent
+                 one says "there isn't one". */
+              (
                 <button
                   type="button"
                   onClick={submit}

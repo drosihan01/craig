@@ -85,6 +85,16 @@ export interface CraigChat {
   tools: CraigToolRun[];
   /** A turn is in flight. */
   busy: boolean;
+  /**
+   * Abandon the reply still arriving.
+   *
+   * The controller has been here since the hook was written — a newer `send`
+   * aborts the older one — but it was never handed out, so no composer could
+   * offer a stop button and none did. A model answering a question you have
+   * already changed your mind about is spending money and holding the screen,
+   * and there was no way to say so.
+   */
+  stop: () => void;
   /** The last failure, in words a person can act on. Cleared by the next send. */
   error: string | null;
   /**
@@ -425,5 +435,24 @@ export function useCraigChat(
     [workflowId, home, threadKind],
   );
 
-  return { messages, send, phase, notes, tools, busy, error, drafted, offer };
+  /* Stable, so a composer holding it in a dependency array is not re-rendered
+     by it. `abortRef` is a ref for exactly this reason. */
+  const stop = React.useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setBusy(false);
+  }, []);
+
+  return {
+    messages,
+    send,
+    phase,
+    notes,
+    tools,
+    busy,
+    stop,
+    error,
+    drafted,
+    offer,
+  };
 }

@@ -16,6 +16,7 @@ import {
 import { Avatar } from "./avatar";
 import { CraigMark } from "./craig-mark";
 import { NotificationBell, type AppNotification } from "./notifications";
+import { useNotifications } from "@/components/craig/notification-scope";
 import { DropdownMenu } from "./dropdown";
 import { DialogClose } from "./dialog";
 import { cn } from "@/lib/cn";
@@ -229,8 +230,8 @@ export function AppShell({
   asidePanel?: { key: string; width: number };
   account?: AccountInfo;
   actions?: React.ReactNode;
-  /** Omit entirely to hide the bell — an empty array still shows it, correctly
-      reading as "you have none" rather than "this app has no notifications". */
+  /** Overrides the list the layout resolved for whoever is reading. Omit on
+      any product screen — the default is already correct there. */
   /** For pages that manage their own full-height layout — a chat with a pinned
       composer, or a canvas. Drops the content column's bottom padding, which
       would otherwise make the document taller than the viewport and let the
@@ -248,6 +249,13 @@ export function AppShell({
     asidePanel ? `craig-aside-w-${asidePanel.key}` : "craig-aside-w",
     asidePanel?.width,
   );
+
+  /* The screen's own list wins; otherwise the one the layout resolved for
+     whoever is reading. A screen with a genuinely different list — the design
+     system and the mailmaker both have one — can still say so, and everything
+     else gets the right answer without asking. */
+  const scoped = useNotifications();
+  const bell = notifications ?? scoped;
 
   const isDesktop = useIsDesktop();
   /* Not persisted, unlike the column state. A drawer is a thing you opened a
@@ -283,7 +291,18 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-canvas" style={vars}>
       <header className="sticky top-0 z-40 border-b border-border bg-canvas/85 backdrop-blur-md">
-        <div className="mx-auto flex h-12 max-w-[1500px] border-x border-border">
+        {/* Full width, no centring. This carried `mx-auto max-w-[1500px]`,
+            which on a wide monitor left a band of empty canvas down each side
+            and floated the whole product in the middle of the screen — the nav
+            drifted away from the left edge, and the notification bell away
+            from the top-right corner, which is the one place people throw the
+            pointer without looking.
+
+            `border-x` goes with it: an outer rule was drawing the seam between
+            the app and that empty band, and with the band gone it would be a
+            line painted along the edge of the window. The columns keep their
+            own dividers, which are the seams that mean something. */}
+        <div className="flex h-12">
           {/* Left cell — tracks the nav column's width, same rule. */}
           <div
             className={cn(
@@ -386,9 +405,9 @@ export function AppShell({
                   onClick={() => setDrawer("aside")}
                 />
               ))}
-            {notifications && (
+            {bell.length > 0 && (
               <NotificationBell
-                items={notifications}
+                items={bell}
                 onSelect={onNotificationSelect}
                 onMarkAllRead={onMarkAllRead}
                 className="ml-auto shrink-0"
@@ -413,7 +432,10 @@ export function AppShell({
        * and should reach the bottom of the window when there is little on them. */}
       <div
         className={cn(
-          "relative mx-auto flex max-w-[1500px] border-x border-border",
+          /* Matches the header above it exactly — same removal, same reason.
+             These two must agree at every width or the vertical rule running
+             from the header into the page steps sideways at the join. */
+          "relative flex",
           fill ? "h-[calc(100vh-3rem)]" : "min-h-[calc(100vh-3rem)]",
         )}
       >
