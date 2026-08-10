@@ -82,8 +82,10 @@ src/
     craig/               the domain: agents, prompts, stores, contract
     google/ stripe/ email/ supabase/   integrations, no SDKs
     workflow/library.ts  the block library the builder offers
-  archive/               the pre-Craig demos. In git, compiled by nothing,
-                         served to nobody — outside the router on purpose
+  archive/               design-system/ (documents components/ui) and
+                         email/ (the mailmaker). Outside the router, so
+                         neither is served — kept as reference. Everything
+                         else that was here is in drosihan01/craig-archive
   proxy.ts               Next 16 middleware
 docs/building-a-block.md the brief for adding an integration block
 ```
