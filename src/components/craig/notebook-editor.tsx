@@ -1,60 +1,39 @@
 "use client";
 
 import * as React from "react";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "tiptap-markdown";
 import { cn } from "@/lib/cn";
 
 /**
- * The notebook, edited the way a page is edited rather than the way a file is.
+ * The notebook, edited as the markdown it actually is.
  *
- * This replaced a `<textarea>` of raw markdown, which stored the right thing
- * and asked the wrong thing of the reader: an admin writing down how leave
- * works should not be typing `##` and counting hyphens. Type `## ` and it
- * becomes a heading; the markup does its job and gets out of the way.
+ * This replaced a TipTap rich-text editor, which was the right idea for a page
+ * somebody writes a paragraph in and the wrong one for this. The reason is
+ * what the editor did on the way *out*.
  *
- * ## Markdown stays the storage format
+ * ## Why the rich editor had to go
  *
- * The editor is a view, not the record. What is saved is still markdown,
- * because the most important reader of this document is **Craig**, and
- * markdown is what a language model reads best — headings become structure it
- * can navigate, and nothing is lost to a serialisation format designed for a
- * browser. Storing the editor's own JSON would mean converting on the way to
- * every prompt, and a conversion in that position is a thing that quietly
- * degrades the answers.
+ * Markdown is the storage format, because the most important reader of this
+ * document is Craig and markdown is what a model reads best — headings become
+ * structure it can navigate. TipTap does not store markdown; it parses it into
+ * a document model and **re-serialises the whole thing on every keystroke**.
  *
- * So `tiptap-markdown` sits underneath: markdown in on load, markdown out on
- * change. The database column is unchanged and a document written in the old
- * textarea opens correctly here.
+ * On a short note nobody notices. On a real handbook — six thousand words,
+ * sixty headings — it means correcting one typo rewrites all of it: heading
+ * styles normalised, list markers swapped, long lines rewrapped, characters
+ * escaped that did not need escaping. The diff is the entire document, and
+ * whatever survived that round trip is what Craig reads from then on. An
+ * editor that silently rewrites the file it opened is a bad trade for the
+ * convenience of not typing `##`.
  *
- * ## Why a library rather than `contenteditable`
+ * A textarea has none of that. What is loaded is what is saved, byte for byte,
+ * unless a person changed it. For a document whose whole job is to be the one
+ * thing Craig can be trusted to quote from, that property is worth more than
+ * live formatting.
  *
- * Hand-rolled `contenteditable` is the classic way to end up with an editor
- * that is subtly wrong — selection that jumps on undo, paste that carries a
- * spreadsheet's HTML in with it, a caret that lands between two blocks with
- * nowhere to be. Those are not things a first version gets right, and each one
- * is discovered by somebody losing a paragraph. This is a solved problem and
- * the solution is a dependency.
- *
- * ## Nothing here formats to impress
- *
- * Headings, lists, bold, italic, quotes, code. No tables, no images, no
- * columns — the notebook is prose that Craig reads aloud to a new starter, and
- * a layout he cannot describe is a layout that does not survive the trip.
+ * It is also honest about what this is. The notebook is a file, the person
+ * editing it is the one admin on the account, and markdown is a format people
+ * already write in every chat window they use.
  */
-
-/**
- * `tiptap-markdown` ships no type declarations, so its storage is invisible to
- * TypeScript. Contained in one place rather than cast at each call site: if the
- * package ever gains types, or renames this, exactly one line has to change and
- * the compiler will point at it.
- */
-type MarkdownStorage = { markdown: { getMarkdown: () => string } };
-
-const markdownOf = (editor: Editor): string =>
-  (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
-
 export function NotebookEditor({
   value,
   onChange,
@@ -64,81 +43,51 @@ export function NotebookEditor({
   onChange: (markdown: string) => void;
   className?: string;
 }) {
-  /* The latest `onChange`, without rebuilding the editor to get it — an editor
-     recreated on every keystroke loses the caret mid-sentence.
-     
-     Written in an effect rather than during render, because `react-hooks`
-     refuses a ref write in the render pass and is right to: a render that
-     mutates something outside itself is a render that cannot be discarded, and
-     React discards renders. */
-  const emit = React.useRef(onChange);
-  React.useEffect(() => {
-    emit.current = onChange;
-  }, [onChange]);
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        /* Off because the notebook has no use for them and each one is a way
-           to produce a document Craig has to describe rather than read. */
-        horizontalRule: false,
-        codeBlock: false,
-      }),
-      Markdown.configure({
-        /* What comes out on every change, and what the server stores. */
-        html: false,
-        /* `-` rather than `*`, because a human eventually edits this in a
-           text box somewhere and hyphens are what people type. */
-        bulletListMarker: "-",
-        linkify: true,
-        breaks: false,
-      }),
-    ],
-    content: value,
-    /* Next renders this on the server first; without it React complains that
-       the editor's DOM does not match, and the fix is to admit it is a client
-       thing rather than to silence the warning. */
-    immediatelyRender: false,
-    editorProps: {
-      attributes: {
-        class: "notebook-prose focus:outline-none",
-        "aria-label": "Notebook",
-      },
-    },
-    onUpdate: ({ editor }) => {
-      emit.current(markdownOf(editor));
-    },
-  });
+  const ref = React.useRef<HTMLTextAreaElement>(null);
 
   /**
-   * Take an outside change without fighting the person typing.
+   * Tab indents rather than leaving the field.
    *
-   * Only when the incoming markdown differs from what the editor already
-   * holds — otherwise every keystroke would round-trip through here and reset
-   * the caret to the top of the document. That guard is the whole reason this
-   * effect is safe to have at all.
+   * Markdown uses indentation for nested lists, and a document full of them is
+   * one this is used to write. Losing focus mid-list is the kind of small
+   * wrongness that makes somebody edit the file somewhere else instead.
+   *
+   * Shift-Tab is left alone so the field can still be escaped by keyboard.
    */
-  React.useEffect(() => {
-    if (!editor) return;
-    const current = markdownOf(editor);
-    if (current === value) return;
-    editor.commands.setContent(value, { emitUpdate: false });
-  }, [editor, value]);
+  function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Tab" || event.shiftKey) return;
+    event.preventDefault();
+
+    const field = event.currentTarget;
+    const { selectionStart: start, selectionEnd: end } = field;
+    const next = `${value.slice(0, start)}  ${value.slice(end)}`;
+    onChange(next);
+
+    /* After React has written the new value, or the caret jumps to the end. */
+    requestAnimationFrame(() => {
+      field.selectionStart = field.selectionEnd = start + 2;
+    });
+  }
 
   return (
-    <div
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={onKeyDown}
+      spellCheck
+      aria-label="Notebook"
       className={cn(
-        "min-h-[24rem] rounded-md border border-border bg-surface px-4 py-3",
-        "focus-within:border-border-strong",
+        "min-h-[36rem] w-full rounded-md border border-border bg-surface px-4 py-3",
+        /* Monospace, because the alignment is information: a person scanning
+           for `##` is reading structure, and a proportional face hides it. */
+        "font-mono text-sm leading-relaxed",
+        "focus:border-border-strong focus:outline-none",
+        /* Off, because a textarea that grows on drag inside a column layout
+           is a way to end up with a field wider than the page. */
+        "resize-y",
         className,
       )}
-      /* Clicking the padding should put the caret in the document, the way it
-         does in every editor people already use. */
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) editor?.commands.focus("end");
-      }}
-    >
-      <EditorContent editor={editor} />
-    </div>
+    />
   );
 }
