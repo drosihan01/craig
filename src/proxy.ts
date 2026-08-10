@@ -34,13 +34,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  /* The new starter's two paths, which this fence is the wrong shape for.
-     It asks for a Supabase session, and they will never have one: they were
-     given a signed link rather than an account, on purpose — see
-     joiner-session.ts. Left in, every magic link in every invitation would
-     land on the admin's sign-in form, asking a stranger for a password nobody
-     ever gave them. Both pages read the joiner cookie themselves. */
-  if (pathname === JOIN_PATH || pathname === JOINER_HOME) {
+  /* The new starter's paths, which this fence is the wrong shape for. It asks
+     for a Supabase session, and they will never have one: they were given a
+     signed link rather than an account, on purpose — see joiner-session.ts.
+     Left in, every magic link in every invitation would land on the admin's
+     sign-in form, asking a stranger for a password nobody ever gave them.
+     Every page under here reads the joiner cookie itself.
+
+     A prefix on `JOINER_HOME`, not an equality test, and that is the whole
+     bug this fixes. It was `pathname === JOINER_HOME` while `/me` was the only
+     page a joiner had; the day Craig became `/me/ask` the new route fell
+     through to the fence below and a new starter clicking "Ask Craig" was sent
+     to a password form for an account that does not exist. The comment above
+     describes that exact failure, and an equality test guaranteed it would
+     come back for the second page. A prefix means the next one is free. */
+  if (pathname === JOIN_PATH || pathname.startsWith(JOINER_HOME)) {
     return NextResponse.next();
   }
 
