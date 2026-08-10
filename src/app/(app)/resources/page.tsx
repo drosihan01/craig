@@ -38,6 +38,7 @@ export default async function ResourcesPage() {
     id: document.id,
     name: document.name,
     kind: KINDS[document.contentType] ?? "File",
+    contentType: document.contentType,
     size: readableSize(document.sizeBytes),
     shared: document.visibility === "shared",
     uploadedOn: readableDay(document.uploadedAt),

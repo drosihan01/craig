@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   AppShell,
   Button,
+  buttonVariants,
   Callout,
+  Dialog,
   EmptyState,
   FilterBar,
   SearchInput,
@@ -14,7 +16,14 @@ import {
   Separator,
   Switch,
 } from "@/components/ui";
-import { Delete, FilterList, MenuBook, UploadFile } from "@/components/ui/icons";
+import {
+  Delete,
+  FilterList,
+  MenuBook,
+  OpenInNew,
+  UploadFile,
+  Visibility,
+} from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { ShowcaseNav, ShowcaseNavRail } from "@/components/craig/nav";
 import type { Session } from "@/lib/craig/contract";
@@ -97,10 +106,170 @@ import type { Session } from "@/lib/craig/contract";
  * and a parser that have to agree forever: the first time somebody improves the
  * wording of a file size, the sort quietly stops working and nothing fails.
  */
+/**
+ * Reading a document without leaving the page.
+ *
+ * Before this, Resources could upload, share and delete a file and offered no
+ * way to *look* at one — so the only way to check what you had shared with
+ * every new starter was to download it. Somebody deciding whether a document
+ * is safe to share should be able to see what is in it in the same breath.
+ *
+ * ## Three kinds of file, three honest answers
+ *
+ * **PDFs** go in an `<iframe>` pointed at our own route, which redirects to a
+ * short-lived signed URL. The same argument the contract room makes: every
+ * browser already has a PDF viewer better than one we would build, and
+ * rendering PDFs ourselves means shipping `pdfjs-dist` to somebody who will
+ * use it once. The frame's `src` is a path on our origin, so the signed URL
+ * never lands in the DOM for a screenshot or a devtools tab to catch.
+ *
+ * **Text and markdown** are fetched and shown as text. They are their own
+ * content, and putting a plain-text file behind a download is a step for
+ * nothing.
+ *
+ * **Word documents and RTF** cannot be rendered by a browser at all, and this
+ * says so rather than showing an empty frame and letting somebody conclude the
+ * file is corrupt. They get the one thing that does work — opening it, which
+ * hands it to whatever application they actually read `.docx` in.
+ *
+ * The dialog is `bare` and supplies its own header because the file name is
+ * long, needs truncating, and wants the "open in a new tab" escape hatch
+ * sitting beside it rather than at the bottom of a scrolling document.
+ */
+function DocumentViewer({
+  row,
+  onClose,
+}: {
+  row: ResourceRow | null;
+  onClose: () => void;
+}) {
+  const [text, setText] = React.useState<string | null>(null);
+  const [failed, setFailed] = React.useState(false);
+  const [loadedFor, setLoadedFor] = React.useState<string | null>(null);
+
+  const isPdf = row?.contentType === "application/pdf";
+  const isText =
+    row?.contentType === "text/plain" || row?.contentType === "text/markdown";
+
+  /* Cleared during render rather than in an effect.
+     
+     Opening a second document has to forget the first one's text *before*
+     anything paints — an effect runs after, so for one frame the new file's
+     name would sit above the old file's contents. That is the whole reason
+     `react-hooks` refuses `setState` in an effect body, and the reason this
+     is written the way React documents for state derived from props. */
+  if (row && loadedFor !== row.id) {
+    setLoadedFor(row.id);
+    setText(null);
+    setFailed(false);
+  }
+
+  React.useEffect(() => {
+    if (!row || !isText) return;
+
+    /* Cancelled on the way out: a dialog closed before the fetch lands would
+       otherwise write one file's contents under the next file's name. */
+    let live = true;
+
+    void fetch(`/api/documents/${encodeURIComponent(row.id)}`)
+      .then((response) => (response.ok ? response.text() : Promise.reject()))
+      .then((body) => {
+        if (live) setText(body);
+      })
+      .catch(() => {
+        if (live) setFailed(true);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [row, isText]);
+
+  if (!row) return null;
+  const href = `/api/documents/${encodeURIComponent(row.id)}`;
+
+  return (
+    <Dialog open onClose={onClose} size="xl" bare>
+      <div className="flex flex-col gap-3 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h2 className="truncate text-base font-semibold">{row.name}</h2>
+            <p className="text-2xs text-text-subtle">
+              {row.kind} · {row.size}
+              {row.shared ? " · new starters can read this" : ""}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "secondary", size: "sm" })}
+            >
+              <OpenInNew aria-hidden />
+              Open
+            </a>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+
+        {isPdf && (
+          <iframe
+            src={href}
+            title={row.name}
+            className="h-[70vh] w-full rounded-md border border-border bg-surface-sunken"
+          />
+        )}
+
+        {isText && (
+          <div className="h-[70vh] w-full overflow-auto rounded-md border border-border bg-surface-sunken p-4">
+            {failed ? (
+              <p className="text-sm text-text-muted">
+                That didn&rsquo;t load. Opening it in a new tab usually works.
+              </p>
+            ) : text === null ? (
+              <p className="text-sm text-text-subtle">Loading&hellip;</p>
+            ) : (
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
+                {text}
+              </pre>
+            )}
+          </div>
+        )}
+
+        {!isPdf && !isText && (
+          /* Said plainly rather than shown as a blank frame. A viewer that
+             renders nothing reads as a broken file, and the file is fine. */
+          <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-md border border-border bg-surface-sunken text-center">
+            <p className="text-sm text-text-muted">
+              Browsers can&rsquo;t display {row.kind} files.
+            </p>
+            <p className="text-2xs text-text-subtle">
+              Open it and it&rsquo;ll go to whatever you normally read these in.
+            </p>
+          </div>
+        )}
+      </div>
+    </Dialog>
+  );
+}
+
 export interface ResourceRow {
   id: string;
   name: string;
   kind: string;
+  /**
+   * The real MIME type, beside the human `kind`.
+   *
+   * Both, because they answer different questions: `kind` is the word a person
+   * reads in the row ("PDF"), and this is what the viewer branches on. Deriving
+   * one from the other in the browser would mean a second copy of the mapping
+   * in `page.tsx`, and the copy that goes stale is always the one further from
+   * the data.
+   */
+  contentType: string;
   /** For the eye: "1.2 MB". */
   size: string;
   shared: boolean;
@@ -158,6 +327,10 @@ export function ResourcesScreen({
   }
 
   const [busy, setBusy] = React.useState<string | null>(null);
+  /* The whole row rather than an id: the dialog draws its name, kind, size and
+     sharing state, and looking all of that back up from an id would mean the
+     dialog could disagree with the row it was opened from. */
+  const [viewing, setViewing] = React.useState<ResourceRow | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -463,6 +636,15 @@ export function ResourcesScreen({
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => setViewing(row)}
+                      aria-label={`View ${row.name}`}
+                    >
+                      <Visibility aria-hidden />
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       disabled={busy === row.id}
                       onClick={() => void remove(row.id, row.name)}
                       aria-label={`Delete ${row.name}`}
@@ -476,6 +658,8 @@ export function ResourcesScreen({
           </div>
         )}
       </div>
+
+      <DocumentViewer row={viewing} onClose={() => setViewing(null)} />
     </AppShell>
   );
 }
