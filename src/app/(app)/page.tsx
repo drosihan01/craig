@@ -48,9 +48,22 @@ export default async function Home() {
     listDocuments(user.email),
   ]);
 
-  /* Only while there is genuinely nothing. The moment Craig drafts something
-     this stops firing and `/welcome` becomes a screen nobody is sent to. */
-  if (workflows.length === 0) redirect(WELCOME_PATH);
+  /* Genuinely nothing, which is not the same as no workflows.
+     
+     This used to send anybody with an empty workflow list to `/welcome`, and
+     that is wrong for the account that *had* workflows and deleted them:
+     Home vanished and they were handed the new-account interview instead,
+     with people on their list and documents in their Resources. Deleting your
+     last workflow is a normal Tuesday, not a reason to be treated as a
+     stranger.
+     
+     So the test is whether this account has ever done anything at all. A
+     joiner or a document is proof it has, and either one is enough — the
+     welcome screen exists for somebody with an empty account, and an empty
+     account is empty of everything. */
+  const brandNew =
+    workflows.length === 0 && joiners.length === 0 && documents.length === 0;
+  if (brandNew) redirect(WELCOME_PATH);
 
   const entitlement = seatEntitlement(subscription, joiners.length);
   const outstanding = await outstandingFor(user.email, {
