@@ -408,14 +408,11 @@ export function applyEdit(id: string, edit: WorkflowEdit) {
    * as a change nobody made.
    */
   if (edit.type === "renamed") {
-    const name = edit.name.trim();
-    if (!name || name === workflow.name) return;
-    set({
-      workflows: state.workflows.map((w) =>
-        w.id === id ? { ...w, name, pending: undefined } : w,
-      ),
-    });
-    logActivity({ verb: "Renamed", what: `${workflow.name} to ${name}` });
+    /* Delegated rather than repeated. This was a second copy of the same write
+       until a rename control existed for people as well as for Craig, at which
+       point the two disagreed immediately: the human one cleared no `pending`
+       flag and wrote no activity line. One function, both callers. */
+    renameWorkflow(id, edit.name);
     return;
   }
 
@@ -569,23 +566,32 @@ export function createBlankWorkflow(name: string): ShowcaseWorkflow {
     blocks: [blankTrigger()],
     createdAt: now,
     revealedAt: now,
-    pending: true,
+    /* Not `pending` any more, and that is the point of asking for a name.
+       `pending` existed because the old flow made a workflow the instant
+       somebody pressed "Start blank" — possibly by accident — so it had to be
+       hidden from the list and dropped on the next load. Typing a name and
+       pressing Create is not an accident, and a workflow that vanishes on
+       reload because you had not added a step yet is the "there's no workflow
+       here" screen somebody hits from their own history. */
   };
 
-  /* Silent, and that is the point of `pending`.
+  /* Recorded now, because now is when it happened.
      
-     This used to log "Started New workflow from blank" here, which reported a
-     workflow into the account's history at the moment somebody pressed a
-     button — before there was anything in it, and whether or not they went on
-     to make one. Pressing the button and thinking better of it left a line in
-     the feed about a thing that never existed, and discarding then left a
-     second line saying it had been deleted: two entries for one cancelled
-     press.
-
-     The line is written when the workflow becomes real instead — the first
-     edit, in `setWorkflowBlocks`. Not `addWorkflow` either, which logs
-     "Drafted … from what you told me": true of Craig's, and a lie about this
-     one. Nobody told anybody anything. */
+     This was silent while a workflow could be created by accident: pressing
+     "Start blank" and thinking better of it left a line in the feed about a
+     thing that never existed, and discarding it left a second saying it had
+     been deleted — two entries for one cancelled press. So the line waited for
+     the first real edit instead.
+     
+     Naming it removes the accident, and with it the reason to wait. Somebody
+     who typed a name and pressed Create has started a workflow, and the
+     history should say so at the moment they did rather than whenever they
+     next happen to add a step.
+     
+     Its own verb, not `addWorkflow`'s "Drafted … from what you told me" —
+     that is true of Craig's and a lie about this one. Nobody told anybody
+     anything. */
+  logActivity({ verb: "Started", what: workflow.name });
   set({ workflows: [...state.workflows, workflow] });
 
   return workflow;
@@ -605,14 +611,25 @@ export function createBlankWorkflow(name: string): ShowcaseWorkflow {
  * the rule is kept because the flag outlives the flow that produced it.
  */
 export function renameWorkflow(id: string, name: string) {
+  const workflow = state.workflows.find((w) => w.id === id);
+  if (!workflow) return;
+
   const trimmed = name.trim();
-  if (!trimmed) return;
+  /* A rename to the name it already has does nothing, so Craig agreeing with
+     somebody — "yes, it's called that" — cannot land in the activity feed as a
+     change nobody made. */
+  if (!trimmed || trimmed === workflow.name) return;
 
   set({
     workflows: state.workflows.map((w) =>
-      w.id === id ? { ...w, name: trimmed } : w,
+      /* `pending` cleared here too. Naming a workflow is a real edit, and one
+         thrown away on the next load because nothing happened to touch its
+         steps would be a rename that silently did not happen. */
+      w.id === id ? { ...w, name: trimmed, pending: undefined } : w,
     ),
   });
+
+  logActivity({ verb: "Renamed", what: `${workflow.name} to ${trimmed}` });
 }
 
 /**
