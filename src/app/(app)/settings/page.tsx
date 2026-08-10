@@ -1,4 +1,4 @@
-import { subscriptionFor } from "@/lib/craig/accounts";
+import { getAccount } from "@/lib/craig/accounts";
 import { requireUser } from "@/lib/craig/current-user";
 import { CONNECT_OUTCOME_PARAM } from "@/lib/craig/google-outcome";
 import { listJoiners } from "@/lib/craig/joiners";
@@ -84,15 +84,22 @@ export default async function ShowcaseSettingsPage(
   const outcome = params[CONNECT_OUTCOME_PARAM];
   const back = parentArea(params.from);
 
-  /* The plan, and how much of it is spoken for.
+  /* The account itself, once, rather than a query per fact.
    *
-   * Both halves are read here for the same reason People reads them together:
-   * "5 seats" is a fact about a subscription and "4 in use" is a fact about a
-   * joiner list, and a screen that learned them from two different places at
-   * two different times would eventually show a total smaller than its own
-   * count. `seatEntitlement` is the same function the paywall is quoted from,
-   * so Settings and the dialog cannot describe the same plan differently. */
-  const subscription = await subscriptionFor(user.email);
+   * This used to be `subscriptionFor(user.email)`, which reads the account row
+   * and returns one field off it. Branding needs two more fields off the same
+   * row — the logo and the company's name as the *account* records it — and
+   * three reads of one row, on one page, would be three chances for them to
+   * disagree as well as two round trips nobody needs. `subscription` below is
+   * the same value `subscriptionFor` returned, assembled by the same function.
+   *
+   * The company comes from here rather than from the session on purpose: a
+   * signed token minted before somebody's company was recorded carries no
+   * company at all (see `Session`), and the one place this screen shows it is
+   * beside a preview of the words a new starter will read when their client
+   * blocks the logo. That is a bad place to be missing a name. */
+  const account = await getAccount(user.email);
+  const subscription = account?.subscription ?? null;
   const taken = (await listJoiners(user.email)).length;
 
   return (
@@ -103,6 +110,8 @@ export default async function ShowcaseSettingsPage(
       subscription={subscription}
       taken={taken}
       entitlement={seatEntitlement(subscription, taken)}
+      logo={account?.logo ?? null}
+      company={account?.company ?? user.company ?? ""}
     />
   );
 }

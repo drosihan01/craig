@@ -15,10 +15,15 @@ import {
 } from "@/components/ui";
 import { ArrowBack } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
+import { CompanyLogoPanel } from "@/components/craig/company-logo";
 import { GoogleWorkspaceConnect } from "@/components/craig/google-workspace";
 import { useUpgrade } from "@/components/craig/use-upgrade";
 import { Google } from "@/components/ui/brand-icons";
-import type { Session, Subscription } from "@/lib/craig/contract";
+import type {
+  CompanyLogo,
+  Session,
+  Subscription,
+} from "@/lib/craig/contract";
 import type { SeatEntitlement } from "@/lib/craig/seats";
 
 /**
@@ -39,6 +44,22 @@ import type { SeatEntitlement } from "@/lib/craig/seats";
  * this the right account" and belong near the top but under the thing you came
  * for; integrations last, because they are the longest and the most likely to
  * grow.
+ *
+ * Branding sits immediately under the account's details, and that placement is
+ * an argument rather than a gap that happened to be free. Account details
+ * already ends by naming "the name new starters see at the top of what Craig
+ * sends"; the logo is the next sentence of exactly that thought, so the two
+ * read as one idea — what this company looks like to somebody they have just
+ * hired — instead of as two settings that happen to share a page.
+ *
+ * It is deliberately **not** in Mission control, which was the obvious-looking
+ * shelf because the mailmaker lives behind that door. Mission control says what
+ * it is in its own sentence: the tools this product is built with rather than
+ * the product itself, that nobody outside the team has any use for. A logo is
+ * the opposite of that on every count — it belongs to the customer, only the
+ * customer can supply it, and it changes what a stranger receives. Putting it
+ * behind a door labelled "not for you" would be hiding the one branding control
+ * this product has from the only person who can use it.
  */
 export function SettingsScreen({
   user,
@@ -47,6 +68,8 @@ export function SettingsScreen({
   subscription,
   taken,
   entitlement,
+  logo,
+  company,
 }: {
   user: Session;
   /** The `?google=` code the connect flow redirected back with, if any. */
@@ -66,6 +89,19 @@ export function SettingsScreen({
   taken: number;
   /** The same entitlement the paywall is quoted from. */
   entitlement: SeatEntitlement;
+  /** The logo on the account, already resolved to the URL an email will use. */
+  logo: CompanyLogo | null;
+  /**
+   * The company's name as the *account row* records it, not as the session
+   * happens to carry it.
+   *
+   * The two are usually the same string and the difference matters exactly
+   * here: a session minted before companies were recorded has no company on it
+   * at all, and this screen draws that name as the thing a recipient reads when
+   * their mail client refuses to load the logo. A blank there would be showing
+   * somebody a fallback that is not the one they will get.
+   */
+  company: string;
 }) {
   return (
     <AppShell
@@ -105,6 +141,10 @@ export function SettingsScreen({
         <Separator />
 
         <AccountSection user={user} />
+
+        <Separator />
+
+        <BrandingSection logo={logo} company={company} />
 
         <Separator />
 
@@ -316,6 +356,45 @@ function AccountSection({ user }: { user: Session }) {
           </>
         )}
       </div>
+    </section>
+  );
+}
+
+/* --- Branding -------------------------------------------------------------- */
+
+/**
+ * The logo on the mail, and the one place it can be changed.
+ *
+ * The lead paragraph is written here rather than inside the panel for the same
+ * reason the Google Workspace one is: the control is headless and the room it
+ * is standing in supplies the sentence. What this room has to say is *why there
+ * is a control at all* — the mail already goes out in the company's name, and
+ * this is the rest of that decision rather than a new one.
+ *
+ * It says "every email Craig sends on your behalf" rather than naming the
+ * templates, because that list is somebody else's file and grows without this
+ * screen hearing about it. A sentence that had to be kept in step with
+ * `templates.ts` would be wrong within a week.
+ */
+function BrandingSection({
+  logo,
+  company,
+}: {
+  logo: CompanyLogo | null;
+  company: string;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <h2 className="text-xl font-semibold tracking-[-0.01em]">Branding</h2>
+        <p className="text-md leading-relaxed text-text-muted">
+          Your logo, at the top of every email Craig sends on your behalf. A new
+          starter should be able to see who has written to them before they read
+          a word of it.
+        </p>
+      </div>
+
+      <CompanyLogoPanel logo={logo} company={company} />
     </section>
   );
 }

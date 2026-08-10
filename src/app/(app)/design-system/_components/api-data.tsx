@@ -969,4 +969,10 @@ export const EMAIL_PREVIEW_PROPS: PropDoc[] = [
     description:
       "Overrides for the merge fields. Anything absent falls back to that field's example, and an unknown token stays visible as {{whatever}} rather than being blanked — a preview that silently drops a typo is a preview that lies.",
   },
+  {
+    name: "logo",
+    type: "CompanyLogo | null",
+    description:
+      "The account's own logo, read on the server and handed down. Draws the letterhead exactly as a recipient will get it — same object, same renderer. Omit it and the message renders with no letterhead, which is what an account that has never uploaded one actually receives.",
+  },
 ];

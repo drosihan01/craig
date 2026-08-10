@@ -14,7 +14,7 @@ import {
 import { findTemplate, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
 import { sendEmail } from "@/lib/email/send";
-import { markGoogleNeedsReconnect } from "@/lib/craig/accounts";
+import { logoForAccount, markGoogleNeedsReconnect } from "@/lib/craig/accounts";
 import type {
   Joiner,
   JoinerStep,
@@ -358,7 +358,18 @@ async function tellThem(
     temporary_password: seat.temporaryPassword,
   };
 
-  const { subject, html, text } = renderEmail(template, values);
+  /* The employer's letterhead, off their own account.
+   *
+   * `joiner.accountEmail` rather than anything in the request or the seat: this
+   * runs unattended, in the middle of the night, from a step — there is no
+   * session here and no admin at a keyboard, and the joiner's own record is the
+   * only thing that says whose company this is. `logoForAccount` never throws
+   * and answers `null` for an account with no logo, which is what keeps a
+   * missing picture from costing somebody the only copy of their password: this
+   * message is the one that cannot be sent twice. */
+  const logo = await logoForAccount(joiner.accountEmail);
+
+  const { subject, html, text } = renderEmail(template, values, logo);
 
   const sent = await sendEmail({
     to: joiner.email,

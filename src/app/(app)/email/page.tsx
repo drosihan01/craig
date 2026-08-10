@@ -1,3 +1,4 @@
+import { logoForAccount } from "@/lib/craig/accounts";
 import { requireUser } from "@/lib/craig/current-user";
 import { EmailScreen } from "./email-screen";
 
@@ -30,5 +31,15 @@ export const metadata = {
  */
 export default async function EmailPage() {
   const user = await requireUser();
-  return <EmailScreen user={user} />;
+
+  /* The letterhead, read here for the same reason the session is: this screen
+     is what somebody checks *instead of* sending, so the one thing it must not
+     do is show a message that differs from the one that will arrive. The logo
+     is now part of that message, so it is read from the account and handed
+     down — a preview that drew no letterhead over an account that has uploaded
+     one would be lying in exactly the way the iframe below it was built to
+     prevent. */
+  const logo = await logoForAccount(user.email);
+
+  return <EmailScreen user={user} logo={logo} />;
 }

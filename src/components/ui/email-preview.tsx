@@ -3,6 +3,7 @@
 import * as React from "react";
 import { render, SENDER, type EmailTemplate } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
+import type { CompanyLogo } from "@/lib/craig/contract";
 import { cn } from "@/lib/cn";
 
 /**
@@ -63,14 +64,30 @@ function monogram(name: string): string {
 export function EmailPreview({
   template,
   values,
+  logo,
   className,
 }: {
   template: EmailTemplate;
   /** Overrides for the merge fields; anything absent uses the example. */
   values?: Record<string, string>;
+  /**
+   * The account's own logo, or nothing.
+   *
+   * Handed in rather than fetched, for the reason the whole component exists:
+   * this is a picture of what will arrive, so the letterhead on it has to be
+   * the same object the sending routes pass to `renderEmail`, resolved from the
+   * same account row. A component that went and looked one up itself would be a
+   * second opinion about what a recipient gets, and a second opinion is exactly
+   * what the iframe below was written to make impossible.
+   *
+   * Absent — on the design system's fixtures, for instance — draws the message
+   * with no letterhead, which is what an account with no logo will genuinely
+   * receive.
+   */
+  logo?: CompanyLogo | null;
   className?: string;
 }) {
-  const email = renderEmail(template, values);
+  const email = renderEmail(template, values, logo ?? null);
 
   /* The display name, built the way the send builds it. The routes that send
      take the company off the account rather than out of the merge values, so

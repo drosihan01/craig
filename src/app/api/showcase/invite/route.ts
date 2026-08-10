@@ -8,7 +8,7 @@ import {
   type Joiner,
 } from "@/lib/craig/contract";
 import { currentUser } from "@/lib/craig/current-user";
-import { getAccount } from "@/lib/craig/accounts";
+import { getAccount, logoForAccount } from "@/lib/craig/accounts";
 import {
   AlreadyInvitedError,
   createJoiner,
@@ -919,7 +919,16 @@ export async function POST(request: Request) {
       link,
     };
 
-    const rendered = renderEmail(template, values);
+    /* The company's own mark on the one email that reaches somebody who has
+       never heard of this product. Inside the existing `try`, and
+       `logoForAccount` returns null on any failure rather than throwing, so a
+       logo that cannot be read costs the invitation nothing — it goes out
+       looking exactly as it did before this feature existed. */
+    const rendered = renderEmail(
+      template,
+      values,
+      await logoForAccount(account.email),
+    );
     message = { ...rendered, fromName: SENDER.name(account.company) };
   } catch (cause) {
     /* Server-side and nobody's fault but this deployment's — a missing

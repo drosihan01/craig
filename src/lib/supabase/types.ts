@@ -20,6 +20,9 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          logo_height: number | null
+          logo_path: string | null
+          logo_width: number | null
           name: string
           owner_id: string
         }
@@ -28,6 +31,9 @@ export type Database = {
           created_at?: string
           email: string
           id?: string
+          logo_height?: number | null
+          logo_path?: string | null
+          logo_width?: number | null
           name: string
           owner_id: string
         }
@@ -36,6 +42,9 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
+          logo_height?: number | null
+          logo_path?: string | null
+          logo_width?: number | null
           name?: string
           owner_id?: string
         }

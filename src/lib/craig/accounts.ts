@@ -10,7 +10,8 @@ import type { GoogleConnection } from "@/lib/google/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Tables } from "@/lib/supabase/types";
 import { SUBSCRIPTION_STATUSES } from "./contract";
-import type { Subscription, SubscriptionStatus } from "./contract";
+import type { CompanyLogo, Subscription, SubscriptionStatus } from "./contract";
+import type { SniffedLogo } from "./logo-image";
 import { safeCompany } from "./sign-up";
 
 /**
@@ -104,6 +105,23 @@ export interface Account {
    * somebody has not paid. That case is the common one.
    */
   subscription: Subscription | null;
+  /**
+   * The company's logo, already resolved to the public URL an email can use,
+   * or null because nobody has uploaded one.
+   *
+   * A resolved URL rather than the stored path, and the difference matters at
+   * exactly one boundary: `renderEmail` runs in a browser as well as on the
+   * server — it is what the preview draws — so it cannot be handed something it
+   * would need a Supabase client to turn into an address. Resolving on the way
+   * out means the preview and the send are given the identical string, which is
+   * the property that stops the preview quietly becoming a second opinion about
+   * what will arrive.
+   *
+   * Null rather than optional for the same reason as `subscription`: an account
+   * with no logo is the state every account starts in and most will stay in,
+   * and a reader who forgets it is a reader who ships a broken image.
+   */
+  logo: CompanyLogo | null;
 }
 
 type AccountRow = Tables<"accounts">;
@@ -324,6 +342,7 @@ function toAccount(
     createdAt: Math.floor(new Date(row.created_at).getTime() / 1000),
     google: googleView(google),
     subscription: subscriptionView(subscription),
+    logo: logoView(row),
   };
 }
 
@@ -352,6 +371,266 @@ async function fetchAccount(email: string): Promise<{
     google: connections.find((c) => c.provider === GOOGLE_PROVIDER),
     subscription: subscriptions,
   };
+}
+
+/* --- The company's logo ---------------------------------------------------- */
+
+/**
+ * Where the logos live, and it is **public**, which is the opposite of the
+ * `documents` bucket next door and must stay that way on purpose.
+ *
+ * `documents.ts` is arranged around one idea: nothing is readable without a
+ * check, and every read hands back a signed URL good for sixty seconds, because
+ * a link to somebody's employment paperwork that works when forwarded is a leak.
+ * Every word of that argument is right, and none of it can be applied here.
+ *
+ * The reader of this URL is a mail client. Gmail fetches it through an image
+ * proxy that carries no cookie of ours; Outlook fetches it when somebody opens
+ * the message, which may be three weeks after it was sent. There is no session
+ * to check, no token that can be short-lived without being expired by the time
+ * it is used, and `data:` — the one route that needs no fetch at all — is
+ * stripped by Gmail and refused by most of the rest. A public URL is not the
+ * convenient option here; it is the only one that renders a picture.
+ *
+ * **So: anyone who has the URL can see the logo, and anyone who guesses one can
+ * too.** That is written down rather than discovered later. What they get is a
+ * company's logo — the most published thing that company owns, on its website,
+ * its careers page and its invoices — and nothing else is in this bucket. The
+ * things that would matter stay where they are: documents are private and
+ * signed, and joiner records never touch storage at all.
+ *
+ * The one obligation that follows is on the *path*, and it is met below.
+ */
+const LOGO_BUCKET = "logos";
+
+/**
+ * A stored logo as everything downstream sees it, or null.
+ *
+ * All three columns are checked rather than only the path, even though the
+ * database has a constraint saying they travel together. The constraint is
+ * carried by a migration; this is carried by the type. A row that somehow held
+ * a path and no size would otherwise reach the email renderer as `width: null`
+ * and be drawn at whatever size the client felt like.
+ */
+function logoView(row: AccountRow): CompanyLogo | null {
+  if (!row.logo_path || !row.logo_width || !row.logo_height) return null;
+
+  /* Pure string assembly — no request, no promise. It is the project URL, the
+     bucket and the path, which is why it is safe to do on the read path of
+     every account lookup. */
+  const { data } = db().storage.from(LOGO_BUCKET).getPublicUrl(row.logo_path);
+  if (!data?.publicUrl) return null;
+
+  return { url: data.publicUrl, width: row.logo_width, height: row.logo_height };
+}
+
+/**
+ * Where one account's logo is kept, and everything the name is *not* allowed to
+ * say.
+ *
+ * The bucket is public, so this path is effectively published the moment
+ * anything is written to it — which makes the object name a place where a
+ * careless choice becomes permanent. The obvious ones are all wrong:
+ * `northgate.io/logo.png` tells a stranger who the customers are;
+ * `ada@northgate.io.png` puts a person's email address in a URL that will be
+ * fetched by every mail server the message passes through and logged by most of
+ * them; and `logo.png` under any stable name makes every account's logo
+ * enumerable from any other.
+ *
+ * So it is two uuids. The account's row id is a prefix rather than a fact about
+ * anybody — it is the same shape `documents.ts` uses, which keeps "one prefix
+ * per account" true across both buckets and makes a listing impossible to walk
+ * across accounts — and the filename is fresh random for each upload.
+ *
+ * The freshness is doing a second job. A logo replaced at the same path would
+ * be the same URL with different bytes, and the copies of it that matter are in
+ * Gmail's image cache and in messages already sitting in inboxes: some would
+ * update, some would not, and which is which is nobody's to control. A new path
+ * per upload means an email that has already gone out keeps showing the logo it
+ * was sent with, for as long as that object exists, and the new one is only ever
+ * new. It also means the object can be cached hard, which is why it is.
+ */
+const logoPath = (accountId: string, extension: string) =>
+  `${accountId}/${crypto.randomUUID()}.${extension}`;
+
+/**
+ * A year, in seconds.
+ *
+ * Safe precisely because the path changes on every upload: the bytes at a given
+ * URL never change, so there is no version of "stale" to worry about. The
+ * caches this is aimed at are not browsers — they are Gmail's image proxy and
+ * whatever sits in front of it, which will fetch this once for the first
+ * recipient and serve it to everybody after them.
+ */
+const LOGO_CACHE_SECONDS = 31_536_000;
+
+export type LogoResult =
+  | { ok: true; account: Account }
+  /** Safe to show. Says what happened to the logo that was already there. */
+  | { ok: false; message: string };
+
+/**
+ * Store a logo against an account, replacing whatever was there.
+ *
+ * The order is the whole function, and it is the same asymmetry `documents.ts`
+ * argues for: **object first, row second, old object last.**
+ *
+ * - The new object is written before the row points at it, so the row never
+ *   names something that is not there. An object nothing points at is invisible
+ *   and costs a few kilobytes; a row pointing at nothing is a broken image in
+ *   every email sent between now and somebody noticing.
+ * - The old object is deleted *after* the row has moved, and only then. Deleting
+ *   it first would leave a window in which the account's logo URL is live, in
+ *   flight to a mail client, and 404. That window is short and the emails it
+ *   would break are already sent.
+ * - If the row update fails, the new object is removed again, so a failed
+ *   upload leaves the account exactly as it was.
+ *
+ * The old object's removal is best-effort on purpose. If it fails, one orphan
+ * sits in a bucket nobody lists — cheap, invisible, and a much better outcome
+ * than reporting failure for an upload that has actually succeeded.
+ */
+export async function saveAccountLogo(
+  email: string,
+  file: { image: SniffedLogo; bytes: ArrayBuffer },
+): Promise<LogoResult> {
+  const found = await fetchAccount(email);
+  if (!found) {
+    return {
+      ok: false,
+      message:
+        "That account no longer exists, so there was nothing to attach a logo to. Nothing was stored.",
+    };
+  }
+
+  const previous = found.row.logo_path;
+  const path = logoPath(found.row.id, file.image.extension);
+  const client = db();
+
+  const { error: uploadError } = await client.storage
+    .from(LOGO_BUCKET)
+    .upload(path, file.bytes, {
+      /* The sniffed type, never the browser's claim — this is the header the
+         bucket will serve the file with, and it is the one a mail client
+         believes. See `logo-image.ts`. */
+      contentType: file.image.contentType,
+      cacheControl: String(LOGO_CACHE_SECONDS),
+      /* Never overwrite. The path holds a fresh uuid, so a collision here means
+         something has gone wrong that silently replacing a file would hide. */
+      upsert: false,
+    });
+
+  if (uploadError) {
+    return {
+      ok: false,
+      message: `The logo couldn't be stored: ${uploadError.message}. Nothing has changed — try again.`,
+    };
+  }
+
+  const { data: row, error } = await client
+    .from("accounts")
+    .update({
+      logo_path: path,
+      logo_width: file.image.width,
+      logo_height: file.image.height,
+    })
+    .eq("id", found.row.id)
+    .select()
+    .single();
+
+  if (error || !row) {
+    /* Leave nothing behind. Best-effort, because the error the caller needs to
+       see is the one that actually stopped them. */
+    await client.storage.from(LOGO_BUCKET).remove([path]);
+    return {
+      ok: false,
+      message: `The logo couldn't be recorded: ${error?.message ?? "the account didn't come back"}. Nothing has changed — try again.`,
+    };
+  }
+
+  /* Only now, and only if there was one. See the ordering note above. */
+  if (previous && previous !== path) {
+    await client.storage.from(LOGO_BUCKET).remove([previous]);
+  }
+
+  return {
+    ok: true,
+    account: toAccount(row, found.google, found.subscription),
+  };
+}
+
+/**
+ * Take the logo off the account, and out of the bucket.
+ *
+ * The row goes first here, which is the opposite of the upload and right for
+ * the same reason: while the row still names the object, the email renderer
+ * will still ask for it. Clearing the columns is what stops new mail carrying
+ * the logo; deleting the object is tidying up after that decision.
+ *
+ * The object is genuinely deleted rather than orphaned, because "remove our
+ * logo" is a request about a picture on the internet, and leaving it reachable
+ * at a public URL would answer a different question to the one that was asked.
+ * Emails already sent keep pointing at it and will show a broken image from
+ * here on — which is the correct trade and worth knowing: it is the price of
+ * the URL being public, and the alternative is a company that cannot actually
+ * withdraw its own mark.
+ */
+export async function removeAccountLogo(email: string): Promise<LogoResult> {
+  const found = await fetchAccount(email);
+  if (!found) {
+    return {
+      ok: false,
+      message: "That account no longer exists, so there was nothing to remove.",
+    };
+  }
+
+  const previous = found.row.logo_path;
+  const client = db();
+
+  const { data: row, error } = await client
+    .from("accounts")
+    .update({ logo_path: null, logo_width: null, logo_height: null })
+    .eq("id", found.row.id)
+    .select()
+    .single();
+
+  if (error || !row) {
+    return {
+      ok: false,
+      message: `The logo couldn't be removed: ${error?.message ?? "the account didn't come back"}. Nothing has changed.`,
+    };
+  }
+
+  if (previous) await client.storage.from(LOGO_BUCKET).remove([previous]);
+
+  return {
+    ok: true,
+    account: toAccount(row, found.google, found.subscription),
+  };
+}
+
+/**
+ * The logo to put on mail sent on this account's behalf, or null.
+ *
+ * A function of its own rather than `getAccount(...).logo` at every call site,
+ * because the callers are sending routes and a step runner, and what they want
+ * is one nullable fact — not an object carrying a subscription and a sealed
+ * Google connection they have no business holding while they render an email.
+ *
+ * Never throws. A send must not fail because a logo could not be looked up: the
+ * message without a logo is the message this product sent for its whole life
+ * until now, and it is a great deal better than no message.
+ */
+export async function logoForAccount(
+  accountEmail: string,
+): Promise<CompanyLogo | null> {
+  try {
+    const found = await fetchAccount(accountEmail);
+    return found ? logoView(found.row) : null;
+  } catch (cause) {
+    console.error("[craig/accounts] couldn't read the logo:", cause);
+    return null;
+  }
 }
 
 /* --- Store ----------------------------------------------------------------- */

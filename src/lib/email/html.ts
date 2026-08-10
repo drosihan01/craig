@@ -1,3 +1,4 @@
+import type { CompanyLogo } from "@/lib/craig/contract";
 import { render, SENDER, type EmailTemplate } from "./templates";
 
 /**
@@ -189,6 +190,153 @@ function watermark() {
 </table>`;
 }
 
+/* --- The company's logo ---------------------------------------------------- */
+
+/**
+ * How tall the logo is drawn, in the ordinary case.
+ *
+ * Small on purpose. This is a letterhead, not a billboard: the message is a
+ * short note from an employer to somebody who has just agreed to work for them,
+ * and a mark big enough to be the first thing you see turns it into marketing.
+ * Thirty-two pixels is roughly the height of the sender's avatar in the inbox
+ * row above it, which is the size a reader has already been told this company
+ * is.
+ */
+const LOGO_HEIGHT = 32;
+
+/**
+ * And how wide it is allowed to get before the height gives way.
+ *
+ * A wordmark can easily be ten times as wide as it is tall — at 32px tall, one
+ * of those is 320px, which is more than half the width of the card and reads as
+ * a banner. Past this, the width is pinned and the height comes down instead,
+ * so a very wide mark ends up smaller rather than wider. Both dimensions stay
+ * in the picture's own ratio either way; nothing is ever stretched.
+ */
+const LOGO_MAX_WIDTH = 180;
+
+/**
+ * The size to draw a logo at, from the size it actually is.
+ *
+ * `null` for anything that cannot be measured into a rectangle — a zero, a
+ * negative, a `NaN` that got past the upload. The caller draws no logo at all
+ * in that case, which is the state every account is in anyway, rather than
+ * emitting an `<img>` with `width="NaN"`.
+ *
+ * Exported because the Settings screen promises to show the logo "at the size
+ * it will appear in the email", and the only way to keep a promise like that is
+ * for both screens to ask the same function. The alternative is two copies of
+ * this arithmetic that agree until somebody changes one of them, which is the
+ * exact failure the email preview's iframe was built to end.
+ */
+export function emailLogoSize(
+  logo: CompanyLogo,
+): { width: number; height: number } | null {
+  const ratio = logo.width / logo.height;
+  if (!Number.isFinite(ratio) || ratio <= 0) return null;
+
+  let height = LOGO_HEIGHT;
+  let width = Math.round(height * ratio);
+
+  if (width > LOGO_MAX_WIDTH) {
+    width = LOGO_MAX_WIDTH;
+    height = Math.round(width / ratio);
+  }
+
+  width = Math.max(1, width);
+  height = Math.max(1, height);
+  return { width, height };
+}
+
+/**
+ * The logo, and everything that has to be true of it in an inbox.
+ *
+ * ## It is a remote image, and it has to be
+ *
+ * `data:` URIs are stripped by Gmail and refused by several others, and inline
+ * `<svg>` is removed outright by Gmail and Outlook — the same three closed
+ * doors documented on `watermark()` below, which is why Craig's own mark is
+ * built out of type rather than out of a picture. A customer's logo cannot be:
+ * it is *their* drawing, and there is no typographic substitute for it. So this
+ * is the one image in the message, it is fetched over `https://` from a public
+ * bucket, and the bucket is public precisely so this fetch can happen with no
+ * session, no cookie and no expiry. `lib/craig/accounts.ts` argues that at
+ * length.
+ *
+ * ## Which means it will sometimes not arrive
+ *
+ * A large share of clients block remote images by default, and a corporate
+ * gateway will do it regardless of what the reader prefers. So the blocked case
+ * is not an edge case, it is a normal way for this email to be read, and it is
+ * designed for rather than degraded into:
+ *
+ * - **The `alt` is the company's name**, not "Logo" and not empty. Blocked, the
+ *   header reads as the company's name in the company's position — which is
+ *   what a letterhead is for. "Logo" would be a caption for a thing that isn't
+ *   there.
+ * - **The type styles are on the `<img>` itself.** Every major client renders
+ *   alt text in the image element's own font, size and colour, so a mark that
+ *   fails to load is replaced by something set in the message's own type rather
+ *   than by the browser's default blue-underlined 16px serif.
+ * - **Only the width is fixed.** The height is deliberately left to the client.
+ *   A `height` attribute makes the box exactly as tall as the picture, and a
+ *   client that has blocked the picture then clips the alt text to that box —
+ *   so the fallback for a company with a name longer than about seven
+ *   characters is a truncated word. Without it the text takes the room it
+ *   needs. The width still pins the layout, which is the half that matters:
+ *   Outlook's Word engine scales an image with *no* dimensions by the machine's
+ *   DPI setting, and one dimension is enough to stop that — it takes the other
+ *   from the file, at the ratio `logoSize` has already used.
+ * - **Nothing collapses.** The logo is its own table row with its own padding,
+ *   so with no image and no alt text rendered at all the header is simply
+ *   shorter. There is no empty box, no border and no reserved space where a
+ *   picture would have been — the accounts with no logo take exactly the
+ *   layout this email had before any of this existed.
+ *
+ * `border="0"` and the three `outline`/`text-decoration` declarations are the
+ * old defences against a client drawing a link border round an image, which
+ * some still do; `display:block` kills the descender gap under it that a
+ * baseline-aligned image leaves in a table cell.
+ */
+function logoBlock(logo: CompanyLogo, company: string): string {
+  /* Ours, from our own bucket — but it is a string that ends up inside an
+     `src`, and the honest place to check that is here rather than in the
+     confidence that nothing upstream will ever change. Anything that is not an
+     https URL draws nothing at all. */
+  if (!/^https:\/\//i.test(logo.url)) return "";
+
+  const size = emailLogoSize(logo);
+  if (!size) return "";
+
+  /* The company's name, and it is already sanitised on the way out of the
+     account store — escaped again here because this is an attribute and the
+     rule in this file is that nothing reaches markup unescaped. An empty
+     company gives an empty alt, which is a client drawing nothing rather than
+     drawing the word "undefined" where a letterhead goes. */
+  const alt = escape(company.trim());
+
+  const style = [
+    "display:block",
+    `width:${size.width}px`,
+    "max-width:100%",
+    "height:auto",
+    "border:0",
+    "outline:none",
+    "text-decoration:none",
+    `font-family:${FONT}`,
+    "font-size:15px",
+    "font-weight:600",
+    "line-height:1.3",
+    `color:${INK}`,
+  ].join(";");
+
+  return `<tr>
+<td style="padding:28px 32px 0 32px;">
+<img src="${escape(logo.url)}" width="${size.width}" alt="${alt}" border="0" style="${style};">
+</td>
+</tr>`;
+}
+
 export interface RenderedEmail {
   subject: string;
   /**
@@ -214,10 +362,23 @@ export interface RenderedEmail {
  * A template plus its merge values, as something sendable — and as the thing
  * the preview shows, so a token cannot resolve one way on screen and another
  * way in the inbox.
+ *
+ * The logo is a third argument rather than a merge field, and that is a
+ * deliberate line. A merge field is a piece of *copy* — somebody writes
+ * `{{first_name}}` into a sentence in the mailmaker and it resolves to a word.
+ * A logo is not a word: it has a size, a fallback, a position in the layout and
+ * a set of rules about what happens when a client refuses to fetch it, none of
+ * which a template author should have to know or be able to get wrong. So the
+ * templates stay text and the letterhead is decided here.
+ *
+ * Optional, and absent means the message this product has sent for its whole
+ * life until now. Every caller that has a logo to pass has an account in hand;
+ * a caller that does not passes nothing and gets the old email exactly.
  */
 export function renderEmail(
   template: EmailTemplate,
   values: Record<string, string> = {},
+  logo: CompanyLogo | null = null,
 ): RenderedEmail {
   const subject = render(template.subject, values);
   const preheader = render(template.preheader, values);
@@ -231,6 +392,12 @@ export function renderEmail(
      they recognise — naming the tool first answers a question nobody asked and
      raises the one about who has their address. */
   const footer = `Sent by ${company}. You're getting this because someone there put you into an onboarding, not because you signed up for anything. Reply to this and it reaches a person — ${SENDER.replyTo}.`;
+
+  /* The letterhead, or nothing at all. `logoBlock` returns an empty string for
+     an account with no logo and for a logo it cannot size, so the card simply
+     has one row fewer — there is no reserved space, no placeholder and no
+     branch further down. */
+  const letterhead = logo ? logoBlock(logo, company) : "";
 
   /* `role="presentation"` on every layout table, because a screen reader
      announcing "table, four rows" over a two-paragraph email is worse than the
@@ -256,8 +423,9 @@ ${preheaderBlock(preheader)}
 <td align="center" style="padding:24px ${GUTTER}px;">
 <!--[if mso]><table role="presentation" width="${WIDTH}" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:${WIDTH}px;background-color:${PAPER};border-radius:8px;">
+${letterhead}
 <tr>
-<td style="padding:32px 32px 16px 32px;">
+<td style="padding:${letterhead ? "20px" : "32px"} 32px 16px 32px;">
 ${paragraphs(body)}
 ${cta ? button(cta, href) : ""}
 </td>

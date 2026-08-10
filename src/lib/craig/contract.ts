@@ -76,6 +76,56 @@ export const PEOPLE_PATH = "/people";
 export const SESSION_COOKIE = "craig_session";
 
 /* ---------------------------------------------------------------------- */
+/*  Branding                                                              */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * The company's logo, as everything downstream of the upload sees it.
+ *
+ * It lives here rather than beside `Account` in `accounts.ts` because both ends
+ * of the product need it and one of them runs in a browser: the Settings panel
+ * that previews it and the email preview that draws it are `"use client"`, and
+ * `accounts.ts` is `server-only`. A type in the contract is the seam those two
+ * halves already meet at.
+ *
+ * ## The URL is public, and that is the whole design
+ *
+ * `url` is an ordinary `https://` address that anybody can fetch — no session,
+ * no cookie, no signed token, no expiry. That is not a convenience, it is the
+ * only shape that works: this URL's real reader is Gmail's image proxy or
+ * Outlook opening a message three weeks after it arrived, neither of which has
+ * ever heard of a Craig session, and a signed URL that has expired by then is a
+ * broken image in a welcome email. `data:` is closed off too — Gmail, Outlook
+ * and Apple Mail all strip or refuse it.
+ *
+ * So it follows that anybody who guesses one of these URLs can see it. Said out
+ * loud, because a public bucket arrived at by accident is a leak and this one is
+ * arrived at on purpose: what they get is a company's logo, the single most
+ * published asset that company owns — it is on their website, their careers
+ * page and their invoices. Nothing else is in the bucket, the object path names
+ * nobody (see `accounts.ts`), and the private half of this product — documents,
+ * transcripts, joiners — stays in the `documents` bucket, which is private and
+ * signed and must never be made to look like this one.
+ *
+ * ## Why the size travels with it
+ *
+ * `width` and `height` are the picture's own, in pixels, read out of the file's
+ * header when it was uploaded. An `<img>` in an email needs a real dimension
+ * attribute — Outlook renders through Word, which scales an unsized image by
+ * the system's DPI — and knowing the natural ratio is what lets the renderer
+ * pick a width and be certain what height it will draw at. Everything about
+ * *how big it appears* is decided in `lib/email/html.ts`; this is just the fact.
+ */
+export interface CompanyLogo {
+  /** Absolute `https://`. Fetchable by a mail client with nothing attached. */
+  url: string;
+  /** The image's own pixel width, from its header. Always > 0. */
+  width: number;
+  /** The image's own pixel height, from its header. Always > 0. */
+  height: number;
+}
+
+/* ---------------------------------------------------------------------- */
 /*  Chat                                                                  */
 /* ---------------------------------------------------------------------- */
 
