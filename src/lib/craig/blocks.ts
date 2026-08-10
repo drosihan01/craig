@@ -1,5 +1,9 @@
 import { AUTOMATION_BY_PRESET, type StepAutomation } from "@/lib/craig/contract";
-import { GOOGLE_WORKSPACE_PRESET } from "@/lib/workflow/library";
+import {
+  GOOGLE_WORKSPACE_PRESET,
+  LINEAR_PRESET,
+  SLACK_PRESET,
+} from "@/lib/workflow/library";
 
 /**
  * What a block *is*, in one place, so that a second one is a row rather than a
@@ -37,8 +41,16 @@ import { GOOGLE_WORKSPACE_PRESET } from "@/lib/workflow/library";
  * what to tell somebody when that connection is missing.
  */
 
-/** A provider in the `connections` table. Matches `GOOGLE_PROVIDER`. */
-export type ConnectionProvider = "google-workspace";
+/**
+ * A provider in the `connections` table. Each member matches a store's own
+ * constant — `GOOGLE_PROVIDER` in `accounts.ts`, `SLACK_PROVIDER` in
+ * `src/lib/slack/store.ts`, `LINEAR_PROVIDER` in `src/lib/linear/store.ts`.
+ * The table's `provider` column is an open string, so this union is the one
+ * place the set is actually closed: a row stored under a spelling this type
+ * does not name is a row nothing will ever read, and a name here that no store
+ * recognises makes the publish gate demand a connection nobody can record.
+ */
+export type ConnectionProvider = "google-workspace" | "slack" | "linear";
 
 /**
  * The only thing this module needs to know about a step.
@@ -86,6 +98,51 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     provider: "google-workspace",
     automation: AUTOMATION_BY_PRESET[GOOGLE_WORKSPACE_PRESET] ?? null,
     blockedReason: "Connect Google Workspace before publishing this.",
+  },
+  /**
+   * The second row, and the reason this registry exists. `automation: null` is
+   * a fact, not a placeholder: there is no Slack runner, so a joiner's Slack
+   * step behaves exactly like an unwired task — somebody ticks it off — and
+   * nothing anywhere may claim otherwise. What the row *does* change is the
+   * publish gate: a workflow with a Slack block now waits for a Slack
+   * connection, which is honest the moment a runner exists and merely early
+   * until then. The alternative — adding the provider only when the runner
+   * lands — would let a workflow publish against a connection nobody has made,
+   * and the person who finds out is a new starter with a step that quietly
+   * does nothing.
+   *
+   * Worth knowing before anybody wires the runner: Slack's API cannot invite
+   * somebody to a workspace unless the customer is on Enterprise Grid
+   * (`admin.users.invite` is Enterprise-only — see `src/lib/slack/config.ts`).
+   * On a normal workspace the automatable half of this block is the channels,
+   * after the person has accepted a human-sent invite.
+   */
+  [SLACK_PRESET]: {
+    preset: SLACK_PRESET,
+    provider: "slack",
+    automation: null,
+    blockedReason: "Connect Slack before publishing this.",
+  },
+
+  /**
+   * The gate arrives before the runner, deliberately.
+   *
+   * `automation` is null because nothing runs on a Linear step yet — no
+   * runner exists, and writing one into `automation.ts` before a live
+   * workspace has proven the invite mutation would be scaffolding wearing a
+   * feature's name. What the row does today is smaller and still worth
+   * having: the block's meaning is "Craig invites them to Linear", and a
+   * workflow published against an account with no Linear connection is a
+   * promise the account cannot keep. Requiring the connection now means the
+   * day the runner lands, every published workflow already satisfies its
+   * prerequisite — instead of a migration hunting for workflows that were
+   * published while the gate looked the other way.
+   */
+  [LINEAR_PRESET]: {
+    preset: LINEAR_PRESET,
+    provider: "linear",
+    automation: null,
+    blockedReason: "Connect Linear before publishing this.",
   },
 };
 

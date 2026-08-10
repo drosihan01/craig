@@ -3,6 +3,8 @@ import type { ConnectionProvider } from "@/lib/craig/blocks";
 import { requireUser } from "@/lib/craig/current-user";
 import { listJoiners } from "@/lib/craig/joiners";
 import { seatEntitlement } from "@/lib/craig/seats";
+import { linearConnectionViewFor } from "@/lib/linear/store";
+import { slackViewFor } from "@/lib/slack/store";
 import { WorkflowEditor } from "./workflow-editor";
 
 export const metadata = {
@@ -56,17 +58,39 @@ export default async function ShowcaseWorkflowPage(
    * editor asks is now per block rather than about Google: `blocks.ts` knows
    * which provider each block needs, so what it wants back is which providers
    * are available, not one bit about the only one that existed when this was
-   * written. The second entry here is a push, not a refactor.
+   * written. Linear is the second entry the list was shaped for — a push,
+   * as promised, not a refactor.
    *
    * `needsReconnect` counts as absent rather than as a separate state, because
    * the question this answers is "would the step work", and a grant Google has
    * revoked would not. The block's own panel draws the distinction, where there
-   * is room to say what happened and what fixes it.
+   * is room to say what happened and what fixes it. Linear's flag is checked
+   * for the same reason even though nothing sets it yet — the code that could
+   * discover a dead Linear grant arrives with the runner, and this line being
+   * ready for it costs nothing.
    */
   const account = await getAccount(user.email);
   const google = account?.google ?? null;
-  const connectedProviders: ConnectionProvider[] =
-    google && !google.needsReconnect ? ["google-workspace"] : [];
+  /* Each connection lives in its own store rather than on the account record
+     — the argument is in `src/lib/slack/store.ts` — so they are asked for
+     separately and in parallel, since none of them depends on the others.
+
+     `needsReconnect` counts as absent for all three, for the reason the Google
+     comment above gives: the question this answers is "would the step work",
+     and a grant the provider has revoked would not. Each block's own panel
+     draws the distinction, where there is room to say what happened. */
+  const [slack, linear] = await Promise.all([
+    slackViewFor(user.email),
+    linearConnectionViewFor(user.email),
+  ]);
+
+  const connectedProviders: ConnectionProvider[] = [
+    ...(google && !google.needsReconnect
+      ? (["google-workspace"] as const)
+      : []),
+    ...(slack && !slack.needsReconnect ? (["slack"] as const) : []),
+    ...(linear && !linear.needsReconnect ? (["linear"] as const) : []),
+  ];
 
   /**
    * How many seats there are to give, from the same account record.
