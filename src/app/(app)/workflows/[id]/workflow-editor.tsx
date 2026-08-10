@@ -53,6 +53,7 @@ import {
   deleteWorkflow,
   markRevealed,
   publishWorkflow,
+  renameWorkflow,
   setWorkflowBlocks,
   stepCount,
   unconfiguredCount,
@@ -705,7 +706,7 @@ function Editor({
 
   return (
     <AppShell
-      title={workflow.name}
+      title={<WorkflowTitle workflow={workflow} />}
       account={{ name: user.name, email: user.email }}
       fill
       /* Wider than the default, and remembered separately. This panel holds
@@ -1046,6 +1047,78 @@ function Editor({
  * fixed behaviour uses, and the reason is printed as written rather than folded
  * into a sentence it doesn't grammatically fit.
  */
+/**
+ * The workflow's name, renamable where it is already written.
+ *
+ * Craig has had a `rename_workflow` tool since he got hands, so the model could
+ * rename a workflow and the person looking at it could not — they could only
+ * ask him to. This is the same write with a human on the end of it.
+ *
+ * In the header rather than the left column, because the column argues against
+ * repeating the name and it is right: a field there would be the name printed
+ * twice, once to read and once to edit. Editing it where it is already written
+ * means there is one of them.
+ *
+ * A button that becomes an input, not an always-on field. A permanently
+ * editable title in the chrome of every screen is a thing people click into by
+ * accident and leave half-changed, and a header is not a form.
+ */
+function WorkflowTitle({ workflow }: { workflow: ShowcaseWorkflow }) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(workflow.name);
+
+  function commit() {
+    /* An empty name is a rename nobody meant. `renameWorkflow` refuses it
+       anyway; this puts the old one back in the box rather than leaving the
+       field blank and the header unchanged, which reads as a lost edit. */
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== workflow.name)
+      renameWorkflow(workflow.id, trimmed);
+    else setDraft(workflow.name);
+    setEditing(false);
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(workflow.name);
+          setEditing(true);
+        }}
+        title="Rename this workflow"
+        className="-mx-1 truncate rounded px-1 text-left transition-colors hover:bg-surface-hover hover:text-text"
+      >
+        {workflow.name}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      /* Enter commits, Escape abandons. Both are what somebody expects of a
+         field that appeared under their cursor, and without Escape the only
+         way out of a rename you regret is retyping what was there. */
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          setDraft(workflow.name);
+          setEditing(false);
+        }
+      }}
+      aria-label="Workflow name"
+      className="-mx-1 w-full min-w-0 rounded border border-border bg-surface px-1 text-base text-text outline-none focus:border-border-strong"
+    />
+  );
+}
+
 function ByHandNote({ reason }: { reason?: string }) {
   if (!reason) return null;
 

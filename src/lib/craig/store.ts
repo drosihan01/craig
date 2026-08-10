@@ -556,11 +556,16 @@ export function deleteWorkflow(id: string) {
  * there is nothing to reveal about a workflow with one block that you just
  * asked for, and animating it in would be a flourish spent on nothing.
  */
-export function createBlankWorkflow(): ShowcaseWorkflow {
+export function createBlankWorkflow(name: string): ShowcaseWorkflow {
   const now = new Date().toISOString();
   const workflow: ShowcaseWorkflow = {
     id: crypto.randomUUID(),
-    name: "New workflow",
+    /* Named before it exists now, rather than called "New workflow" and
+       renamed later if anybody remembered. The old default was a placeholder
+       that survived: a list of three workflows where two were called "New
+       workflow" was the normal outcome, because the one moment somebody knows
+       what a thing is for is the moment they decide to make it. */
+    name: name.trim() || "New workflow",
     blocks: [blankTrigger()],
     createdAt: now,
     revealedAt: now,
@@ -584,6 +589,30 @@ export function createBlankWorkflow(): ShowcaseWorkflow {
   set({ workflows: [...state.workflows, workflow] });
 
   return workflow;
+}
+
+/**
+ * Rename a workflow.
+ *
+ * Craig has had a `rename_workflow` tool since he got hands, so the *model*
+ * could rename a workflow and the person sitting in front of it could not.
+ * This is the same write, reachable by a human.
+ *
+ * Deliberately does not clear `pending`. Renaming is not the first real edit —
+ * a blank workflow you named and walked away from is still a blank workflow,
+ * and `setWorkflowBlocks` remains the one place that decides something has
+ * become real. Under the new create flow nothing arrives here pending anyway;
+ * the rule is kept because the flag outlives the flow that produced it.
+ */
+export function renameWorkflow(id: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+
+  set({
+    workflows: state.workflows.map((w) =>
+      w.id === id ? { ...w, name: trimmed } : w,
+    ),
+  });
 }
 
 /**

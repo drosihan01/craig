@@ -273,6 +273,19 @@
 
   html {
     -webkit-text-size-adjust: 100%;
+    /* Tells the browser which set of *its own* defaults to use — the canvas it
+       paints before any CSS applies, scrollbars, form controls, the overscroll
+       area. Without it those stay light whatever the page does, which is the
+       white flash on navigation: `body`'s background is correct, but there are
+       frames where the browser is painting its own and has not been told. */
+    color-scheme: light;
+    /* Also on `html` rather than only `body`, so the frame before `body` is
+       styled is already the right colour. */
+    background-color: var(--c-canvas);
+  }
+
+  .dark {
+    color-scheme: dark;
   }
 
   body {
