@@ -36,14 +36,13 @@ export function AskScreen({
       navRail={<JoinerNavRail />}
       nav={
         <JoinerNav>
+          {/* Only the half the empty state does not already say. The room
+              itself introduces what Craig can see; what belongs here is the
+              part that stays true once the conversation has started and the
+              greeting has scrolled away — who to ask when he cannot help. */}
           <p className="px-2 text-xs leading-relaxed text-text-subtle">
-            {/* The scope, in the nav rather than over the conversation. It is
-                the same sentence the panel used to carry above its first
-                message, and it belongs here now: somewhere permanent, out of
-                the way of the reply, and readable before you type rather than
-                only on an empty screen. */}
-            Craig knows your plan and anything {company} has shared with new
-            starters. For anything else, ask whoever invited you.
+            For anything {company} hasn&apos;t shared with Craig, ask whoever
+            invited you.
           </p>
         </JoinerNav>
       }

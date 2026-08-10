@@ -225,7 +225,17 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
           the viewport pins its composer somewhere past the bottom edge — the
           one control that must never scroll away. `scrollIntoView(nearest)` on
           the tail targets the nearest scrolling ancestor, which is this. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto",
+          /* Centred while there is nothing to read. A room this tall with three
+             chips pinned to the top of it and a composer at the bottom reads as
+             a page that failed to load its content; the same three chips in the
+             middle read as an invitation. Once there is a transcript the
+             content starts at the top, where a conversation belongs. */
+          empty && "justify-center",
+        )}
+      >
         {!empty && (
           <>
             {turns.map((turn, i) =>
@@ -260,7 +270,21 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
         {/* Inside the scrolling region so a long list of them cannot push the
             composer off the bottom on a short window. */}
         {empty && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <CraigMark className="size-8 text-accent" />
+            <div className="flex flex-col gap-1">
+              <p className="text-lg font-semibold tracking-[-0.01em]">
+                Ask me anything, {firstName}.
+              </p>
+              {/* What he can see, said once, where somebody reads it before
+                  typing rather than after being told he does not know. */}
+              <p className="text-sm text-text-muted">
+                I know your plan and whatever your company has shared with new
+                starters.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-2">
             {OPENERS.map((opener) => (
               <button
                 key={opener}
@@ -270,7 +294,8 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
               >
                 {opener}
               </button>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>
