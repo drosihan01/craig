@@ -16,6 +16,7 @@ import {
   Button,
   Dialog,
   EmptyState,
+  Skeleton,
   Field,
   Input,
   Select,
@@ -157,7 +158,7 @@ export function WorkflowEditor({
    */
   entitlement: SeatEntitlement;
 }) {
-  const { workflows } = useShowcase();
+  const { workflows, hydrated } = useShowcase();
   const router = useRouter();
   const workflow = workflows.find((w) => w.id === id);
 
@@ -199,7 +200,23 @@ export function WorkflowEditor({
     router.push("/workflows");
   }
 
-  if (!workflow) return leaving ? null : <NoWorkflow user={user} />;
+  /* Three states, not two, and conflating the first with the third is the bug
+     this replaced.
+
+     A browser paints from its own copy first and asks the server a moment
+     later, so on a second machine — or a cleared site, or a private window —
+     `workflows` is empty for the first few hundred milliseconds of a workflow
+     that exists perfectly well. Reading that as "no such workflow" told people
+     their work was gone, and it was the *most common* way to see this screen
+     rather than a rare one.
+
+     `leaving` stays first: deleting one on purpose should not flash a "this is
+     missing" screen at you on the way out. */
+  if (!workflow) {
+    if (leaving) return null;
+    if (!hydrated) return <LoadingWorkflow user={user} />;
+    return <NoWorkflow user={user} />;
+  }
 
   return (
     <>
@@ -1380,6 +1397,36 @@ function NavFact({ label, value }: { label: string; value: string }) {
  * account fresh — so it offers both ways forward rather than only the one that
  * assumes you already have workflows.
  */
+/**
+ * While the server is still being asked.
+ *
+ * Deliberately not a spinner in the middle of an empty page: the shell, the
+ * title and the back link are all known already, so drawing them immediately
+ * and leaving one region unresolved is both faster to read and closer to what
+ * arrives. Nothing here claims anything about whether the workflow exists,
+ * which is the entire point — a screen that guesses during a fetch is how the
+ * old one came to say "there is no workflow here" about a workflow that was
+ * on the server the whole time.
+ */
+function LoadingWorkflow({ user }: { user: Session }) {
+  return (
+    <AppShell
+      title="Workflows"
+      account={{ name: user.name, email: user.email }}
+    >
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 py-10">
+        <Skeleton className="h-7 w-52" />
+        <Skeleton className="h-4 w-72" />
+        <div className="mt-4 flex flex-col gap-2">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
 function NoWorkflow({ user }: { user: Session }) {
   return (
     <AppShell
@@ -1389,8 +1436,14 @@ function NoWorkflow({ user }: { user: Session }) {
       <div className="mx-auto w-full max-w-3xl py-10">
         <EmptyState
           icon={<AltRoute />}
-          title="There's no workflow here"
-          description="Open one from your workflows, or tell Craig about your company and he'll draft one."
+          title="That workflow isn't on this account"
+          /* Says the two things that are actually true and stops. It cannot
+             claim the workflow was deleted — nothing records deletions, so a
+             link that was mistyped, one from a different account, and one to
+             something genuinely removed all arrive here identically, and
+             picking the alarming one to display would be a guess presented as
+             a fact. */
+          description="It may have been deleted, or the link may belong to a different account. Everything this account does have is on the workflows page."
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Link

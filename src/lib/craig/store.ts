@@ -123,6 +123,22 @@ export interface CraigMessage extends ChatTurn {
 
 interface ShowcaseState {
   workflows: ShowcaseWorkflow[];
+  /**
+   * Whether the server has been asked yet what this account actually has.
+   *
+   * The distinction between "you have no workflows" and "we haven't looked" —
+   * and until it existed, every screen read the first from an empty array that
+   * meant the second. Opening a workflow link in a browser with no local copy
+   * of this account (a second machine, a cleared site, a private window) found
+   * `workflows: []`, decided the workflow did not exist, and said so — about a
+   * workflow that was on the server the whole time and arrived a moment later.
+   *
+   * Not persisted. It is a fact about this page load rather than about this
+   * browser: a restored store is still a store nobody has checked against the
+   * server yet, and treating yesterday's local copy as confirmation is how a
+   * workflow deleted on another machine stays on screen here.
+   */
+  hydrated: boolean;
   activity: ActivityEntry[];
   /** What Craig found that nobody had written down. */
   gaps: { id: string; text: string }[];
@@ -184,6 +200,7 @@ interface ShowcaseState {
  */
 const initial = (): ShowcaseState => ({
   workflows: [],
+  hydrated: false,
   activity: [],
   gaps: [],
   facts: [],
@@ -668,6 +685,10 @@ export function claimAccount(email: string | null) {
   forgetThreadSync();
 
   if (!email) {
+    /* Signed out is a settled answer, not a pending one. Nothing is going to
+       arrive, so a screen waiting for it would wait forever. */
+    state = { ...state, hydrated: true };
+    listeners.forEach((l) => l());
     forgetSync();
     return;
   }
@@ -685,9 +706,17 @@ export function claimAccount(email: string | null) {
     /* Guarded, because a hydrate is a fetch and somebody can sign out or switch
        accounts while it is in flight. Applying it then would drop one account's
        workflows into another's session. */
-    if (!merged || state.accountEmail !== email) return;
-    state = { ...state, workflows: merged };
-    persist();
+    if (state.accountEmail !== email) return;
+
+    /* `hydrated` is set even when the fetch came back with nothing usable.
+       The flag means "the server has been asked", not "the server answered
+       well" — a failed request that left this false would leave the editor
+       waiting on a second attempt that never comes, which is a spinner
+       forever in place of a page that at least says something true. */
+    state = merged
+      ? { ...state, workflows: merged, hydrated: true }
+      : { ...state, hydrated: true };
+    if (merged) persist();
     listeners.forEach((l) => l());
   });
 }
