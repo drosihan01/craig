@@ -31,6 +31,7 @@ import {
   Cloud,
   Delete,
   Groups,
+  Mail,
   Schedule,
   TaskAlt,
   Visibility,
@@ -94,6 +95,7 @@ const TICK_ENDPOINT = "/api/showcase/tick";
    on it, and they are in different halves of the app. */
 /** Where taking the seat back goes. */
 const PERSON_ENDPOINT = "/api/showcase/person";
+const INVITE_ENDPOINT = "/api/showcase/invite";
 /** Where "how is that account getting on" goes. */
 const SEAT_ENDPOINT = "/api/showcase/seat";
 
@@ -221,6 +223,10 @@ export function PersonProgress({
   const [error, setError] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState(false);
   const [removing, setRemoving] = React.useState(false);
+  const [resending, setResending] = React.useState(false);
+  /* Cleared by the next action rather than by a timer. A confirmation that
+     vanishes on its own is a confirmation somebody looked away from. */
+  const [resent, setResent] = React.useState(false);
 
   /* Reading somebody's sealed personal details, which is its own small machine
      — a panel, a request, and a copy of the answer that is thrown away when the
@@ -235,7 +241,8 @@ export function PersonProgress({
      two answers that can arrive in either order. */
   const [checking, setChecking] = React.useState<string | null>(null);
 
-  const busy = saving !== null || refreshing || removing || checking !== null;
+  const busy =
+    saving !== null || refreshing || removing || resending || checking !== null;
 
   /**
    * Tick a step, or take the tick back.
@@ -390,6 +397,69 @@ export function PersonProgress({
   }, [busy, person.id, router]);
 
   /**
+   * Send this person their link again.
+   *
+   * This is the screen an admin is standing on when they find out the email
+   * never arrived — "he says he never got it" is a fact you learn about a
+   * person, and this is the person's page. Before this button the only thing
+   * here that could produce a second email was *Remove from People*, followed
+   * by inviting them again from scratch, which threw away every answer they
+   * had already given. An admin choosing between chasing somebody and keeping
+   * their work is a choice the product should never have put in front of them.
+   *
+   * Nothing about their onboarding changes: same row, same steps, same answers,
+   * same start date. Only the link is new, and it is new because it has to be
+   * minted rather than retrieved — the token was never stored anywhere this
+   * side could read it back from, which is the same property that keeps it out
+   * of a devtools tab.
+   *
+   * No confirmation dialog, unlike removal. The weight of a confirmation should
+   * match the weight of the mistake, and the mistake here is that somebody gets
+   * two copies of an email they were waiting for.
+   */
+  const sendAgain = React.useCallback(async () => {
+    if (busy) return;
+    setResending(true);
+    setError(null);
+    setResent(false);
+
+    try {
+      const response = await fetch(INVITE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        /* The address and nothing else. Everything the email needs to say is
+           already on the row, and re-sending the name and start date from a
+           page that rendered them some minutes ago is how a resend comes to
+           contradict the record. */
+        body: JSON.stringify({ email: person.email, resend: true }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setError(
+          payload?.error ??
+            "That didn't send. Their seat and their answers are untouched.",
+        );
+        return;
+      }
+
+      setResent(true);
+    } catch {
+      /* The request may well have arrived. Said the way the invite dialog says
+         it, for the same reason: the one thing this must not do is imply
+         nothing happened and invite a second press. */
+      setError(
+        "That didn't reach the server, so it's not clear whether it went out. Their seat and their answers are untouched either way.",
+      );
+    } finally {
+      setResending(false);
+    }
+  }, [busy, person.email]);
+
+  /**
    * The steps worth asking Google about the moment this page is opened.
    *
    * A seat that exists and hasn't been accepted, and a run that claimed itself
@@ -477,6 +547,7 @@ export function PersonProgress({
         }}
         error={error}
         onRemove={() => setConfirming(true)}
+        invite={{ resending, resent, onSendAgain: sendAgain }}
       />
       <ConfirmRemove
         open={confirming}
@@ -682,6 +753,16 @@ interface DetailsUi {
   onOpen: (stepId: string) => void;
 }
 
+/** Sending this person's invitation again: whether it is in flight, whether the
+    last press worked, and how to press it. Bundled like the three above so the
+    nav takes one prop rather than three, and so `resent` cannot travel without
+    the thing that sets it. */
+interface InviteUi {
+  resending: boolean;
+  resent: boolean;
+  onSendAgain: () => void;
+}
+
 function Detail({
   person,
   progress,
@@ -691,6 +772,7 @@ function Detail({
   details,
   error,
   onRemove,
+  invite,
 }: {
   person: PersonView;
   progress: PersonProgressView;
@@ -700,6 +782,7 @@ function Detail({
   details: DetailsUi;
   error: string | null;
   onRemove: () => void;
+  invite: InviteUi;
 }) {
   const first = person.name.split(" ")[0];
   const addedOn = onDay(person.invitedAt);
@@ -756,6 +839,7 @@ function Detail({
           progress={progress}
           first={first}
           onRemove={onRemove}
+          invite={invite}
         />
       }
     >
@@ -1720,11 +1804,13 @@ function PersonNav({
   progress,
   first,
   onRemove,
+  invite,
 }: {
   person: PersonView;
   progress: PersonProgressView;
   first: string;
   onRemove: () => void;
+  invite: InviteUi;
 }) {
   const addedOn = onDay(person.invitedAt);
 
@@ -1800,6 +1886,42 @@ function PersonNav({
         A step only changes here once it has happened — either {first} filled it
         in, or you ticked it off. Nothing is filled in ahead of the work.
       </p>
+
+      {/* Above removal, and deliberately so. These two are the answers to the
+          same question — "they never got the email" — and until this one
+          existed the only answer on this screen was the destructive one. An
+          admin scanning the column should meet the reversible option first.
+
+          Hidden once they have finished, because at that point the link opens
+          a screen with nothing left on it, and offering to send somebody a
+          fresh credential for an onboarding they have completed is offering a
+          way in rather than a way on. */}
+      {progress.done < progress.total && (
+        <button
+          type="button"
+          onClick={invite.onSendAgain}
+          disabled={invite.resending}
+          className="mx-0.5 mt-1 flex items-center gap-1.5 self-start rounded-md px-1.5 py-1 text-xs text-text-subtle transition-colors hover:bg-surface-sunken hover:text-text disabled:opacity-60"
+        >
+          <Mail className="size-3.5" />
+          {invite.resending
+            ? "Sending…"
+            : invite.resent
+              ? "Sent again"
+              : "Send their link again"}
+        </button>
+      )}
+
+      {invite.resent && (
+        /* The reassurance is the specific half. "Sent" they can see on the
+           button; what they cannot see is whether pressing it cost them
+           anything, and that is the exact fear this whole button exists to
+           retire. */
+        <p className="mx-0.5 px-1.5 text-2xs leading-relaxed text-text-subtle">
+          A fresh link to {person.email}. Nothing {first} has already filled in
+          was touched.
+        </p>
+      )}
 
       {/* Last in the column, a quiet link rather than a red button — the weight
           belongs in the confirmation, and a danger button sitting in the

@@ -6,11 +6,14 @@ import {
   JOINER_FIELD_BY_PRESET,
   PAYROLL_DETAILS_EXTRAS_FIELD,
   PERSONAL_DETAILS_EXTRAS_FIELD,
+  type Joiner,
 } from "@/lib/craig/contract";
 import { currentUser } from "@/lib/craig/current-user";
 import { getAccount } from "@/lib/craig/accounts";
 import {
+  AlreadyInvitedError,
   createJoiner,
+  joinerByEmail,
   deleteJoiner,
   stepsFromBlocks,
 } from "@/lib/craig/joiners";
@@ -556,7 +559,25 @@ const refuse = (error: string, status: number) =>
  * sentence in the response, which together turn an invisible leak into a row
  * somebody has been told to remove.
  */
-async function withdrawSeat(joinerId: string): Promise<boolean> {
+/**
+ * Undo a seat this request created, when the email it exists for never went.
+ *
+ * Only ever a seat *this request* created. A resend that fails must leave the
+ * row alone: it was already there, somebody may already be halfway through
+ * their onboarding behind it, and deleting it because a second email bounced
+ * would destroy exactly what the resend path was built to protect. Hence the
+ * flag rather than a bare id — the two call sites below run on both paths, and
+ * the difference between them is not visible from a joiner id.
+ */
+async function withdrawSeat(
+  joinerId: string,
+  { created }: { created: boolean },
+): Promise<boolean> {
+  if (!created) return false;
+  return withdrawCreatedSeat(joinerId);
+}
+
+async function withdrawCreatedSeat(joinerId: string): Promise<boolean> {
   try {
     const removed = await deleteJoiner(joinerId);
     if (!removed) {
@@ -592,10 +613,23 @@ async function withdrawSeat(joinerId: string): Promise<boolean> {
  * row is wrong, and a row that looks like every other seat is not something
  * anybody would think to delete a week later.
  */
-function aftermath(removed: boolean, name: string): string {
+function aftermath(
+  removed: boolean,
+  name: string,
+  { resent }: { resent: boolean },
+): string {
+  /* A failed resend changed nothing, and saying so is the whole reassurance
+     the admin needs: the seat they were trying to protect is still there,
+     still holding whatever the new starter has already filled in, and the only
+     thing that didn't happen is a second email. Telling them to delete
+     anything here would talk them straight into the loss this path exists to
+     prevent. */
+  if (resent) {
+    return `${name}'s seat and everything they've already filled in are untouched — try sending again once that's sorted.`;
+  }
   return removed
     ? "No seat was taken and nothing was left behind, so you can invite them again once that's sorted."
-    : `${name}'s seat was created before the email failed and couldn't be taken back — remove them from People before inviting them again, or they'll hold a seat against an invitation nobody received.`;
+    : `${name}'s seat was created before the email failed and couldn't be taken back — use Send again from People rather than inviting them a second time, or they'll hold a seat against an invitation nobody received.`;
 }
 
 export async function POST(request: Request) {
@@ -642,10 +676,26 @@ export async function POST(request: Request) {
   const input = (body ?? {}) as Record<string, unknown>;
 
   const name = oneLine(input.name);
-  if (!name) return refuse("Enter their name.", 400);
 
   const to = oneAddress(input.email);
   if (!to) return refuse("That doesn't look like an email address.", 400);
+
+  /* An explicit press, not an inference. `true` only, so a stray string or a
+     truthy number cannot turn a first invitation into a resend against
+     somebody else's seat.
+
+     Read before the validation below because it changes what this request is
+     required to carry. A resend is "send this person's link again" and the
+     only thing it needs to name is the person: their start date, their role
+     and their steps are already on the row, and demanding the admin re-supply
+     them would mean the Send again button could only work from a screen that
+     happened to have the whole workflow loaded. */
+  const resendRequested = input.resend === true;
+
+  /* A resend takes the name off the row instead, for the same reason it takes
+     the start date off the row: the person already exists, and the record is
+     what their own screen shows them. */
+  if (!name && !resendRequested) return refuse("Enter their name.", 400);
 
   /* Both spellings of the same day are kept. The email wants "Monday 24
      August", and the record kept for the new starter wants the `YYYY-MM-DD` it
@@ -654,7 +704,9 @@ export async function POST(request: Request) {
      locale. */
   const startISO = oneLine(input.startDate, 10);
   const startDate = readableDate(startISO);
-  if (!startDate) return refuse("Pick the day they start.", 400);
+  if (!startDate && !resendRequested) {
+    return refuse("Pick the day they start.", 400);
+  }
 
   const role = oneLine(input.role);
   const workflowId = oneLine(input.workflowId, MAX_ID);
@@ -671,7 +723,7 @@ export async function POST(request: Request) {
      silently, on the day somebody changes how the client posts this rather than
      on the day anybody edits this file. */
   const steps = stepsFromBlocks(blocksFrom(input.blocks));
-  if (steps.length === 0) {
+  if (steps.length === 0 && !resendRequested) {
     return refuse(
       "There's nothing in that workflow for them to do yet. Add a step, then invite them.",
       400,
@@ -762,19 +814,91 @@ export async function POST(request: Request) {
    * which produces a working one. The leftover row fails open and is fixed by
    * nobody, because nobody knows it is there.
    */
-  const joiner = await createJoiner({
-    email: to,
-    name,
-    role,
-    startDate: startISO,
-    /* Whose list they appear on. From the session, never the request — this is
-       the field that decides which account can read their progress. */
-    accountEmail: account.email,
-    company: account.company,
-    workflowId,
-    workflowName,
-    steps,
-  });
+  /* One seat per person, and a duplicate is an offer rather than an error.
+     
+     Inviting somebody who already has a seat is a normal thing for an admin to
+     try — they forgot, or the person said the email never arrived — and until
+     now it made a *second* joiner: a second magic link, a second checklist, and
+     every answer the person had already given stranded on the row nobody was
+     looking at. The database refuses that now, and this turns the refusal into
+     the thing the admin actually wanted, which is another email.
+     
+     `resend` on the response is what tells the client to offer it. The status
+     is 409 rather than 400 — this is a conflict with something that already
+     exists, not a malformed request, and the difference matters to anybody
+     reading logs later. */
+  /* Declared before the branch so both paths land on the same send. A resend
+     is the same envelope with a fresh token, and duplicating the token-minting
+     and template-rendering below would be two copies of the one thing that
+     must never drift — the link somebody actually receives. */
+  let joiner: Joiner;
+
+  /* Asked for by name, so a resend cannot happen by accident. An admin who
+     retypes somebody already on the list gets the 409 and an offer; only a
+     deliberate press comes back with `resend`, which is what stops "invite"
+     quietly meaning "invite or re-invite, whichever applies". */
+  if (resendRequested) {
+    const existing = await joinerByEmail(account.email, to);
+    if (!existing) {
+      return Response.json(
+        { error: "There is no invitation to resend for that address." },
+        { status: 404, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    /* Their row, their steps and everything they have already answered are
+       left exactly as they are. That is the entire point: the only way to
+       send again used to be deleting the seat, which threw away their
+       answers — so an admin whose new starter never got the email had to
+       choose between chasing them and keeping their work. A fresh token
+       against the same row is a new envelope for the same onboarding. */
+    joiner = existing;
+  } else {
+    try {
+      joiner = await createJoiner({
+        email: to,
+        name,
+        role,
+        startDate: startISO,
+        /* Whose list they appear on. From the session, never the request —
+           this is the field that decides which account can read their
+           progress. */
+        accountEmail: account.email,
+        company: account.company,
+        workflowId,
+        workflowName,
+        steps,
+      });
+    } catch (failure) {
+      if (failure instanceof AlreadyInvitedError) {
+        return Response.json(
+          {
+            error: `${to} already has a seat on this onboarding.`,
+            resend: true,
+          },
+          { status: 409, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      throw failure;
+    }
+  }
+
+  /* Who the email is actually about. On a first invitation this is what the
+     admin just typed; on a resend it is what the record already says, because
+     the record is what the new starter's own screen will show them. An admin
+     retyping the address to send again may well type "Sam" where the seat says
+     "Samantha", and an email that greets them differently from the app they
+     are about to log into is a small lie this route has no reason to tell. */
+  const person = resendRequested
+    ? {
+        name: joiner.name,
+        role: joiner.role,
+        startISO: joiner.startDate,
+        startDate: readableDate(joiner.startDate) ?? "",
+        workflowId: joiner.workflowId,
+        workflowName: joiner.workflowName,
+      }
+    : { name, role, startISO, startDate: startDate ?? "", workflowId, workflowName };
 
   /* Built rather than sent, so that the one `catch` below covers minting the
      credential and rendering the copy as well as the send itself — see the
@@ -814,13 +938,13 @@ export async function POST(request: Request) {
        a template that starts using one gets a blank, which is visible, instead of
        Jason's name, which isn't. */
     const values = {
-      first_name: name.split(" ")[0],
-      full_name: name,
+      first_name: person.name.split(" ")[0],
+      full_name: person.name,
       company: account.company,
-      role,
-      start_date: startDate,
+      role: person.role,
+      start_date: person.startDate,
       sender: session.name,
-      workflow: workflowName,
+      workflow: person.workflowName,
       step: "",
       owner: "",
       link,
@@ -837,12 +961,12 @@ export async function POST(request: Request) {
   }
 
   if (!message) {
-    const removed = await withdrawSeat(joiner.id);
+    const removed = await withdrawSeat(joiner.id, { created: !resendRequested });
     return NextResponse.json(
       {
         ok: false,
         seatRemoved: removed,
-        error: `The invitation couldn't be prepared, so nothing was sent. ${aftermath(removed, name)}`,
+        error: `The invitation couldn't be prepared, so nothing was sent. ${aftermath(removed, person.name, { resent: resendRequested })}`,
       },
       { status: 500, headers: noStore },
     );
@@ -861,7 +985,7 @@ export async function POST(request: Request) {
        reason: `sendEmail`'s taxonomy is about what to *fix*, not about whether
        a message was delivered, and there is no value of `reason` that means
        "keep the row". */
-    const removed = await withdrawSeat(joiner.id);
+    const removed = await withdrawSeat(joiner.id, { created: !resendRequested });
 
     /* Configuration this deployment got wrong is a 500 — the caller did nothing
        unusual and can't fix it by asking differently. A provider that refused
@@ -881,7 +1005,7 @@ export async function POST(request: Request) {
            went out, and whether anything is left on their account because of
            it. `seatRemoved` says the same thing in a form a client can branch
            on without reading prose. */
-        error: `${result.message} ${aftermath(removed, name)}`,
+        error: `${result.message} ${aftermath(removed, person.name, { resent: resendRequested })}`,
         seatRemoved: removed,
       },
       {
@@ -922,8 +1046,13 @@ export async function POST(request: Request) {
          admin as evidence of what a stranger received. */
       from: fromHeader(message.fromName, SENDER.address),
       subject: message.subject,
-      person: { name, role, startDate },
-      workflow: { id: workflowId, name: workflowName },
+      resent: resendRequested,
+      person: {
+        name: person.name,
+        role: person.role,
+        startDate: person.startISO,
+      },
+      workflow: { id: person.workflowId, name: person.workflowName },
     },
     { headers: noStore },
   );
