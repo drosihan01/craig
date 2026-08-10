@@ -3,6 +3,7 @@ import type { ConnectionProvider } from "@/lib/craig/blocks";
 import { requireUser } from "@/lib/craig/current-user";
 import { listJoiners } from "@/lib/craig/joiners";
 import { seatEntitlement } from "@/lib/craig/seats";
+import { linearConnectionViewFor } from "@/lib/linear/store";
 import { WorkflowEditor } from "./workflow-editor";
 
 export const metadata = {
@@ -56,17 +57,23 @@ export default async function ShowcaseWorkflowPage(
    * editor asks is now per block rather than about Google: `blocks.ts` knows
    * which provider each block needs, so what it wants back is which providers
    * are available, not one bit about the only one that existed when this was
-   * written. The second entry here is a push, not a refactor.
+   * written. Linear is the second entry the list was shaped for — a push,
+   * as promised, not a refactor.
    *
    * `needsReconnect` counts as absent rather than as a separate state, because
    * the question this answers is "would the step work", and a grant Google has
    * revoked would not. The block's own panel draws the distinction, where there
-   * is room to say what happened and what fixes it.
+   * is room to say what happened and what fixes it. Linear's flag is checked
+   * for the same reason even though nothing sets it yet — the code that could
+   * discover a dead Linear grant arrives with the runner, and this line being
+   * ready for it costs nothing.
    */
   const account = await getAccount(user.email);
   const google = account?.google ?? null;
-  const connectedProviders: ConnectionProvider[] =
-    google && !google.needsReconnect ? ["google-workspace"] : [];
+  const linear = await linearConnectionViewFor(user.email);
+  const connectedProviders: ConnectionProvider[] = [];
+  if (google && !google.needsReconnect) connectedProviders.push("google-workspace");
+  if (linear && !linear.needsReconnect) connectedProviders.push("linear");
 
   /**
    * How many seats there are to give, from the same account record.

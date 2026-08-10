@@ -1,5 +1,5 @@
 import { AUTOMATION_BY_PRESET, type StepAutomation } from "@/lib/craig/contract";
-import { GOOGLE_WORKSPACE_PRESET } from "@/lib/workflow/library";
+import { GOOGLE_WORKSPACE_PRESET, LINEAR_PRESET } from "@/lib/workflow/library";
 
 /**
  * What a block *is*, in one place, so that a second one is a row rather than a
@@ -37,8 +37,13 @@ import { GOOGLE_WORKSPACE_PRESET } from "@/lib/workflow/library";
  * what to tell somebody when that connection is missing.
  */
 
-/** A provider in the `connections` table. Matches `GOOGLE_PROVIDER`. */
-export type ConnectionProvider = "google-workspace";
+/**
+ * A provider in the `connections` table. The members match `GOOGLE_PROVIDER`
+ * in `accounts.ts` and `LINEAR_PROVIDER` in `src/lib/linear/store.ts` — a
+ * string here that neither store recognises would make the publish gate
+ * demand a connection nothing can ever record.
+ */
+export type ConnectionProvider = "google-workspace" | "linear";
 
 /**
  * The only thing this module needs to know about a step.
@@ -86,6 +91,26 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     provider: "google-workspace",
     automation: AUTOMATION_BY_PRESET[GOOGLE_WORKSPACE_PRESET] ?? null,
     blockedReason: "Connect Google Workspace before publishing this.",
+  },
+  /**
+   * The gate arrives before the runner, deliberately.
+   *
+   * `automation` is null because nothing runs on a Linear step yet — no
+   * runner exists, and writing one into `automation.ts` before a live
+   * workspace has proven the invite mutation would be scaffolding wearing a
+   * feature's name. What the row does today is smaller and still worth
+   * having: the block's meaning is "Craig invites them to Linear", and a
+   * workflow published against an account with no Linear connection is a
+   * promise the account cannot keep. Requiring the connection now means the
+   * day the runner lands, every published workflow already satisfies its
+   * prerequisite — instead of a migration hunting for workflows that were
+   * published while the gate looked the other way.
+   */
+  [LINEAR_PRESET]: {
+    preset: LINEAR_PRESET,
+    provider: "linear",
+    automation: null,
+    blockedReason: "Connect Linear before publishing this.",
   },
 };
 

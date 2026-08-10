@@ -186,6 +186,16 @@ const UNAVAILABLE: Record<string, string> = {
  */
 export const GOOGLE_WORKSPACE_PRESET = "google-workspace";
 
+/**
+ * The second preset with a connection behind it, named for the same reason.
+ *
+ * The registry row in `blocks.ts` and the settings panel in
+ * `block-settings.tsx` both key off this string, and a literal in either is a
+ * typo away from the panel silently never appearing — on the one block where
+ * being told about the connection is the whole point.
+ */
+export const LINEAR_PRESET = "linear";
+
 /** An account on a third-party service. */
 function account(
   id: string,
@@ -632,7 +642,7 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         ],
       ),
       account(
-        "linear",
+        LINEAR_PRESET,
         "Linear",
         "Workspace invite, the teams they're on, and their role in it.",
         Linear,
