@@ -7,10 +7,14 @@ import {
   Button,
   Callout,
   EmptyState,
+  FilterBar,
+  SearchInput,
+  SegmentedControl,
+  Select,
   Separator,
   Switch,
 } from "@/components/ui";
-import { Delete, MenuBook, UploadFile } from "@/components/ui/icons";
+import { Delete, FilterList, MenuBook, UploadFile } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { ShowcaseNav, ShowcaseNavRail } from "@/components/craig/nav";
 import type { Session } from "@/lib/craig/contract";
@@ -45,16 +49,76 @@ import type { Session } from "@/lib/craig/contract";
  * Workflows. `AppShell` is a client component holding panel state, and the
  * account cell wants a session — so the screens that need it take it as a prop
  * and the server page hands it down, which is why `user` travels beside `rows`.
+ *
+ * ## Finding one of them, once there are more than a few
+ *
+ * A search box, a sharing filter and a sort, all three composing, and every one
+ * of them arithmetic on the rows the server already sent. Nothing here asks the
+ * server anything: the whole list is in the browser the moment the page paints,
+ * an account's documents number in the tens rather than the thousands, and a
+ * round trip per keystroke would buy latency and a race and no correctness at
+ * all. If that assumption ever stops holding, the thing to change is the query
+ * in `page.tsx`, not this file.
+ *
+ * The screen's failure mode shapes all three. A filtered list looks exactly
+ * like a short list, and somebody who believes a filtered list is the whole
+ * list will conclude they never uploaded the handbook — or, worse, that nothing
+ * is shared. So:
+ *
+ *   - `FilterBar` keeps "showing 3 of 20 documents" under the controls
+ *     whenever anything is hidden, and offers to put it back.
+ *   - Matching nothing gets its own empty state, which says what was asked for
+ *     and that the documents are still there. The upload-something-first empty
+ *     state is a different sentence for a different situation, and using one
+ *     for both is how a screen ends up saying "nothing here yet" to somebody
+ *     with twenty documents and a typo in the search box.
+ *   - The counts in the nav are never narrowed. They describe the account, and
+ *     a number that moves while you type is describing something other than
+ *     what its label says.
  */
 
+/**
+ * One document, flattened by the server — and two of its facts twice over.
+ *
+ * `size` and `uploadedOn` are words: "1.2 MB", "10 August". They are words
+ * because words are what the row draws, and they are made into words on the
+ * server for the reason every date in this product is — an instant formatted
+ * during render is formatted twice, in two timezones, and either side of
+ * midnight those are two different days.
+ *
+ * Words cannot be put in order. "1.2 MB" sorts before "900 KB" and "10 August"
+ * sorts before "9 August", so a sort reading the display strings would be
+ * confidently, silently wrong — the worst kind of wrong on a control whose
+ * entire job is to be believed. `sizeBytes` and `uploadedAt` are the same two
+ * facts unformatted, they are what the sort compares, and neither is ever
+ * drawn.
+ *
+ * The alternative was parsing the words back into numbers, which is a formatter
+ * and a parser that have to agree forever: the first time somebody improves the
+ * wording of a file size, the sort quietly stops working and nothing fails.
+ */
 export interface ResourceRow {
   id: string;
   name: string;
   kind: string;
+  /** For the eye: "1.2 MB". */
   size: string;
   shared: boolean;
+  /** For the eye: "10 August". */
   uploadedOn: string;
+  /** For the sort. Never drawn. */
+  sizeBytes: number;
+  /** For the sort — an ISO instant. Never drawn. */
+  uploadedAt: string;
 }
+
+/**
+ * What the sharing filter is set to. `all` is not a filter — it is the absence
+ * of one, which is why it is also what "clear" puts it back to.
+ */
+type Sharing = "all" | "shared" | "private";
+
+type Order = "newest" | "oldest" | "name" | "largest";
 
 export function ResourcesScreen({
   user,
@@ -97,13 +161,50 @@ export function ResourcesScreen({
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  /* How the list is being looked at, which is nobody's business but this
+     browser's. None of the three is in the URL: they are not a place, nothing
+     links to a filtered Resources screen, and a query string would only mean a
+     back button that walks somebody backwards through their own typing. */
+  const [query, setQuery] = React.useState("");
+  const [sharing, setSharing] = React.useState<Sharing>("all");
+  const [order, setOrder] = React.useState<Order>("newest");
+
   /* Counted off `items` rather than `rows`, so the column agrees with the
      switch that was just flicked. The list moves before the server does — see
      the note on that state above — and a count sitting two feet from the
      control that changed it, still describing the previous answer until a
      refresh lands, is the same "did that register?" doubt the optimistic
-     update exists to prevent. */
+     update exists to prevent.
+
+     Off `items` rather than `visible`, too, and that one matters more. These
+     two numbers are answers about the account — how much is here, how much of
+     it has been let out — and the nav says exactly that in words. A count that
+     fell to zero because somebody typed three letters into a search box would
+     still be sitting under the heading "New starters can read", claiming a
+     thing about the company that is not true. */
   const shared = items.filter((row) => row.shared).length;
+
+  /* Search and filter decide what is on the list; sort decides only what order
+     it is in. That split is why `clear()` below puts the first two back and
+     leaves the third alone — and why the "showing 3 of 20" line can be trusted
+     to appear exactly when something is missing. */
+  const needle = query.trim().toLowerCase();
+  const visible = items
+    .filter((row) => {
+      if (sharing === "shared" && !row.shared) return false;
+      if (sharing === "private" && row.shared) return false;
+      return needle === "" || row.name.toLowerCase().includes(needle);
+    })
+    /* Safe to sort in place: `filter` has already handed back a new array, and
+       `items` itself must not be reordered — it is the state the switches and
+       the delete button index into. */
+    .sort(ORDERS[order]);
+
+  /* Everything that is hiding a document, and nothing else. */
+  function clear() {
+    setQuery("");
+    setSharing("all");
+  }
 
   async function upload(file: File) {
     setError(null);
@@ -187,6 +288,8 @@ export function ResourcesScreen({
       account={{ name: user.name, email: user.email }}
       navRail={<ShowcaseNavRail />}
       nav={
+        /* `items`, never `visible` — the nav is about the account, not about
+           what is currently on screen. See the count above. */
         <ShowcaseNav>
           <ResourcesNav total={items.length} shared={shared} />
         </ShowcaseNav>
@@ -233,57 +336,215 @@ export function ResourcesScreen({
         )}
 
         {items.length === 0 ? (
+          /* No documents at all. The other empty state on this screen is the
+             one that looks like this and means something completely different
+             — read them next to each other before editing either. */
           <EmptyState
             icon={<MenuBook />}
             title="Nothing here yet"
             description="Upload a handbook, a policy, or anything else somebody joining should read. You choose which of them new starters can see."
           />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {items.map((row) => (
-              <li
-                key={row.id}
-                className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border px-4 py-3"
-              >
-                <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-0.5">
-                  <span className="truncate text-sm font-medium">
-                    {row.name}
-                  </span>
-                  <span className="text-2xs text-text-subtle">
-                    {row.kind} · {row.size} · added {row.uploadedOn}
-                  </span>
-                </div>
+          <div className="flex flex-col gap-3">
+            {/* Shown from the first document rather than past some threshold.
+                A screen that grows a search box on the fourth upload is a
+                screen that behaves differently for a reason nobody can see,
+                and the number would have to be defended forever. One document
+                and a search box is mildly silly; it is not confusing. */}
+            <FilterBar
+              shown={visible.length}
+              total={items.length}
+              noun={items.length === 1 ? "document" : "documents"}
+              onClear={clear}
+            >
+              <SearchInput
+                value={query}
+                onChange={setQuery}
+                placeholder="Search documents"
+                className="w-56"
+              />
 
-                <label className="flex shrink-0 items-center gap-2.5">
-                  <Switch
-                    checked={row.shared}
-                    disabled={busy === row.id}
-                    onChange={(event) =>
-                      void setShared(row.id, event.target.checked)
-                    }
-                  />
-                  {/* The consequence, not the state. */}
-                  <span className="text-sm text-text-muted">
-                    New starters can read this
-                  </span>
-                </label>
+              {/* The middle option is the switch's own words, not "Shared".
+                  A filter and the control it filters on must not use two names
+                  for one state — the whole screen is written that way, and a
+                  segment saying "Shared" above a column of switches saying "New
+                  starters can read this" is two vocabularies for one fact. */}
+              <div role="group" aria-label="Filter by who can read">
+                <SegmentedControl
+                  value={sharing}
+                  onValueChange={(value) => setSharing(value as Sharing)}
+                  items={[
+                    { value: "all", label: "All" },
+                    { value: "shared", label: "New starters can read" },
+                    { value: "private", label: "Private" },
+                  ]}
+                />
+              </div>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy === row.id}
-                  onClick={() => void remove(row.id, row.name)}
-                  aria-label={`Delete ${row.name}`}
+              {/* A plain `Select` rather than the design system's
+                  `SortControl`, which is a field paired with its own
+                  ascending/descending button. That control is right for a
+                  column of comparable values and wrong here: it would offer
+                  "oldest largest" and "name Z–A" as reachable states, and three
+                  of the four orders anybody actually wants on this screen only
+                  make sense in one direction. Four named answers beat eight
+                  combinations, six of which are noise.
+
+                  The wrapper carries `ml-auto`, not the `Select`. `Select`
+                  puts its `className` on the `<select>` and draws its own
+                  positioned box around it, so a margin passed in would land on
+                  the element being pushed rather than on the flex item doing
+                  the pushing, and quietly do nothing. */}
+              <div className="ml-auto">
+                <Select
+                  className="w-auto"
+                  aria-label="Sort documents"
+                  value={order}
+                  onChange={(event) => setOrder(event.target.value as Order)}
                 >
-                  <Delete aria-hidden />
-                </Button>
-              </li>
-            ))}
-          </ul>
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                  <option value="name">Name A–Z</option>
+                  <option value="largest">Largest first</option>
+                </Select>
+              </div>
+            </FilterBar>
+
+            {visible.length === 0 ? (
+              /* Documents exist; these controls are hiding them. Everything
+                 about this state has to be different from the one above,
+                 because the two mean opposite things and the mistake they
+                 invite is expensive in opposite directions: told "nothing here
+                 yet", somebody uploads a second copy of a handbook they
+                 already have, or concludes the account lost their files. So it
+                 names what was asked for, says the documents are still there,
+                 and puts the way out in the one place they are already
+                 looking. */
+              <EmptyState
+                icon={<FilterList />}
+                title="No documents match"
+                description={noMatch(query.trim(), sharing, items.length)}
+                action={
+                  <Button size="sm" variant="secondary" onClick={clear}>
+                    Clear filters
+                  </Button>
+                }
+              />
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {visible.map((row) => (
+                  <li
+                    key={row.id}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border px-4 py-3"
+                  >
+                    <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-0.5">
+                      <span className="truncate text-sm font-medium">
+                        {row.name}
+                      </span>
+                      <span className="text-2xs text-text-subtle">
+                        {row.kind} · {row.size} · added {row.uploadedOn}
+                      </span>
+                    </div>
+
+                    <label className="flex shrink-0 items-center gap-2.5">
+                      <Switch
+                        checked={row.shared}
+                        disabled={busy === row.id}
+                        onChange={(event) =>
+                          void setShared(row.id, event.target.checked)
+                        }
+                      />
+                      {/* The consequence, not the state. */}
+                      <span className="text-sm text-text-muted">
+                        New starters can read this
+                      </span>
+                    </label>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy === row.id}
+                      onClick={() => void remove(row.id, row.name)}
+                      aria-label={`Delete ${row.name}`}
+                    >
+                      <Delete aria-hidden />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
     </AppShell>
   );
+}
+
+/**
+ * The four orders, and the two facts they are allowed to read.
+ *
+ * Every one of them compares a raw value rather than the words on the row —
+ * see `ResourceRow` for why that distinction is the difference between a sort
+ * that works and one that looks like it does.
+ *
+ * `uploadedAt` is compared as text, not parsed. `toISOString()` always produces
+ * the same fixed-width UTC format, so lexicographic order is chronological
+ * order exactly; and unlike `Date.parse`, a value that somehow was not an ISO
+ * instant degrades into the wrong order rather than into `NaN`, which would
+ * make the comparator incoherent and the resulting list arbitrary.
+ *
+ * The locale is named rather than left to the runtime. This component renders
+ * on the server and again in the browser, and `localeCompare` with no locale
+ * asks each of them for its own default — the same trap the date formatting in
+ * `page.tsx` avoids, one layer down. `numeric` is what puts "Policy 2" before
+ * "Policy 10", which is what anybody means by A–Z when their filenames are
+ * numbered.
+ */
+const ORDERS: Record<Order, (a: ResourceRow, b: ResourceRow) => number> = {
+  newest: (a, b) => b.uploadedAt.localeCompare(a.uploadedAt),
+  oldest: (a, b) => a.uploadedAt.localeCompare(b.uploadedAt),
+  name: (a, b) =>
+    a.name.localeCompare(b.name, "en-AU", {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  largest: (a, b) => b.sizeBytes - a.sizeBytes,
+};
+
+/**
+ * Why the list is empty, in the words of whatever was asked for.
+ *
+ * "No documents match" on its own is true and useless — it leaves open the one
+ * reading that does damage, which is that the documents are gone. So the
+ * sentence names the search text and the sharing state that produced the
+ * result, and then says plainly that everything is still there. Somebody who
+ * reads it knows both what to change and that they have not lost anything.
+ *
+ * The count is the account's, not the filtered list's, for the same reason the
+ * nav's is.
+ */
+function noMatch(query: string, sharing: Sharing, total: number): string {
+  const kept = `All ${
+    total === 1 ? "1 document is" : `${total} documents are`
+  } still here — this is the search and the filter, not the account.`;
+
+  const state =
+    sharing === "shared"
+      ? "shared with new starters"
+      : sharing === "private"
+        ? "private"
+        : null;
+
+  if (query && state)
+    return `Nothing with “${query}” in its name is ${state}. ${kept}`;
+  if (query) return `Nothing here has “${query}” in its name. ${kept}`;
+  if (state) return `Nothing here is ${state}. ${kept}`;
+
+  /* Unreachable: with no search and no filter the visible list is the account's
+     own list, and this screen only asks for these words once something has been
+     hidden. Written out anyway rather than thrown, because the cost of being
+     wrong about that is an empty screen with no explanation on it. */
+  return kept;
 }
 
 /**
