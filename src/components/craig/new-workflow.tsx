@@ -1,7 +1,17 @@
 "use client";
 
+import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Dialog, List, ListIcon, ListItem } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Dialog,
+  Field,
+  Input,
+  List,
+  ListIcon,
+  ListItem,
+} from "@/components/ui";
 import { AutoAwesome, Draw } from "@/components/ui/icons";
 import { createBlankWorkflow } from "@/lib/craig/store";
 
@@ -38,8 +48,42 @@ export function NewWorkflowDialog({
 }) {
   const router = useRouter();
 
-  function startBlank() {
-    const workflow = createBlankWorkflow();
+  /* Which half of the dialog is showing. "Start blank" no longer creates
+     anything — it asks what the thing is called, and only the button on that
+     step makes a workflow.
+
+     The old flow created one on the press and navigated, which meant a
+     workflow existed the instant somebody was curious about the option. That
+     needed `pending` to hide it from the list, a confirm-on-back to offer to
+     throw it away, and a deliberate silence in the activity feed so the
+     history would not record a thing nobody made. All three were compensation
+     for creating too early, and the file said so: "the workflow shouldn't
+     exist until there is something in it". Asking for a name is the smallest
+     honest thing to put in it. */
+  const [naming, setNaming] = React.useState(false);
+  const [name, setName] = React.useState("");
+
+  /* Reset on close, so reopening starts clean rather than on the name step
+     with last time's half-typed answer still in the box.
+
+     Adjusted during render rather than in an effect: an effect renders the
+     stale state once before correcting it, so reopening would flash the name
+     step for a frame. `lastOpen` is an identity check on the boolean, which is
+     all that is needed to notice the transition. */
+  const [lastOpen, setLastOpen] = React.useState(open);
+  if (lastOpen !== open) {
+    setLastOpen(open);
+    if (!open) {
+      setNaming(false);
+      setName("");
+    }
+  }
+
+  function create() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    const workflow = createBlankWorkflow(trimmed);
 
     /* Closed before the push, not left for the route change to take with it.
        A client-side navigation to a route this session hasn't loaded yet can
@@ -48,6 +92,50 @@ export function NewWorkflowDialog({
        workflow, and they'd arrive at the editor with a stray one behind them. */
     onClose();
     router.push(`/workflows/${workflow.id}`);
+  }
+
+  if (naming) {
+    return (
+      <Dialog
+        open={open}
+        onClose={onClose}
+        title="Name your workflow"
+        description="What is this onboarding for? You can change it later."
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            {/* Back to the two options rather than closing outright. Somebody
+                who opens this and realises they wanted Craig after all should
+                not have to find the button again. */}
+            <Button variant="secondary" onClick={() => setNaming(false)}>
+              Cancel
+            </Button>
+            <Button onClick={create} disabled={!name.trim()}>
+              Create workflow
+            </Button>
+          </div>
+        }
+      >
+        <div className="px-5 py-5">
+          <Field label="Workflow name">
+            <Input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Engineering onboarding"
+              /* Enter creates, because a one-field dialog where the keyboard
+                 does nothing is a dialog people press the button on twice. */
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  create();
+                }
+              }}
+            />
+          </Field>
+        </div>
+      </Dialog>
+    );
   }
 
   return (
@@ -93,7 +181,7 @@ export function NewWorkflowDialog({
           />
 
           <ListItem
-            onClick={startBlank}
+            onClick={() => setNaming(true)}
             /* Dashed rather than filled, which is the same tile the empty state
                on this page draws itself in. It says "nothing in here yet"
                without needing a word, and it keeps the one filled accent tile
