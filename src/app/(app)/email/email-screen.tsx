@@ -47,7 +47,7 @@ const NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-export default function EmailPage() {
+export function EmailScreen() {
   const [drafts, setDrafts] = React.useState<EmailTemplate[]>(TEMPLATES);
   const [selectedId, setSelectedId] = React.useState(TEMPLATES[0].id);
   const [view, setView] = React.useState("edit");

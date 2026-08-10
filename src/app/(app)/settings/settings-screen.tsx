@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   AppShell,
   BackLink,
@@ -107,6 +108,10 @@ export function SettingsScreen({
         <Separator />
 
         <IntegrationsSection user={user} outcome={outcome} />
+
+        <Separator />
+
+        <MissionControlSection />
       </div>
     </AppShell>
   );
@@ -356,6 +361,77 @@ function IntegrationsSection({
         />
       </div>
     </section>
+  );
+}
+
+/* --- Mission control ------------------------------------------------------- */
+
+/**
+ * The two internal tools, and the only place either is linked from.
+ *
+ * Both existed for months with no way in: they sat outside the router entirely,
+ * so the only way to look at the design system was to know it was there and
+ * type the path — and the path did not resolve. Routing them without linking
+ * them would have reproduced the same problem more quietly.
+ *
+ * In Settings rather than the main nav on the argument the nav itself makes:
+ * it lists what the product *does*, and these are not that. They are for
+ * whoever is building it. Settings is already the room for things about the
+ * account rather than about onboarding, which is the closest existing shelf.
+ *
+ * Behind the same door as everything else in `(app)`. They were unguarded while
+ * unreachable, which was fine; the guard went on in the same change that gave
+ * them URLs, because a route reachable for even one deploy before it is guarded
+ * is a route somebody can find.
+ */
+function MissionControlSection() {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <h2 className="text-xl font-semibold tracking-[-0.01em]">
+          Mission control
+        </h2>
+        <p className="text-md leading-relaxed text-text-muted">
+          The tools this product is built with rather than the product itself.
+          Nobody outside the team has any use for them.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <ToolLink
+          href="/design-system"
+          title="Design system"
+          description="Every component the product is made of, live, on the product's own shell — so if the frame breaks it breaks here first."
+        />
+        <ToolLink
+          href="/email"
+          title="Mailmaker"
+          description="Compose and preview the emails Craig sends, against the same templates the invite route uses."
+        />
+      </div>
+    </section>
+  );
+}
+
+function ToolLink({
+  href,
+  title,
+  description,
+}: {
+  href: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex flex-col gap-1 rounded-lg border border-border px-4 py-3 transition-colors hover:border-border-strong"
+    >
+      <span className="text-md font-semibold">{title}</span>
+      <span className="text-sm leading-relaxed text-text-muted">
+        {description}
+      </span>
+    </Link>
   );
 }
 
