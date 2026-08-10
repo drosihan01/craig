@@ -136,6 +136,10 @@ function SetupControl({
     );
   }
 
+  if (f.kind === "document") {
+    return <DocumentPicker field={f} value={value} onChange={onChange} />;
+  }
+
   if (f.kind === "file") {
     const name = typeof value === "string" ? value : "";
     return (
@@ -186,6 +190,144 @@ function SetupControl({
       />
     </Field>
   );
+}
+
+/**
+ * One of the account's uploaded documents, picked rather than named.
+ *
+ * The control this replaced was a file input that stored `file.name` and
+ * uploaded nothing. That was honest enough while nothing downstream read it —
+ * the hint said "the document they'll be sent" and the product never sent
+ * one — and it became the wrong shape the moment Craig had to *show* somebody
+ * their contract: a filename is a claim that a document exists, and a signature
+ * has to be evidence about a document that does.
+ *
+ * So this offers what the account has actually uploaded, and stores the row id.
+ * Two consequences follow and both are deliberate.
+ *
+ * **It cannot upload.** Resources is where documents go — it is the screen with
+ * the visibility switch on it, and that switch is the safety feature of the
+ * whole documents feature. An upload control here would create documents
+ * out of the one place that asks the question those documents exist to answer.
+ * The empty state says where to go instead.
+ *
+ * **It fetches.** Every other control in this file is pure, and this one needs
+ * the server. The list is cached for the life of the page so that a workflow
+ * with three document fields on it makes one request, not three — and it is
+ * deliberately *not* revalidated, because a stale list here costs a reload and
+ * a request per keystroke costs an editor that stutters.
+ */
+function DocumentPicker({
+  field: f,
+  value,
+  onChange,
+}: {
+  field: SetupField;
+  value?: string | string[];
+  onChange: (value: string) => void;
+}) {
+  const documents = useAccountDocuments();
+  const selected = typeof value === "string" ? value : "";
+
+  const label = f.required ? f.label : `${f.label} (optional)`;
+
+  /* Only PDFs. Every other type in the bucket is accepted for *reading* — a
+     handbook can be a .docx and a policy can be an image — and none of them can
+     be paged through and stamped. Offering one would be offering a choice that
+     fails on the new starter's screen rather than on this one, which is the
+     worst place for it to fail: the admin is gone by then. */
+  const options = documents.list
+    .filter((document) => document.contentType === "application/pdf")
+    .map((document) => ({ id: document.id, label: document.name }));
+
+  /* A document that has since been deleted, or one Craig invented. It keeps its
+     place in the menu rather than silently resolving to "Not set", because the
+     two are different problems: an empty field is something nobody has done,
+     and this is something that has gone. */
+  const missing = selected && !options.some((o) => o.id === selected);
+
+  return (
+    <Field label={label} hint={f.hint}>
+      <div className="flex flex-col gap-1.5">
+        <SelectMenu
+          label={f.label}
+          value={missing ? "" : selected}
+          placeholder={documents.loading ? "Loading…" : "Not set"}
+          onChange={onChange}
+          options={options}
+        />
+
+        {missing && (
+          <p className="text-xs text-warning">
+            The document this pointed at isn&apos;t in Resources any more. Pick
+            another one — nobody can sign this step until you do.
+          </p>
+        )}
+
+        {!documents.loading && options.length === 0 && (
+          <p className="text-xs text-text-subtle">
+            No PDFs uploaded yet. Put the contract in{" "}
+            <a
+              href="/resources"
+              className="underline underline-offset-2 hover:text-text"
+            >
+              Resources
+            </a>{" "}
+            first — it stays private unless you share it.
+          </p>
+        )}
+      </div>
+    </Field>
+  );
+}
+
+interface AccountDocument {
+  id: string;
+  name: string;
+  contentType: string;
+}
+
+/**
+ * The account's documents, fetched once per page.
+ *
+ * A module-level promise rather than a per-component fetch, because the block
+ * inspector mounts and unmounts as the admin clicks around the canvas and a
+ * request per mount would be a request per click. Held for the life of the tab:
+ * a document uploaded in another tab appears after a reload, which is the right
+ * trade for an editor whose job is not to be a file browser.
+ *
+ * A failure is an empty list rather than an error, and the empty state's
+ * sentence covers it — "no PDFs uploaded yet" is wrong in that case and it
+ * points at the screen that would show them, which is what somebody needs
+ * either way. A red box in a settings panel about a fetch is noise on a screen
+ * about something else.
+ */
+let documentsPromise: Promise<AccountDocument[]> | null = null;
+
+function useAccountDocuments() {
+  const [list, setList] = React.useState<AccountDocument[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let live = true;
+
+    documentsPromise ??= fetch("/api/documents", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : { documents: [] }))
+      .then((payload: { documents?: AccountDocument[] }) => payload.documents ?? [])
+      .catch(() => []);
+
+    documentsPromise.then((documents) => {
+      if (!live) return;
+      setList(documents);
+      setLoading(false);
+    });
+
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return { list, loading };
 }
 
 /**

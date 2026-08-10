@@ -100,6 +100,124 @@ export type Database = {
           },
         ]
       }
+      contract_signings: {
+        Row: {
+          account_id: string
+          artefact_seal: string | null
+          consent_text: string | null
+          consented_at: string | null
+          created_at: string
+          document_bytes: number
+          document_id: string | null
+          document_name: string
+          document_sha256: string
+          drew_signature: boolean
+          id: string
+          joiner_id: string
+          open_ip: string | null
+          open_user_agent: string | null
+          opened_at: string
+          page_count: number
+          pages_seen: number
+          read_at: string | null
+          record_seal: string | null
+          sign_ip: string | null
+          sign_user_agent: string | null
+          signed_at: string | null
+          signed_bytes: number | null
+          signed_sha256: string | null
+          signed_storage_path: string | null
+          signer_email: string
+          signer_name: string
+          step_id: string
+          typed_name: string | null
+        }
+        Insert: {
+          account_id: string
+          artefact_seal?: string | null
+          consent_text?: string | null
+          consented_at?: string | null
+          created_at?: string
+          document_bytes: number
+          document_id?: string | null
+          document_name: string
+          document_sha256: string
+          drew_signature?: boolean
+          id?: string
+          joiner_id: string
+          open_ip?: string | null
+          open_user_agent?: string | null
+          opened_at?: string
+          page_count: number
+          pages_seen?: number
+          read_at?: string | null
+          record_seal?: string | null
+          sign_ip?: string | null
+          sign_user_agent?: string | null
+          signed_at?: string | null
+          signed_bytes?: number | null
+          signed_sha256?: string | null
+          signed_storage_path?: string | null
+          signer_email: string
+          signer_name: string
+          step_id: string
+          typed_name?: string | null
+        }
+        Update: {
+          account_id?: string
+          artefact_seal?: string | null
+          consent_text?: string | null
+          consented_at?: string | null
+          created_at?: string
+          document_bytes?: number
+          document_id?: string | null
+          document_name?: string
+          document_sha256?: string
+          drew_signature?: boolean
+          id?: string
+          joiner_id?: string
+          open_ip?: string | null
+          open_user_agent?: string | null
+          opened_at?: string
+          page_count?: number
+          pages_seen?: number
+          read_at?: string | null
+          record_seal?: string | null
+          sign_ip?: string | null
+          sign_user_agent?: string | null
+          signed_at?: string | null
+          signed_bytes?: number | null
+          signed_sha256?: string | null
+          signed_storage_path?: string | null
+          signer_email?: string
+          signer_name?: string
+          step_id?: string
+          typed_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_signings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_signings_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_signings_joiner_id_fkey"
+            columns: ["joiner_id"]
+            isOneToOne: false
+            referencedRelation: "joiners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           account_id: string
@@ -212,6 +330,7 @@ export type Database = {
           ask_tax_file_number: boolean
           automation: string | null
           completed_at: string | null
+          contract_document_id: string | null
           due: number | null
           field: string | null
           joiner_id: string
@@ -234,6 +353,7 @@ export type Database = {
           ask_tax_file_number?: boolean
           automation?: string | null
           completed_at?: string | null
+          contract_document_id?: string | null
           due?: number | null
           field?: string | null
           joiner_id: string
@@ -255,6 +375,7 @@ export type Database = {
           ask_tax_file_number?: boolean
           automation?: string | null
           completed_at?: string | null
+          contract_document_id?: string | null
           due?: number | null
           field?: string | null
           joiner_id?: string

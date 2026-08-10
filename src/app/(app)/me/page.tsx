@@ -18,8 +18,11 @@ import {
   summarisePayroll,
 } from "@/lib/craig/payroll-details";
 import { canSealJoinerAnswers } from "@/lib/craig/sealed-answer";
+import { contractStatus, type ContractStatus } from "@/lib/craig/contract-signing";
+import { joinerContractPath } from "@/lib/craig/contract";
 import {
   JoinerScreen,
+  type ContractRow,
   type JoinerView,
   type PlanStep,
   type Resource,
@@ -106,6 +109,19 @@ export default async function JoinerHomePage() {
      there is one key. */
   const canCollect = canSealJoinerAnswers();
 
+  /* Where each contract step has got to, resolved from rows only — no bytes are
+     downloaded to render a list. One query pair per contract step, and none at
+     all for the great majority of plans that have none, which is why this is a
+     loop over the matching steps rather than a flag threaded through
+     `toPlanStep`. Sequential rather than `Promise.all` because a plan with two
+     contracts in it does not exist and building for it would spend concurrency
+     on nothing. */
+  const contracts = new Map<string, ContractStatus>();
+  for (const step of joiner.steps) {
+    if (step.field !== "contract") continue;
+    contracts.set(step.id, await contractStatus(joiner, step));
+  }
+
   const view: JoinerView = {
     firstName: joiner.name.split(" ")[0] || joiner.name,
     company: joiner.company,
@@ -118,6 +134,7 @@ export default async function JoinerHomePage() {
         details: details.get(step.id),
         payroll: payroll.get(step.id),
         canCollect,
+        contract: contracts.get(step.id),
       }),
     ),
     done: progress.done,
@@ -198,6 +215,8 @@ function toPlanStep(
     payroll?: PayrollDetails;
     /** Whether a sealed answer can be taken at all on this deployment. */
     canCollect: boolean;
+    /** Where a contract step has got to, when this is one. */
+    contract?: ContractStatus;
   },
 ): PlanStep {
   const { startDate } = joiner;
@@ -238,10 +257,22 @@ function toPlanStep(
     actor: step.actor,
     doneOn: (step.completedAt && readableDay(step.completedAt)) || undefined,
     answer: readableAnswer(step, sealed.details, sealed.payroll),
-    field: current && !uncollectable ? step.field : undefined,
+    /* A contract step never carries a field to the screen, and that is enforced
+       twice over: here, and by `AnswerForm`'s prop type, which excludes it. The
+       field is what makes the screen draw a box, and a box is exactly the wrong
+       thing for a contract — it would be a text input on a plan row, next to a
+       document nobody had read, capable of closing a step that has no signature
+       behind it. The way in is `contract` above. */
+    field:
+      current && !uncollectable && step.field !== "contract"
+        ? step.field
+        : undefined,
     askEmergencyContact: step.askEmergencyContact,
     askSuperFund: step.askSuperFund,
     askTaxFileNumber: step.askTaxFileNumber,
+    contract: sealed.contract
+      ? toContractRow(sealed.contract, step.id, joiner.company)
+      : undefined,
     dueOn,
     detail:
       automated?.detail ??
@@ -249,6 +280,52 @@ function toPlanStep(
         ? `I can't collect this safely just yet, so I'm not going to ask for it. Nothing here is waiting on you — ${joiner.company} has something to sort out at their end first.`
         : undefined),
     badge: automated?.badge,
+  };
+}
+
+/**
+ * A contract step's state, as the one line the plan can show.
+ *
+ * The unavailable sentences are written here rather than on the screen for the
+ * reason every other sentence on this page is: this side knows *why*, and a
+ * component that guessed would be guessing about somebody's employment
+ * paperwork. They follow the same rule the automated steps' wording follows —
+ * say whose problem it is, never name the mechanism, and never let it read as
+ * something this person failed to do.
+ *
+ * "Not a PDF" earns its own sentence rather than being folded into the generic
+ * one, because it is the mistake an admin will actually make: they have a `.docx`
+ * of the contract, they upload it, and every part of the product accepts it right
+ * up to the point somebody has to read it. An honest sentence here is what gets
+ * that fixed in a minute rather than reported as "the contract doesn't work".
+ */
+function toContractRow(
+  status: ContractStatus,
+  stepId: string,
+  company: string,
+): ContractRow {
+  if (status.state === "signed") {
+    return {
+      state: "signed",
+      href: joinerContractPath(stepId),
+      name: status.documentName,
+    };
+  }
+
+  if (status.state === "ready") {
+    return {
+      state: "ready",
+      href: joinerContractPath(stepId),
+      name: status.documentName,
+    };
+  }
+
+  return {
+    state: "unavailable",
+    reason:
+      status.problem === "not-a-pdf"
+        ? `The file on this one isn't a PDF, so I can't show it to you here. ${company} has something to sort out first — nothing here is waiting on you.`
+        : `There's no contract attached to this one yet. ${company} has something to sort out first — nothing here is waiting on you.`,
   };
 }
 

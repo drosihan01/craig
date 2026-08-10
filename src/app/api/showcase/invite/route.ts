@@ -18,7 +18,12 @@ import {
 } from "@/lib/craig/joiners";
 import { createJoinerToken } from "@/lib/craig/joiner-session";
 import { rateLimit } from "@/lib/craig/rate-limit";
-import { readableDate } from "@/lib/workflow/library";
+import {
+  CONTRACT_TEMPLATE_FIELD,
+  readableDate,
+  SIGNING_METHOD_FIELD,
+  SIGN_CONTRACT_PRESET,
+} from "@/lib/workflow/library";
 import { findTemplate, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
 import { fromHeader, sendEmail } from "@/lib/email/send";
@@ -396,18 +401,35 @@ function blocksFrom(value: unknown) {
         ? rawDue
         : undefined;
 
-    /* An allowlist of one, not the block's whole config.
-       
+    /* An allowlist of three, not the block's whole config.
+
        Everything else a block holds is either the admin's own notes or a value
        only the editor renders, and none of it is read by a run — copying it all
        onto the joiner would put settings nobody consults into a record about a
-       person. `require-mfa` is here because it changes what "done" means, which
-       is the only kind of setting a step needs to carry. */
+       person. Each of the three below is here because it changes what "done"
+       means, which is the only kind of setting a step needs to carry:
+       `require-mfa` decides whether a Workspace seat counts as accepted, and
+       the signing method and template decide whether a contract step is
+       something this person signs here at all, and which document it is.
+
+       The template is an id rather than a filename, and it is not resolved
+       here. Whether it names a document this employer owns is a question for
+       the database, asked at the moment somebody opens the contract, by the
+       one module that also knows whose contract it is. Validating it here
+       would be a second copy of that rule that could only ever be a weaker
+       one. */
     const rawConfig =
       raw.config && typeof raw.config === "object"
         ? (raw.config as Record<string, unknown>)
         : undefined;
     const requireMfa = oneLine(rawConfig?.["require-mfa"], MAX_ID);
+    const signingMethod = oneLine(rawConfig?.[SIGNING_METHOD_FIELD], MAX_ID);
+    const template = oneLine(rawConfig?.[CONTRACT_TEMPLATE_FIELD], MAX_ID);
+
+    const config: Record<string, string> = {};
+    if (requireMfa) config["require-mfa"] = requireMfa;
+    if (signingMethod) config[SIGNING_METHOD_FIELD] = signingMethod;
+    if (template) config[CONTRACT_TEMPLATE_FIELD] = template;
 
     blocks.push({
       id,
@@ -418,13 +440,21 @@ function blocksFrom(value: unknown) {
          "done" means for a step Craig runs, `extras` carries the ids that
          change which fields a person is shown. Neither trusts the block's
          config wholesale. */
-      config: requireMfa ? { "require-mfa": requireMfa } : undefined,
+      config: Object.keys(config).length > 0 ? config : undefined,
       extras: extrasFrom(raw.config),
       kind: oneLine(raw.kind, MAX_ID),
       preset:
         Object.hasOwn(JOINER_FIELD_BY_PRESET, preset) ||
         ADMIN_TICK_PRESETS.has(preset) ||
-        Object.hasOwn(AUTOMATION_BY_PRESET, preset)
+        Object.hasOwn(AUTOMATION_BY_PRESET, preset) ||
+        /* The fourth collection, and the one that is not a collection.
+           `sign-contract` is on none of the three lists above because its
+           preset alone does not decide who owns the step — the signing method
+           does, and `stepsFromBlocks` is where that is read. Dropping the
+           preset here would take the config with it and leave a contract step
+           that nobody owns and nothing can sign, which is precisely the silent
+           failure the paragraphs above this function warn about. */
+        preset === SIGN_CONTRACT_PRESET
           ? preset
           : undefined,
     });

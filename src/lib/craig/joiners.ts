@@ -16,6 +16,12 @@ import {
   type StepAutomation,
   type StepRun,
 } from "./contract";
+import {
+  CONTRACT_TEMPLATE_FIELD,
+  CRAIG_SIGNING_METHOD,
+  SIGNING_METHOD_FIELD,
+  SIGN_CONTRACT_PRESET,
+} from "@/lib/workflow/library";
 
 /**
  * Everyone who has been given a seat, and how far through they are.
@@ -92,6 +98,13 @@ function toStep(row: StepRow): JoinerStep {
     askEmergencyContact: row.ask_emergency_contact || undefined,
     askSuperFund: row.ask_super_fund || undefined,
     askTaxFileNumber: row.ask_tax_file_number || undefined,
+    /* The id only. Nothing about the document itself rides on a `Joiner`: the
+       name, the size and the hash live on the signing record, and resolving
+       this id is `contract-signing.ts`'s job because that is where the check
+       "does this document belong to this person's employer" lives. A step
+       carrying a document *name* would be a filename in a record a stranger's
+       screen renders, and one carrying a URL would be worse. */
+    contractDocumentId: row.contract_document_id ?? undefined,
     /* Deliberately only the plaintext column. A sealed answer's envelope has
        no field on `JoinerStep` to travel in, so a `Joiner` handed to a screen,
        to the joiner's own Craig, or to anything anybody writes next simply
@@ -175,6 +188,16 @@ async function fetchJoiner(id: string): Promise<Joiner | null> {
  * that only the very first attempt takes — which is the attempt nobody tests
  * twice.
  *
+ * **A fourth kind arrived with in-Craig signing, and it broke the "order of
+ * certainty" above rather than extending it.** Every other preset decides what
+ * it is by being itself; `sign-contract` decides by what the admin answered in
+ * it. Set to "In Craig" it is the new starter's step and they read and sign it
+ * here; set to DocuSign, Dropbox Sign or "email a PDF back" it is work that
+ * happens somewhere this product cannot see, and it stays exactly what it was
+ * before — a step on the plan that belongs to nobody in these screens. That is
+ * why `JOINER_FIELD_BY_PRESET` does not name it and this function does: this is
+ * the only place with the block's config in its hand.
+ *
  * The trigger is dropped, because it is not a step anybody does.
  */
 export function stepsFromBlocks(
@@ -212,9 +235,20 @@ export function stepsFromBlocks(
     .filter((b) => b.kind !== "trigger")
     .map((b) => {
       const preset = b.preset ?? "";
-      const field = Object.hasOwn(JOINER_FIELD_BY_PRESET, preset)
-        ? JOINER_FIELD_BY_PRESET[preset]
-        : undefined;
+
+      /* The contract block, and only when it says Craig is doing the signing.
+         Read before the map below rather than folded into it, because it is a
+         different question: the map answers "what does this preset always
+         ask", and this answers "what did somebody choose". */
+      const contract =
+        preset === SIGN_CONTRACT_PRESET &&
+        b.config?.[SIGNING_METHOD_FIELD] === CRAIG_SIGNING_METHOD;
+
+      const field: JoinerField | undefined = contract
+        ? "contract"
+        : Object.hasOwn(JOINER_FIELD_BY_PRESET, preset)
+          ? JOINER_FIELD_BY_PRESET[preset]
+          : undefined;
       const admin = ADMIN_TICK_PRESETS.has(preset);
       const automation =
         !field && !admin && Object.hasOwn(AUTOMATION_BY_PRESET, preset)
@@ -272,6 +306,21 @@ export function stepsFromBlocks(
           field === "payroll-details" &&
           (b.extras ?? []).includes(TAX_FILE_NUMBER_EXTRA)
             ? true
+            : undefined,
+        /* Frozen here, and tested against the *field* rather than the preset
+           for the same reason the three flags above are: a request claiming a
+           template against some other block must not be able to attach a
+           document to a step that has no signing behind it.
+
+           A malformed or invented id survives this — the shape is not checked
+           and cannot usefully be, because "is this a document of theirs" is a
+           question only the database can answer and this function is pure. The
+           resolver treats an id that does not resolve as no contract at all,
+           and the step then says so on their screen rather than offering a
+           signature over nothing. */
+        contractDocumentId:
+          field === "contract"
+            ? (b.config?.[CONTRACT_TEMPLATE_FIELD] ?? undefined)
             : undefined,
       };
     });
@@ -366,6 +415,7 @@ export async function createJoiner(
         ask_emergency_contact: s.askEmergencyContact ?? false,
         ask_super_fund: s.askSuperFund ?? false,
         ask_tax_file_number: s.askTaxFileNumber ?? false,
+        contract_document_id: s.contractDocumentId ?? null,
       })),
     );
   if (stepsError) {
@@ -522,17 +572,26 @@ export async function completeStep(
     .eq("step_id", stepId)
     .eq("actor", "joiner")
     .not("field", "is", null)
-    /* The two fields this function must never touch. Their answers are sealed
-       documents written by `completeSealedStep`, and a string arriving here for
-       one of them would land somebody's address or bank account in the
-       plaintext column — quietly, and looking exactly like a step that worked.
-       In the statement rather than in a guard above it, so it refuses by
-       matching zero rows rather than by being remembered.
+    /* The three fields this function must never touch, and they are not on the
+       list for quite the same reason.
 
-       `not(...in...)` rather than two `neq`s: a third sealed block is a string
-       added to one list, and the failure mode of forgetting is that a regulated
-       value goes in the clear. */
-    .not("field", "in", "(personal-details,payroll-details)")
+       `personal-details` and `payroll-details` are sealed documents written by
+       `completeSealedStep`, and a string arriving here for one of them would
+       land somebody's address or bank account in the plaintext column —
+       quietly, and looking exactly like a step that worked.
+
+       `contract` is worse than untidy: it is completed by `contract-signing.ts`
+       only after a document has been read, consented to, signed, stamped and
+       sealed. A path that could close it with a typed value would be a path
+       that marks somebody as having signed an employment contract because a
+       POST said so, with no artefact and no audit row behind it. That is the
+       forgery this whole feature exists to make impossible.
+
+       In the statement rather than in a guard above it, so it refuses by
+       matching zero rows rather than by being remembered. `not(...in...)`
+       rather than three `neq`s: the next such block is a string added to one
+       list, and the failure mode of forgetting is exactly the above. */
+    .not("field", "in", "(personal-details,payroll-details,contract)")
     .select("joiner_id");
   if (error) throw new Error(`Writing steps failed: ${error.message}`);
   if (data.length === 0) return null;

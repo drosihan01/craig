@@ -6,6 +6,7 @@ import {
   AppShell,
   Badge,
   Button,
+  buttonVariants,
   Callout,
   ControlRow,
   CraigMark,
@@ -119,6 +120,17 @@ export interface PlanStep {
    */
   askSuperFund?: boolean;
   askTaxFileNumber?: boolean;
+  /**
+   * On a `contract` step, where it has got to.
+   *
+   * Present whether or not the step is the current one, which every other field
+   * on this shape is not — and the difference is the point. `field` is withheld
+   * until it is somebody's turn because a form for a step nobody is being asked
+   * yet is a form somebody would fill in early. A contract that has been signed
+   * is not a form; it is a document this person owns and should be able to
+   * reach from their plan on any Tuesday afterwards.
+   */
+  contract?: ContractRow;
   /** When it's due, already a real date. Absent once it's done. */
   dueOn?: string;
   /**
@@ -145,6 +157,20 @@ export interface PlanStep {
    */
   badge?: string;
 }
+
+/**
+ * A contract step, in the three states this screen can draw.
+ *
+ * Words rather than a status enum plus a lookup table here, for the same reason
+ * every date on this screen arrives formatted: the server is the side that knows
+ * *why* a contract cannot be opened, and a component that reconstructed the
+ * sentence would be a second opinion about somebody's employment paperwork.
+ */
+export type ContractRow =
+  | { state: "ready"; href: string; name: string }
+  | { state: "signed"; href: string; name: string }
+  /** `reason` is already a sentence, written for somebody who cannot fix it. */
+  | { state: "unavailable"; reason: string };
 
 export interface JoinerView {
   firstName: string;
@@ -218,13 +244,28 @@ const spell = (n: number) => NUMBERS[n] ?? String(n);
  * not true. Telling them what to write costs one line and unsticks the whole
  * thing.
  */
+/**
+ * The fields that really are one question with one answer.
+ *
+ * Named as its own type rather than written inline, because three places have
+ * to agree on it: the table below, `AnswerForm`'s prop, and the branch that
+ * chooses between them. A `contract` reaching `AnswerForm` would render a text
+ * box on somebody's employment agreement, so the compiler is made to refuse it
+ * rather than the branch being trusted to.
+ */
+type TypedField = Exclude<
+  JoinerField,
+  "personal-details" | "payroll-details" | "contract"
+>;
+
 const ASK: Record<
-  /* Everything except the two fields that are forms rather than questions.
-     Their labels live on `PERSONAL_DETAIL_FIELDS` and `PAYROLL_DETAIL_FIELDS`,
-     beside the validators that have to agree with them, and excluding them here
-     is what makes the compiler insist they are drawn by their own components
-     rather than by one that grew two branches. */
-  Exclude<JoinerField, "personal-details" | "payroll-details">,
+  /* Everything except the fields that are not one question. Two are forms —
+     their labels live on `PERSONAL_DETAIL_FIELDS` and `PAYROLL_DETAIL_FIELDS`,
+     beside the validators that have to agree with them — and one is a document,
+     which is not answered on this screen at all. Excluding them here is what
+     makes the compiler insist each is drawn by the thing built for it rather
+     than by one component that grew branches. */
+  TypedField,
   { label: string; hint: string }
 > = {
   "middle-name": {
@@ -547,6 +588,14 @@ function PlanRow({
           </p>
         ) : null}
 
+        {/* A contract is not a form and does not get one. It is a document that
+            has to be read before it can be answered, so what belongs on this
+            row is the way in — the reading and the signing happen in a room of
+            their own. Drawn from `contract` rather than from `field`, which is
+            why a signed one still shows: the link to somebody's own executed
+            contract should not disappear the moment the step goes green. */}
+        {step.contract && <ContractRowControl contract={step.contract} />}
+
         {/* The three forms are three components, not one with branches in it.
             One is a box; one is twelve boxes, a calendar and a select; one is
             nine boxes, a radio group and a legal notice — and two of them
@@ -566,6 +615,12 @@ function PlanRow({
             taxFileNumber={Boolean(step.askTaxFileNumber)}
             finishing={finishing}
           />
+        ) : step.field === "contract" ? (
+          /* Never a box. The page above deliberately withholds the field on a
+             contract step so this branch should be unreachable — it exists so
+             that if it ever stops being, the answer is nothing rather than a
+             text input over somebody's contract. */
+          null
         ) : step.field ? (
           <AnswerForm
             stepId={step.id}
@@ -576,6 +631,39 @@ function PlanRow({
         ) : null}
       </div>
     </li>
+  );
+}
+
+/**
+ * The way into a contract, or the reason there isn't one.
+ *
+ * A link rather than a button, and a real `href` rather than a router push:
+ * this is a place, it survives a reload, and somebody who wants it in a second
+ * tab while they look something up should be able to have that. `next/link` is
+ * deliberately not reached for — the destination does server work on arrival
+ * (it is where the signing record starts), and a client transition into it
+ * would be indistinguishable from a prefetch of the same address.
+ */
+function ContractRowControl({ contract }: { contract: ContractRow }) {
+  if (contract.state === "unavailable") {
+    return <p className="mt-1 text-sm text-text-muted">{contract.reason}</p>;
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <a
+        href={contract.href}
+        className={buttonVariants({
+          size: "sm",
+          variant: contract.state === "signed" ? "secondary" : "primary",
+        })}
+      >
+        {contract.state === "signed" ? "See your signed copy" : "Read and sign"}
+      </a>
+      <span className="min-w-0 truncate text-xs text-text-subtle">
+        {contract.name}
+      </span>
+    </div>
   );
 }
 
@@ -695,7 +783,7 @@ function AnswerForm({
   finishing,
 }: {
   stepId: string;
-  field: Exclude<JoinerField, "personal-details" | "payroll-details">;
+  field: TypedField;
   company: string;
   finishing: boolean;
 }) {
