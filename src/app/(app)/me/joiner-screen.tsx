@@ -213,7 +213,25 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
 
   return (
     <main className="min-h-screen bg-canvas">
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-5 pb-16 pt-6 sm:px-8">
+      {/* Two columns on a wide screen: the plan, and Craig beside it.
+          He was a section under the plan until Dzaky asked for a panel, and
+          the panel is better for a reason the stacked version obscured — a
+          conversation and a checklist have different lifetimes. You read the
+          plan once and act on one step; you come back to him between steps.
+          Stacked, every question meant scrolling past everything you had
+          already read; beside it, both are on screen at once.
+
+          The right side, not the left, because that is Craig's seat everywhere
+          else in the product — the workflow editor keeps him in the right
+          column too, and a person who later becomes an admin should find him
+          where they left him. The plan keeps the wider column: it is still the
+          thing with a deadline on it, and the panel being narrower is what
+          keeps answering a question from looking like the first task.
+
+          Below `lg` the grid stacks and he returns to exactly where he was —
+          under the plan, above the way out. */}
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-8 px-5 pb-16 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start lg:gap-x-10">
+        <div className="flex min-w-0 flex-col gap-8">
         {/* The mark and the theme switch, and nothing else. There is nowhere
             else for this person to go, so a header with links in it would be a
             navigation bar that navigates nowhere. */}
@@ -357,20 +375,23 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
           </section>
         )}
 
-        {/* Underneath the plan, not above it. The checklist is what this person
-            came for and the thing with a deadline on it; a chat box at the top
-            would make answering a question look like the first task. It sits
-            above the line about replying to the email on purpose, so the two
-            ways of getting help read as a pair — him for what is on this screen,
-            a person for everything else. */}
-        <JoinerCraig firstName={firstName} />
+        </div>
+
+        {/* His own column. Sticky so he stays reachable while somebody scrolls
+            a long plan — the conversation keeps its place on screen the way it
+            keeps its thread. On a narrow screen this is simply the next thing
+            after the plan, where he has always been. */}
+        <div className="lg:sticky lg:top-6">
+          <JoinerCraig firstName={firstName} />
+        </div>
 
         {/* The way out, and the only one there is. This person cannot raise a
             ticket, and nothing on this screen can correct a name somebody else
             typed — so the last line is a route back to a human rather than a
-            legal notice about why they are receiving this. Craig above does not
-            replace it: he can answer questions and change nothing. */}
-        <p className="text-xs leading-relaxed text-text-subtle">
+            legal notice about why they are receiving this. Craig beside it does
+            not replace it: he can answer questions and change nothing. Spans
+            both columns so it stays the last line of the whole screen. */}
+        <p className="text-xs leading-relaxed text-text-subtle lg:col-span-2">
           You&apos;re seeing this because {company} gave you a seat. If
           something here looks wrong, reply to the email that brought you — it
           reaches a person.

@@ -193,7 +193,15 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
   const empty = turns.length === 0;
 
   return (
-    <section className="flex flex-col gap-4" aria-label="Ask Craig">
+    /* A panel rather than a section since Dzaky moved him beside the plan: the
+       border is what makes "his column" read as a place rather than as leftover
+       margin. `max-h` only ever binds inside the sticky column on a wide
+       screen — stacked on a phone there is no height to be viewport-relative
+       to, and the page scrolls as it always did. */
+    <section
+      className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 lg:max-h-[calc(100vh-3rem)]"
+      aria-label="Ask Craig"
+    >
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold tracking-[-0.01em]">Ask me</h2>
         <p className="text-sm text-text-muted">
@@ -206,7 +214,12 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
       </div>
 
       {!empty && (
-        <div className="flex flex-col gap-4">
+        /* The conversation scrolls inside the panel rather than growing it.
+           A sticky panel that outgrows the viewport pins its composer somewhere
+           past the bottom edge — the one control that must never scroll away.
+           `scrollIntoView(nearest)` on the tail already targets the nearest
+           scrolling ancestor, which is now this element. */
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
           {turns.map((turn, i) =>
             turn.role === "user" ? (
               <p
