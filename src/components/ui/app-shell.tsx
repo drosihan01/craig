@@ -544,7 +544,16 @@ export function AppShell({
  * Escape closes, the backdrop closes, and the page behind can't scroll while
  * it's open. Same obligations a dialog has, because at this size it is one.
  */
-function Drawer({
+/**
+ * Exported because `/me` needs the same drawer and must not grow a second one.
+ *
+ * A drawer written twice is a drawer that behaves differently in two places —
+ * different escape handling, different scroll locking, a different animation —
+ * and the second copy is always the one nobody remembers to fix. The joiner's
+ * screen cannot use `AppShell` itself (it has no nav: there is nowhere for that
+ * person to go), so it borrows this piece rather than the whole frame.
+ */
+export function Drawer({
   side,
   open,
   onClose,

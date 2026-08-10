@@ -9,6 +9,7 @@ import {
   CraigLockup,
   CraigMark,
   DatePicker,
+  Drawer,
   EmptyState,
   Field,
   Input,
@@ -205,6 +206,11 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
     allDone,
   } = view;
 
+  /* Open only matters below `lg`; above it Craig is a column and this is
+     never read. Held here rather than inside the panel because the button that
+     opens it lives in the header, which is the panel's sibling. */
+  const [asking, setAsking] = React.useState(false);
+
   const left = total - done;
   /* Whether there is anybody else in this plan at all. It decides one clause:
      promising that "the rest is taken care of" on a workflow that is nothing
@@ -250,7 +256,22 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
             navigation bar that navigates nowhere. */}
         <div className="flex items-center justify-between gap-3">
           <CraigLockup className="text-text-muted" />
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            {/* Below `lg` only — above it he is a column already on screen, and
+                a button that opens what you are looking at is a button that
+                does nothing. Worded rather than drawn as a hamburger: this is
+                one specific thing, not a menu, and "Ask Craig" says what
+                happens. */}
+            <button
+              type="button"
+              onClick={() => setAsking(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-border-strong hover:text-text lg:hidden"
+            >
+              <CraigMark className="size-4 text-accent" />
+              Ask Craig
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
 
         <header className="flex flex-col gap-3 pt-4">
@@ -405,21 +426,50 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
           </p>
         </div>
 
-        {/* His column. The rule down the left edge and the panel surface are
-            what `AppShell` gives the builder's aside, and they are the whole
-            difference between a room and a widget.
+        {/* His column, on a wide screen only. The rule down the left edge and
+            the panel surface are what `AppShell` gives the builder's aside, and
+            they are the whole difference between a room and a widget.
 
             `overflow` is deliberately not on this element. Making it a scroll
             container would make it the scrollport for the sticky child inside,
             which would then offset by `top` once and never stick again — the
             same trap `app-shell.tsx` documents at length. This owns the edge;
-            the inner element owns sticking and scrolling. */}
-        <div className="border-border bg-surface lg:h-full lg:border-l">
+            the inner element owns sticking and scrolling.
+
+            `hidden lg:block` rather than letting it stack: below `lg` he is the
+            drawer below, and rendering both would mount two conversations —
+            two independent transcripts, two live streams, and whichever one you
+            were not looking at would quietly answer into nothing. */}
+        <div className="hidden border-border bg-surface lg:block lg:h-full lg:border-l">
           <div className="lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
             <JoinerCraig firstName={firstName} />
           </div>
         </div>
       </div>
+
+      {/* The same drawer the rest of the product uses, borrowed rather than
+          rebuilt — it already handles Escape, the scroll lock and the backdrop,
+          and a second implementation is the one that drifts. It renders nothing
+          until opened, so the conversation above is the only one mounted on a
+          wide screen and this is the only one mounted on a narrow one.
+
+          From the right, matching every other panel in the product and matching
+          where he sits on a desktop: the same thing arriving from the same
+          side, whatever the window is doing. */}
+      <Drawer
+        side="right"
+        open={asking}
+        onClose={() => setAsking(false)}
+        title="Ask Craig"
+        heading={
+          <span className="flex flex-1 items-center gap-1.5 text-2xs font-semibold uppercase tracking-[0.06em] text-text-subtle">
+            <CraigMark className="size-4 text-accent" />
+            Ask Craig
+          </span>
+        }
+      >
+        <JoinerCraig firstName={firstName} />
+      </Drawer>
     </main>
   );
 }

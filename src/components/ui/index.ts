@@ -75,7 +75,7 @@ export {
   fromISODate,
   type CalendarProps,
 } from "./calendar";
-export { AppShell, type AccountInfo } from "./app-shell";
+export { AppShell, Drawer, type AccountInfo } from "./app-shell";
 export {
   AuthShell,
   GoogleButton,
