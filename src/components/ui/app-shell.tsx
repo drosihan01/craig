@@ -16,6 +16,7 @@ import {
 import { Avatar } from "./avatar";
 import { CraigMark } from "./craig-mark";
 import { NotificationBell, type AppNotification } from "./notifications";
+import { useNotifications } from "@/components/craig/notification-scope";
 import { DropdownMenu } from "./dropdown";
 import { DialogClose } from "./dialog";
 import { cn } from "@/lib/cn";
@@ -229,8 +230,8 @@ export function AppShell({
   asidePanel?: { key: string; width: number };
   account?: AccountInfo;
   actions?: React.ReactNode;
-  /** Omit entirely to hide the bell — an empty array still shows it, correctly
-      reading as "you have none" rather than "this app has no notifications". */
+  /** Overrides the list the layout resolved for whoever is reading. Omit on
+      any product screen — the default is already correct there. */
   /** For pages that manage their own full-height layout — a chat with a pinned
       composer, or a canvas. Drops the content column's bottom padding, which
       would otherwise make the document taller than the viewport and let the
@@ -248,6 +249,13 @@ export function AppShell({
     asidePanel ? `craig-aside-w-${asidePanel.key}` : "craig-aside-w",
     asidePanel?.width,
   );
+
+  /* The screen's own list wins; otherwise the one the layout resolved for
+     whoever is reading. A screen with a genuinely different list — the design
+     system and the mailmaker both have one — can still say so, and everything
+     else gets the right answer without asking. */
+  const scoped = useNotifications();
+  const bell = notifications ?? scoped;
 
   const isDesktop = useIsDesktop();
   /* Not persisted, unlike the column state. A drawer is a thing you opened a
@@ -397,9 +405,9 @@ export function AppShell({
                   onClick={() => setDrawer("aside")}
                 />
               ))}
-            {notifications && (
+            {bell.length > 0 && (
               <NotificationBell
-                items={notifications}
+                items={bell}
                 onSelect={onNotificationSelect}
                 onMarkAllRead={onMarkAllRead}
                 className="ml-auto shrink-0"

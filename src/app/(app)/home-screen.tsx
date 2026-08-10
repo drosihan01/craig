@@ -211,6 +211,7 @@ export function HomeScreen({
           messages={chat.messages}
           phase={chat.phase}
           busy={chat.busy}
+          onStop={chat.stop}
           error={chat.error}
           onSend={chat.send}
           /* Nothing to hand over and nothing to offer. Home is not where a

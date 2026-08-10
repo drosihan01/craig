@@ -80,6 +80,7 @@ export function CraigConversation({
   messages,
   phase,
   busy,
+  onStop,
   error,
   draft,
   onSend,
@@ -94,6 +95,8 @@ export function CraigConversation({
   messages: CraigMessage[];
   phase: string | null;
   busy: boolean;
+  /** Abandons the reply still arriving. Draws the stop button while busy. */
+  onStop?: () => void;
   error: string | null;
   /** The workflow Craig has drafted, once he has. Null until then. */
   draft: ShowcaseWorkflow | null;
@@ -326,6 +329,7 @@ export function CraigConversation({
           modelPicker={false}
           dictation={false}
           busy={busy}
+          onStop={onStop}
           footnote={footnote(files.length > 0, started)}
         />
       </div>
