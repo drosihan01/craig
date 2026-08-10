@@ -119,6 +119,36 @@ export async function outstandingFor(
     });
   }
 
+  /* Craig has stopped chasing, and this is the only place that says so
+     besides one email a fortnight ago.
+
+     `urgent`, above the "waiting on you" items, because it is the only line on
+     this screen that reports a *person* who has gone quiet rather than a task
+     the reader has not got to. Everything else here waits patiently and is
+     still true tomorrow; this one has a start date attached to it.
+
+     Deliberately in the same list as everything else rather than in a banner
+     of its own. An escalation that needs its own furniture is an escalation
+     nobody built the second one of — and by construction there is at most one
+     of these per person, ever, because `handedOverAt` is set once. */
+  for (const joiner of joiners) {
+    if (!joiner.handedOverAt) continue;
+
+    const theirs = joiner.steps.filter(
+      (s) => s.actor === "joiner" && !s.completedAt,
+    );
+    if (theirs.length === 0) continue;
+
+    items.push({
+      id: `handedover:${joiner.id}`,
+      ask: `${firstName(joiner.name)} hasn't responded, and I've stopped asking.`,
+      detail: `Three reminders, no movement on ${theirs.length === 1 ? "one thing" : `${theirs.length} things`}. I won't email them about it again — this one needs a word from a person.`,
+      tone: "urgent",
+      href: `/people/${joiner.id}`,
+      cta: "Look",
+    });
+  }
+
   /* --- Waiting on you, and somebody can feel it ------------------------- */
 
   for (const joiner of joiners) {

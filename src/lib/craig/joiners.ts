@@ -122,6 +122,11 @@ function toJoiner(row: JoinerRow, steps: StepRow[]): Joiner {
       .sort((a, b) => a.position - b.position)
       .map(toStep),
     invitedAt: new Date(row.invited_at).toISOString(),
+    nudgeCount: row.nudge_count ?? 0,
+    nudgedAt: row.nudged_at ? new Date(row.nudged_at).toISOString() : null,
+    handedOverAt: row.handed_over_at
+      ? new Date(row.handed_over_at).toISOString()
+      : null,
   };
 }
 
@@ -289,7 +294,7 @@ export class AlreadyInvitedError extends Error {
 }
 
 export async function createJoiner(
-  input: Omit<Joiner, "id" | "invitedAt">,
+  input: Omit<Joiner, "id" | "invitedAt" | "nudgeCount" | "nudgedAt" | "handedOverAt">,
 ): Promise<Joiner> {
   /* The account's row id, from the same email the caller holds. The invite
      route has already established the account exists; a miss here means it
@@ -396,6 +401,38 @@ export async function joinerByEmail(
   return (
     everyone.find((j) => j.email.trim().toLowerCase() === wanted) ?? null
   );
+}
+
+/**
+ * Everybody the nudge sweep might need to chase, across every account.
+ *
+ * The one query in this file that deliberately ignores `account_email`. Every
+ * other read is scoped to one account because it is answering "who is on *my*
+ * list"; this one is answering "who in the world is overdue", on behalf of a
+ * scheduler that belongs to no account and signs in as nobody. It is therefore
+ * the one place where getting the caller wrong would cross tenants — which is
+ * why it lives here, next to the scoped reads, rather than in the sweep where
+ * it would look like an ordinary fetch.
+ *
+ * Narrowed in SQL to the rows that could possibly matter: anyone Craig has
+ * already given up on is excluded by the index's own predicate, so the sweep
+ * never loads them. Everything else — is it late, has it been long enough, has
+ * this person had their three — is decided in `nudges.ts`, in TypeScript,
+ * where it can be read.
+ */
+export async function listJoinersForSweep(): Promise<Joiner[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("joiners")
+    .select("*, joiner_steps(*)")
+    .is("handed_over_at", null);
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => {
+    const { joiner_steps: steps, ...joiner } = row as JoinerWithSteps;
+    return toJoiner(joiner, steps ?? []);
+  });
 }
 
 export async function listJoiners(accountEmail: string): Promise<Joiner[]> {

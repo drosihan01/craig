@@ -285,9 +285,12 @@ export type Database = {
           account_id: string
           company: string
           email: string
+          handed_over_at: string | null
           id: string
           invited_at: string
           name: string
+          nudge_count: number
+          nudged_at: string | null
           role: string
           start_date: string
           workflow_id: string
@@ -298,9 +301,12 @@ export type Database = {
           account_id: string
           company: string
           email: string
+          handed_over_at?: string | null
           id?: string
           invited_at?: string
           name: string
+          nudge_count?: number
+          nudged_at?: string | null
           role?: string
           start_date: string
           workflow_id: string
@@ -311,9 +317,12 @@ export type Database = {
           account_id?: string
           company?: string
           email?: string
+          handed_over_at?: string | null
           id?: string
           invited_at?: string
           name?: string
+          nudge_count?: number
+          nudged_at?: string | null
           role?: string
           start_date?: string
           workflow_id?: string

@@ -339,6 +339,93 @@ Bring whatever the quiz turned up, and anything else you've been quietly wonderi
 I'll stop mentioning it once it's done. If it's not actually yours, reassign it and I'll go and bother the right person instead.`,
     cta: "Open the step",
   },
+
+  /**
+   * The chase, to the new starter, about their own list.
+   *
+   * Addressed to somebody who has not done something, which is the hardest
+   * audience in this file to write for and the easiest to get wrong. Three
+   * rules, all of them load-bearing:
+   *
+   * **It names the things rather than the failure.** "You still have two
+   * things to do" is a fact about a list; "you haven't done your onboarding"
+   * is a fact about them. The first is answerable in four minutes and the
+   * second is answerable only by feeling bad, and somebody who feels bad about
+   * an email tends to deal with it by not opening the next one.
+   *
+   * **It gives the reason, which is never Craig's convenience.** Every item on
+   * this list exists so that something is ready on their first day — an
+   * account, a payslip, a signed contract. Saying which is what separates a
+   * request from a nag.
+   *
+   * **It says there is an end to it.** `{{step}}` carries the count and
+   * `chases_left` is deliberately absent from the vocabulary: telling somebody
+   * "two more emails and I'll stop" invites them to wait out the two. What it
+   * promises instead is that finishing stops it, which is true and is the only
+   * lever they actually hold.
+   *
+   * There is no version of this that mentions their manager. The handover
+   * exists and it is deliberately invisible from this side — a chase that
+   * threatens escalation is a threat, and the person receiving it has been at
+   * the company for less than a week.
+   */
+  {
+    id: "chase",
+    name: "Chase",
+    trigger: "A step of theirs is late, every few days, up to three times",
+    audience: "starter",
+    subject: "{{step}} — whenever you get a minute",
+    preheader: "It's the last thing standing between you and a first day that works.",
+    body: `Hi {{first_name}},
+
+{{step}}
+
+It's all on one page, and most people are done in a few minutes. Everything here is so that things actually work on {{start_date}} — an account that opens, a contract that's signed, a first payslip that goes to the right place.
+
+If something's in the way, or you've hit a question the page doesn't answer, reply to this and a person at {{company}} will see it.`,
+    cta: "Pick up where you left off",
+  },
+
+  /**
+   * Craig admitting he isn't getting through, to the person who hired them.
+   *
+   * The most important email in this file, and the one a reader is most likely
+   * to think is a failure message. It isn't — it is the automation doing the
+   * one thing automation usually will not: noticing that it has stopped
+   * working and asking for a human.
+   *
+   * A reminder that has failed three times will not succeed on the ninth. The
+   * alternatives were to keep sending (which is how a product teaches people
+   * to filter its mail, and how a new starter's first impression of their
+   * employer becomes "they send robotic email") or to fall silent (which is
+   * how an onboarding quietly never finishes and nobody finds out until the
+   * person turns up on Monday with no laptop). Both are worse than one honest
+   * message to somebody who can walk over and ask.
+   *
+   * Written to be *useful* rather than apologetic: it says exactly what is
+   * outstanding, exactly how many times it was asked for, and what happens
+   * next, which is nothing unless a person does something.
+   */
+  {
+    id: "handover",
+    name: "Handover",
+    trigger: "Craig has chased three times and heard nothing back",
+    audience: "owner",
+    subject: "I've stopped chasing {{full_name}}",
+    preheader: "Three reminders, no movement. This one needs a person.",
+    body: `Hi {{first_name}},
+
+I've asked {{full_name}} three times and nothing has moved, so I've stopped — a fourth email from me wasn't going to be the one that worked, and I'd rather tell you than keep going quietly.
+
+Still outstanding:
+
+{{step}}
+
+They start on {{start_date}}. I'm not going to email them about this again unless you ask me to, so if it matters, it needs a word from someone.
+
+Nothing is broken and nothing is lost — everything they've already filled in is exactly where they left it, and the moment they pick it up again it all carries on.`,
+    cta: "See where they got to",
+  },
 ];
 
 export const findTemplate = (id: string) => TEMPLATES.find((t) => t.id === id);
