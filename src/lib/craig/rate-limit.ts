@@ -1,3 +1,7 @@
+import "server-only";
+
+import { supabaseAdmin } from "@/lib/supabase/admin";
+
 /**
  * Limits on the routes that spend something, because an agent loop can run away
  * three different ways and only one of them is a person clicking too fast.
@@ -14,12 +18,37 @@
  * The daily cap is the backstop for all three: whatever else goes wrong, the
  * key cannot be drained past a known number in a day.
  *
- * In-memory and single-instance, which is a real limitation and worth stating
- * plainly rather than discovering later. It resets when the server restarts,
- * and two instances would each get their own allowance. That is fine for a
- * showcase running on one machine and is *not* fine for anything with real
- * users — at that point this file becomes a Redis or Upstash call and nothing
- * else about it changes, which is why the interface is deliberately boring.
+ * ## It counts in Postgres, and it used to count in memory
+ *
+ * The original was a `Map` in this module, and the comment here said that was
+ * fine for one machine and would become a Redis call later. Later arrived: on
+ * serverless there is no "one machine". Each warm instance kept its own
+ * bucket, so scaling to four gave every caller four times the allowance, and a
+ * cold start handed out a fresh one. What it exists to protect is the OpenAI
+ * key — and "roughly four times whatever you configured, resetting whenever
+ * the platform feels like it" is not a guard, it is a decoration.
+ *
+ * So the counting moved into `rate_limit_check`, a Postgres function, and the
+ * one thing the old comment promised would not change did: this is **async**
+ * now. There is no way around that and pretending otherwise — a fire-and-
+ * forget write, an optimistic local check — would reintroduce exactly the
+ * per-instance drift that made the old one meaningless.
+ *
+ * **Check and record happen in one statement**, which is the other reason it
+ * is a function rather than three queries from here. One process with one Map
+ * could read-then-write safely; across instances two requests can both read
+ * "eleven hits, allowed" and both write, and the twelfth and thirteenth calls
+ * are through. Counting and inserting under one snapshot closes that.
+ *
+ * ## What happens when the database is unreachable
+ *
+ * It allows the call, and that is deliberate. This limiter guards a spend
+ * ceiling, not a security boundary — nothing here decides who somebody is, and
+ * every route that calls it has already checked that separately. Failing
+ * closed would mean a blip in Postgres logs every new starter out of their own
+ * onboarding, which is a worse day than an unmetered hour on a key that also
+ * has `MAX_TURNS` and a request timeout in front of it. The failure is logged
+ * so it cannot be silent.
  */
 
 /** Per session, per minute. Generous for a person, obvious for a loop. */
@@ -42,26 +71,6 @@ export const MAX_TURNS = 8;
 
 /** A single request may not hold the connection longer than this. */
 export const REQUEST_TIMEOUT_MS = 60_000;
-
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
-
-interface Window {
-  /** Timestamps, newest last. Trimmed on every check. */
-  hits: number[];
-}
-
-const buckets = new Map<string, Window>();
-const globalDay: Window = { hits: [] };
-
-function trim(w: Window, since: number) {
-  /* The list is ordered, so the first index inside the window is where the
-     live hits start — no need to filter the whole array. */
-  let i = 0;
-  while (i < w.hits.length && w.hits[i] < since) i += 1;
-  if (i > 0) w.hits.splice(0, i);
-}
 
 /**
  * Allowed, or refused with something a person can be shown.
@@ -116,57 +125,60 @@ export interface RateLimitOptions {
  * Deliberately not split into `check` then `record`: every caller would have
  * to remember to do both, and the one that forgets is the one that leaks.
  */
-export function rateLimit(
+export async function rateLimit(
   key: string,
   { spend = true }: RateLimitOptions = {},
-): RateLimitResult {
-  const now = Date.now();
+): Promise<RateLimitResult> {
+  let decision: { allowed: boolean; retry_after: number; scope: string } | null =
+    null;
 
-  trim(globalDay, now - DAY);
-  if (spend && globalDay.hits.length >= PER_DAY_GLOBAL) {
+  try {
+    const { data, error } = await supabaseAdmin().rpc("rate_limit_check", {
+      p_key: key,
+      p_spend: spend,
+      p_per_minute: PER_MINUTE,
+      p_per_hour: PER_HOUR,
+      p_per_day_global: PER_DAY_GLOBAL,
+    });
+    if (error) throw error;
+    decision = Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
+  } catch (cause) {
+    /* Allowed, loudly. See the header: this guards a budget, not a door, and
+       a database blip that locked every new starter out of their onboarding
+       would be the worse failure. The log line is what stops it being
+       silent — an outage here is invisible from the outside, because the only
+       symptom is a limit that briefly stopped limiting. */
+    console.error("[rate-limit] couldn't reach the counter, allowing:", cause);
+    return { ok: true };
+  }
+
+  if (!decision || decision.allowed) return { ok: true };
+
+  /* The sentence is written here rather than in SQL. The function decides
+     *whether*; what a person is told is a product decision, and it is one that
+     changes far more often than the arithmetic does. */
+  if (decision.scope === "day") {
     return {
       ok: false,
       message:
         "The showcase has hit its daily limit. It resets on a rolling 24 hours — this is a spend guard, not a fault.",
-      retryAfter: Math.ceil((globalDay.hits[0] + DAY - now) / 1000),
+      retryAfter: decision.retry_after,
     };
   }
 
-  const bucket = buckets.get(key) ?? { hits: [] };
-  trim(bucket, now - HOUR);
-
-  const lastMinute = bucket.hits.filter((t) => t > now - MINUTE).length;
-  if (lastMinute >= PER_MINUTE) {
-    return {
-      ok: false,
-      message: "That was a lot at once. Give it a minute.",
-      retryAfter: 60,
-    };
-  }
-
-  if (bucket.hits.length >= PER_HOUR) {
+  if (decision.scope === "hour") {
     return {
       ok: false,
       message: "You've hit the hourly limit for the showcase. Try again later.",
-      retryAfter: Math.ceil((bucket.hits[0] + HOUR - now) / 1000),
+      retryAfter: decision.retry_after,
     };
   }
 
-  bucket.hits.push(now);
-  buckets.set(key, bucket);
-  if (spend) globalDay.hits.push(now);
-
-  /* Sessions that stopped talking shouldn't sit in the map forever. Swept
-     here rather than on an interval so there's no timer to leak. */
-  if (buckets.size > 64) {
-    for (const [k, w] of buckets) {
-      if (w.hits.length === 0 || w.hits[w.hits.length - 1] < now - HOUR) {
-        buckets.delete(k);
-      }
-    }
-  }
-
-  return { ok: true };
+  return {
+    ok: false,
+    message: "That was a lot at once. Give it a minute.",
+    retryAfter: decision.retry_after,
+  };
 }
 
 /**
@@ -181,19 +193,4 @@ export function rateLimit(
 export function clientKey(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() || "local";
-}
-
-/** What's left, for anything that wants to show it. */
-export function remaining(key: string) {
-  const now = Date.now();
-  const bucket = buckets.get(key);
-  trim(globalDay, now - DAY);
-  if (bucket) trim(bucket, now - HOUR);
-
-  return {
-    minute:
-      PER_MINUTE - (bucket?.hits.filter((t) => t > now - MINUTE).length ?? 0),
-    hour: PER_HOUR - (bucket?.hits.length ?? 0),
-    day: PER_DAY_GLOBAL - globalDay.hits.length,
-  };
 }

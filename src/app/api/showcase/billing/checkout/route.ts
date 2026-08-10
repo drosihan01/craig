@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   const session = await currentUser();
   if (!session) return refuse("Not signed in.", 401);
 
-  const limit = rateLimit(`showcase-checkout:${session.email}`, LIMIT_OPTIONS);
+  const limit = await rateLimit(`showcase-checkout:${session.email}`, LIMIT_OPTIONS);
   if (!limit.ok) {
     return NextResponse.json(
       { ok: false, error: limit.message },

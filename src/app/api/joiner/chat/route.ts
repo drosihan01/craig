@@ -105,7 +105,7 @@ export async function POST(request: Request) {
 
   /* Namespaced so a joiner id can never collide with an account email in the
      limiter's map. They are different keyspaces sharing one store. */
-  const limit = rateLimit(`joiner:${joiner.id}`);
+  const limit = await rateLimit(`joiner:${joiner.id}`);
   if (!limit.ok) {
     return errorStream(limit.message ?? "Too many questions at once. Give it a moment.", {
       status: 429,

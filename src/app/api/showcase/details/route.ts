@@ -76,7 +76,7 @@ export async function POST(request: Request) {
      somehow been taken should not be able to sweep every person's details as
      fast as the network allows. Not against the model budget — nothing here
      reaches OpenAI, and a reveal must never be able to switch the chat off. */
-  const limit = rateLimit(`showcase-details:${user.email}`, { spend: false });
+  const limit = await rateLimit(`showcase-details:${user.email}`, { spend: false });
   if (!limit.ok) {
     return NextResponse.json(
       { ok: false, error: limit.message },

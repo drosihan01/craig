@@ -708,6 +708,20 @@ export type Database = {
           version: number
         }[]
       }
+      rate_limit_check: {
+        Args: {
+          p_key: string
+          p_per_day_global: number
+          p_per_hour: number
+          p_per_minute: number
+          p_spend: boolean
+        }
+        Returns: {
+          allowed: boolean
+          retry_after: number
+          scope: string
+        }[]
+      }
       search_shared_documents: {
         Args: { p_account: string; p_limit?: number; p_query: string }
         Returns: {

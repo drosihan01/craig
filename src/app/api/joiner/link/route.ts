@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   /* Both ceilings are checked before anything is read, so a rate-limited
      request costs a map lookup and reveals nothing. `spend: false` on both —
      see the note above about the global budget. */
-  const perAddress = rateLimit(`joiner-link:${email}`, { spend: false });
+  const perAddress = await rateLimit(`joiner-link:${email}`, { spend: false });
   if (!perAddress.ok) {
     return NextResponse.json(
       { ok: false, error: perAddress.message },
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const perClient = rateLimit(`joiner-link-ip:${clientKey(request)}`, {
+  const perClient = await rateLimit(`joiner-link-ip:${clientKey(request)}`, {
     spend: false,
   });
   if (!perClient.ok) {
