@@ -90,6 +90,28 @@ export interface Gap {
 
 /** One turn's memory, seeded with what the client says he already knows. */
 export interface Notebook {
+  /**
+   * Whose account this is, so a tool can write past the end of the turn.
+   *
+   * Everything else on this context dies with the response. This is the seam
+   * to the notebook — the one memory that outlives the conversation.
+   */
+  accountEmail?: string;
+  /**
+   * The notebook's headings, and deliberately not its contents.
+   *
+   * Handing Craig the whole document every turn is the mistake `read_notebook`
+   * exists to avoid: accuracy falls as input grows, inside the model's limit
+   * and even when the relevant fact is present. Fifteen thousand words of
+   * company knowledge in front of a question about expenses makes the expenses
+   * answer worse, not merely dearer.
+   *
+   * So the headings are resident — what he knows, in about sixty tokens — and
+   * a section is fetched when a question touches one. The headings somebody
+   * already wrote are the index: nothing to generate, embed or keep in step,
+   * and a heading that is missing is visible to him rather than silent.
+   */
+  headings?: string[];
   gaps: Gap[];
   facts: { key: string; value: string }[];
   workflow: Draft | null;
@@ -397,14 +419,46 @@ const factLine = (f: { key: string; value: string }) =>
 const gapLine = (g: Gap) =>
   g.whyItMatters ? `- ${g.what} (${g.whyItMatters})` : `- ${g.what}`;
 
+/**
+ * Offer something to the account's notebook, if there is an account.
+ *
+ * Never throws and never blocks the reply: every caller is a tool call in the
+ * middle of a sentence, and losing a suggestion is a far smaller failure than
+ * Craig stopping mid-answer because a write failed.
+ *
+ * **Company facts only.** The notebook is read by new starters as well as by
+ * the admin, so anything about a *person* — what they earn, where they live,
+ * whether they have signed yet — belongs in `joiners` and `joiner_steps`,
+ * behind a boundary that already exists. The prompt says so; this is the
+ * second place it is said, because the cost of getting it wrong is a stranger
+ * being told something private.
+ */
+async function suggestFor(
+  notebook: Notebook,
+  text: string,
+  kind: "gap" | "fact" | "unanswered",
+): Promise<void> {
+  if (!notebook.accountEmail) return;
+  const { suggestNote } = await import("./notebook");
+  await suggestNote(notebook.accountEmail, text, kind);
+}
+
 const noteGap = tool<typeof noteGapParams, Notebook>({
   name: "note_gap",
   description:
     "Record something that is not written down anywhere, that only one person knows, or that nobody owns. Call this as soon as it comes up, before replying. Examples that must be recorded: 'we have nothing written down', 'only I can create accounts', 'nobody has done this before', 'it's all in his head'. Err towards calling it.",
   parameters: noteGapParams,
-  execute: ({ what, why_it_matters }, context) => {
+  execute: async ({ what, why_it_matters }, context) => {
     const notebook = notebookOf(context);
     notebook.gaps.push({ what, whyItMatters: why_it_matters });
+
+    /* Also written to the account, which is the difference between a note that
+       dies with this conversation and one somebody can answer next week. It is
+       a *suggestion* — nothing reaches the notebook itself without a person
+       agreeing, because a document a new starter reads must never fill up with
+       what an AI inferred. */
+    await suggestFor(notebook, what, "gap");
+
     return `Noted. That's ${notebook.gaps.length} gap${notebook.gaps.length === 1 ? "" : "s"} so far.`;
   },
 });
@@ -414,13 +468,79 @@ const recordFact = tool<typeof recordFactParams, Notebook>({
   description:
     "Record concrete facts about the company: its name, what it sells, headcount, a person's role, a start date, a tool they use, who owns an account. Pass every fact in their message in one call, before replying — not one call each, and not a summary at the end.",
   parameters: recordFactParams,
-  execute: ({ facts }, context) => {
+  execute: async ({ facts }, context) => {
     const notebook = notebookOf(context);
     const kept = facts.filter((f) => f.key.trim() && f.value.trim());
     notebook.facts.push(...kept);
+
+    for (const fact of kept) {
+      await suggestFor(notebook, `${fact.key} — ${fact.value}`, "fact");
+    }
+
     return kept.length === 0
       ? "Nothing recorded — every entry was blank."
       : `Got it:\n${kept.map((f) => `- ${f.key} — ${f.value}`).join("\n")}`;
+  },
+});
+
+const readNotebookParams = z.object({
+  section: z
+    .string()
+    .describe(
+      "The heading to read, exactly as it appears in the list you were given.",
+    ),
+});
+
+/**
+ * One section of the notebook, fetched when a question touches it.
+ *
+ * The counterpart of the headings on the prompt: he is told *what* he knows
+ * and reads the part he needs. Handing him the whole document every turn is
+ * what this avoids — accuracy falls as input grows, inside the model's limit
+ * and even when the answer is sitting in there.
+ *
+ * A miss returns a refusal rather than an empty string, and says what to do
+ * about it. That sentence is doing real work: the moment Craig finds he has no
+ * section for something somebody asked is exactly the moment worth writing
+ * down, and the next thing he should reach for is `note_gap`.
+ */
+const readNotebook = tool<typeof readNotebookParams, Notebook>({
+  name: "read_notebook",
+  description:
+    "Read one section of the company notebook by its heading. Use it whenever a question touches something in the heading list you were given — do not answer from memory when a section exists. If nothing comes back, say you don't have it written down and call note_gap.",
+  parameters: readNotebookParams,
+  execute: async ({ section }, context) => {
+    const notebook = notebookOf(context);
+    if (!notebook.accountEmail) return "There's no notebook on this account.";
+
+    const { notebookFor } = await import("./notebook");
+    const { sectionOf } = await import("./notebook-text");
+    const { content } = await notebookFor(notebook.accountEmail);
+    const found = sectionOf(content, section);
+
+    if (!found) {
+      return `Nothing under "${section}". Say you don't have it written down, and record it with note_gap so somebody can fill it in.`;
+    }
+
+    /* The caveat rides on the tool result, not the system prompt.
+       
+       This is the fix for a real failure: asked about *parental* leave against
+       a notebook that only documents *annual* leave, Craig read the nearest
+       heading and reported four weeks as the parental policy — twice, and the
+       second time after the system prompt had been told in bold not to. The
+       instruction was two thousand tokens behind him by the time he answered;
+       this sentence is the last thing he reads before he does.
+       
+       It names the heading back to him because that is the comparison that
+       matters: he chose this section from a list, and choosing the nearest one
+       is not the same as finding the answer. */
+    return [
+      `From the notebook, under "${section}":`,
+      "",
+      found,
+      "",
+      `— That section is titled "${section}". If the question was about something else, this does not answer it: say the notebook covers "${section}" but not what they asked, and call note_gap. Never move a figure from one kind of leave, notice or payment to another.`,
+    ].join("\n");
   },
 });
 
@@ -1094,13 +1214,50 @@ Answer about their people and their account — who is waiting on what, what has
 **You cannot draft a workflow here, and must not try.** If what they are describing needs one that does not exist yet — a kind of hire they have no onboarding for — call \`offer_new_workflow\`. It puts a button on their screen that takes them to the builder. Say one line about why it would help; the button says the rest, so do not describe it, spell out what pressing it does, or ask them to confirm.`;
 
 function instructionsFor(context: RunContext<Notebook>): string {
-  const { facts, gaps, firstName, company, editing, simpleDraft, home } =
+  const { facts, gaps, firstName, company, editing, simpleDraft, home, headings } =
     context.context;
+
+  /**
+   * What he knows about this company, as a list of headings.
+   *
+   * The index rather than the contents — see `Notebook.headings`. It is here
+   * so that "do I know about this?" is answerable without a tool call, which
+   * is the question that decides whether he reads a section, admits he does
+   * not know, or leaves a note asking somebody.
+   *
+   * The instruction to prefer it is deliberately not a refusal. He may still
+   * answer generally when the notebook is silent — a new starter asking
+   * whether they get a lunch break deserves better than "I don't know" — but
+   * he has to say which he is doing, and the moment he answers generally is
+   * the moment worth writing down.
+   */
+  const known =
+    !headings || headings.length === 0
+      ? [
+          "## The company notebook",
+          "",
+          "Nothing has been written down about this company yet. Anything you learn is worth recording, and anything somebody asks that you cannot answer is worth a `note_gap`.",
+        ].join("\n")
+      : [
+          "## The company notebook",
+          "",
+          "What somebody has written down about this company. These are headings, not the text — call `read_notebook` with one to read it.",
+          "",
+          headings.map((h) => `- ${h}`).join("\n"),
+          "",
+          "Answer from the notebook whenever a section covers the question, and say which heading it came from.",
+          "",
+          "**A section answers only what it actually says.** \"How leave works\" saying four weeks a year tells you about annual leave and nothing about parental leave, notice periods or sabbaticals. Do not carry a number from one kind of thing to another. If the nearest section is about something adjacent, say what the notebook does cover, then answer the actual question separately.",
+          "",
+          "When the notebook does not answer it you may still say what is generally true — but make the difference obvious (\"that isn't written down; generally...\") and call `note_gap` in the same turn. Every question the notebook could not answer is a gap, whether or not you were able to help.",
+          "",
+          "Never record anything about a *person* here — what somebody earns, where they live, how their onboarding is going. The notebook is read by new starters. Facts about people live elsewhere and you already have tools for them.",
+        ].join("\n");
 
   /* Each block appears once and only once. His notes are here and in `recall`,
      which is the same list read two ways rather than two lists; the workflow is
-     here and nowhere else, because `known` carries notes and never steps. */
-  const known =
+     here and nowhere else, because `sofar` carries notes and never steps. */
+  const sofar =
     facts.length === 0 && gaps.length === 0
       ? ""
       : [
@@ -1119,7 +1276,11 @@ function instructionsFor(context: RunContext<Notebook>): string {
 
   return [
     craigSystemPrompt(firstName, company),
+    /* The account's notebook first, then what has come up in this
+       conversation. Long-term memory before short-term: what the company has
+       written down outranks what he inferred twenty minutes ago. */
     known,
+    sofar,
     /* Only while there's still a workflow to draft. Once one is open the
        editing note is the thing that governs, and a second instruction about
        what may be drafted would be answering a question nobody is asking. */
@@ -1143,6 +1304,7 @@ export const craig = new Agent<Notebook>({
   tools: [
     noteGap,
     recordFact,
+    readNotebook,
     recall,
     offerNewWorkflow,
     draftWorkflow,

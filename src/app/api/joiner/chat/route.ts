@@ -142,7 +142,14 @@ export async function POST(request: Request) {
 
   /* Built from the joiner's own record, on the server, from the cookie. The
      client never sends context and could not usefully forge any if it tried. */
-  const agent = joinerCraigFor(briefFor(joiner));
+  /* Headings only — the index of what the company has written down. Safe to
+     hand a new starter because the notebook holds company facts and never a
+     person; that rule is enforced where things are written, not here. */
+  const { headingsOf } = await import("@/lib/craig/notebook-text");
+  const { notebookForJoiner } = await import("@/lib/craig/notebook");
+  const agent = joinerCraigFor(
+    briefFor(joiner, headingsOf(await notebookForJoiner(joiner))),
+  );
 
   /* Cancelling stops the meter when somebody closes the tab or sends again. The
      timer is the third runaway mode: a connection that never closes holds the

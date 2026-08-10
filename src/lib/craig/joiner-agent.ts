@@ -140,6 +140,19 @@ export interface JoinerBrief {
   /** `YYYY-MM-DD`, or null once it is in the past. */
   startsOn: string | null;
   workflowName: string;
+  /**
+   * What the company has written down, as headings only.
+   *
+   * The same index the admin's Craig gets, and safe to hand a new starter for
+   * one reason held upstream: the notebook holds company facts and never a
+   * person, so there is nothing in it to withhold. That rule is what buys one
+   * document for two audiences with no visibility column — see `notebook.ts`.
+   *
+   * Headings rather than the text, for the reason the other agent has them
+   * that way: accuracy falls as input grows, and a new starter's question is
+   * usually about one of these.
+   */
+  notebookHeadings: string[];
   steps: BriefStep[];
   done: number;
   total: number;
@@ -170,7 +183,13 @@ interface BriefStep {
  * broken integration and names environment variables, consent screens and
  * Google console pages — the same reason `/me` never prints it.
  */
-export function briefFor(joiner: Joiner): JoinerBrief {
+export function briefFor(
+  joiner: Joiner,
+  /* Passed in rather than read here, so this stays a pure allowlist over one
+     record. The moment it fetches, it stops being the thing you can read top
+     to bottom to see exactly what reaches a new starter. */
+  notebookHeadings: string[] = [],
+): JoinerBrief {
   const progress = progressOf(joiner);
   const nextId = progress.next?.id ?? null;
 
@@ -182,6 +201,7 @@ export function briefFor(joiner: Joiner): JoinerBrief {
     email: joiner.email,
     startsOn: upcoming(joiner.startDate) ? joiner.startDate : null,
     workflowName: joiner.workflowName,
+    notebookHeadings,
     steps: joiner.steps.map((step) => ({
       title: step.title,
       owner:
@@ -215,7 +235,82 @@ export function briefFor(joiner: Joiner): JoinerBrief {
  * Monday 24 August" writes a better sentence back than one reading
  * `{"startsOn":"2026-08-24"}`, and there is no parsing to get wrong.
  */
+/**
+ * One section of the company notebook, for a new starter.
+ *
+ * The same shape as the admin's, and safe for the same reason: the notebook
+ * holds company facts and never a person, so there is nothing here to withhold
+ * from them. That rule is enforced upstream — in what gets written, not in who
+ * may read — which is what lets one document serve both audiences.
+ *
+ * **It takes a heading, never an identifier.** The rule this file is built on:
+ * a tool here may take a question and must never take a way of naming somebody
+ * else's row. A heading is a question about the company.
+ */
+const readNotebookParams = z.object({
+  section: z
+    .string()
+    .describe("The heading to read, from the list you were given."),
+});
+
+const readNotebook = tool<typeof readNotebookParams, JoinerContext>({
+  name: "read_notebook",
+  description:
+    "Read one section of the company's notebook by heading. Use it whenever they ask something the headings cover. If nothing comes back, say plainly that it isn't written down and that you'll flag it.",
+  parameters: readNotebookParams,
+  execute: async ({ section }, context) => {
+    const joiner = context?.context.joiner;
+    /* Same refusal as `search_resources`: no joiner means no scope, and a read
+       with no scope is the one thing a tool on this agent must never do. */
+    if (!joiner) return "Nothing to read.";
+
+    const { notebookForJoiner } = await import("./notebook");
+    const { sectionOf } = await import("./notebook-text");
+    const content = await notebookForJoiner(joiner);
+    const found = sectionOf(content, section);
+
+    if (!found) {
+      return `Nothing under "${section}". Tell them it isn't written down and that you'll pass it on — don't guess at it.`;
+    }
+
+    /* The caveat travels with the section rather than sitting in the system
+       prompt, because it is the last thing read before the answer. Craig
+       reported an annual-leave figure as a parental-leave policy when this
+       lived in the prompt alone. For a new starter that is a claim about their
+       own contract, and they have no way to tell it from the real thing. */
+    return [
+      `From ${joiner.company}'s notebook, under "${section}":`,
+      "",
+      found,
+      "",
+      `— That section is titled "${section}". If they asked about something else, this does not answer it: say that isn't written down and you'll pass it on. Never move a figure from one kind of leave, notice or payment to another.`,
+    ].join("\n");
+  },
+});
+
 export function joinerSystemPrompt(brief: JoinerBrief): string {
+  /* What the company has written down, as headings. The same index the admin's
+     Craig gets — and the instruction is the same too: read the section rather
+     than answer from memory, and when nothing covers it, say so plainly rather
+     than inventing a policy. A new starter cannot tell a guess from a fact, and
+     the guess is about their own employment. */
+  const notebook =
+    brief.notebookHeadings.length === 0
+      ? ""
+      : [
+          `\n## What ${brief.company} has written down`,
+          "",
+          "Headings only — call `read_notebook` with one to read it.",
+          "",
+          brief.notebookHeadings.map((h) => `- ${h}`).join("\n"),
+          "",
+          "If a heading covers what they asked, read it and answer from it, and say which heading.",
+          "",
+          "**A section answers only what it literally says.** \"How leave works\" giving a number of days for annual leave tells you nothing about parental leave, notice periods or sick pay. Never carry a figure from one to another — for a new starter that is a claim about their own contract, and they cannot tell your guess from their employer's policy.",
+          "",
+          "If nothing covers it, say it isn't written down and that you'll pass it on. Never invent a policy and never soften it into a maybe.",
+        ].join("\n");
+
   const steps = brief.steps
     .map((step) => {
       const who =
@@ -250,6 +345,7 @@ ${brief.firstName} is the new starter, not the employer. They are one week into 
 ## What you know and what you do not
 
 Everything above is everything you know by heart.
+${notebook}
 
 You also have **search_resources**, which searches the documents ${brief.company} has shared with new starters. Use it before saying you don't know anything a company document might answer — a handbook, a policy, dress code, leave, expenses, parking, what to bring on day one. Search first, answer second.
 
@@ -308,6 +404,6 @@ export function joinerCraigFor(brief: JoinerBrief): Agent<JoinerContext> {
     /* One tool, and the argument for it is in the header. Anything added beside
        it needs the same argument: it may take a question, never an
        identifier. */
-    tools: [searchResources],
+    tools: [searchResources, readNotebook],
   });
 }
