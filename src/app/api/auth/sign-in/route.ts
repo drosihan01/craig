@@ -28,7 +28,7 @@ export async function POST(request: Request) {
      here the limit is the security control rather than a spend guard. Hence
      `spend: false`: failed logins must not eat the chat route's daily budget,
      or password-guessing becomes a way to switch the product off. */
-  const limit = rateLimit(`sign-in:${clientKey(request)}`, { spend: false });
+  const limit = await rateLimit(`sign-in:${clientKey(request)}`, { spend: false });
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Wait a minute and try again." },

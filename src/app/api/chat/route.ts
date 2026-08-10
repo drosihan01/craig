@@ -381,7 +381,7 @@ export async function POST(request: Request) {
      both easy to change and shared by everyone behind a router. Checked here,
      ahead of parsing and well ahead of the model, so a rejected request costs
      nothing — which is the entire point of having it. */
-  const limit = rateLimit(session.email);
+  const limit = await rateLimit(session.email);
   if (!limit.ok) {
     return errorStream(
       limit.message ?? "Too many requests. Try again shortly.",

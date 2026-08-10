@@ -59,7 +59,7 @@ export async function DELETE(request: Request) {
   const session = await currentUser();
   if (!session) return refuse("Not signed in.", 401);
 
-  const limit = rateLimit(`showcase-person:${session.email}`, LIMIT_OPTIONS);
+  const limit = await rateLimit(`showcase-person:${session.email}`, LIMIT_OPTIONS);
   if (!limit.ok) {
     /* Its own wording rather than the limiter's, which is written for the chat
        and talks about messages. See the note in the tick route: `spend: false`

@@ -89,7 +89,7 @@ const SIGN_UP_CLOSED = "Sign-up isn't open at the moment.";
 export async function POST(request: Request) {
   /* Not a spend guard — creating an account costs nothing but hashing, and a
      script hammering this must not be able to exhaust the chat route's budget. */
-  const limit = rateLimit(`sign-up:${clientKey(request)}`, { spend: false });
+  const limit = await rateLimit(`sign-up:${clientKey(request)}`, { spend: false });
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Wait a minute and try again." },
