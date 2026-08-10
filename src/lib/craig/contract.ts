@@ -1403,6 +1403,24 @@ export interface Joiner {
   steps: JoinerStep[];
   /** ISO. */
   invitedAt: string;
+  /**
+   * How many times Craig has chased them, and when he last did.
+   *
+   * On the person rather than on each step, because a chase is one email about
+   * everything they still owe. See `nudges.ts` for the cadence and for why
+   * there is a ceiling on it at all.
+   */
+  nudgeCount: number;
+  /** ISO, or null if he never has. */
+  nudgedAt: string | null;
+  /**
+   * When Craig stopped chasing and told the admin instead, if he has.
+   *
+   * Set once. It is both the record of the handover and the thing that stops
+   * it happening twice — an escalation that repeats is the nagging it was
+   * supposed to replace, aimed at somebody else.
+   */
+  handedOverAt: string | null;
 }
 
 /** Where a magic link lands before it becomes a session. */

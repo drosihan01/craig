@@ -1776,6 +1776,40 @@ export function dueLabel(due: number | undefined): string | null {
 }
 
 /**
+ * A `YYYY-MM-DD` start date as an email says it: "Saturday 22 August".
+ *
+ * Shared rather than written wherever it is needed, because **every message
+ * about one person's start date has to say the same date in the same words.**
+ * The invitation promises a day, the chase repeats it, and the handover
+ * repeats it again — three emails a fortnight apart, and a reader comparing
+ * them is precisely the person who would be alarmed by two spellings of one
+ * Saturday.
+ *
+ * Parsed as local rather than through `new Date(string)`, which reads a bare
+ * date as UTC and lands on the previous day for anyone west of Greenwich. That
+ * is the same off-by-one `dueDateFrom` guards below, and it is the kind of
+ * error nobody notices until somebody turns up on the wrong morning.
+ */
+export function readableDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!parts) return null;
+
+  const date = new Date(
+    Number(parts[1]),
+    Number(parts[2]) - 1,
+    Number(parts[3]),
+  );
+  if (Number.isNaN(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(date);
+}
+
+/**
  * The real date, once there is a person to have one.
  *
  * `startDate` is `YYYY-MM-DD` and is parsed as local rather than through
