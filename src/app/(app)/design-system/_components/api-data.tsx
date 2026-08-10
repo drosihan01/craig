@@ -41,19 +41,28 @@ export const DROPDOWN_PROPS: PropDoc[] = [
     type: '"top" | "bottom"',
     default: '"bottom"',
     description:
-      "Which way the menu opens. Use top when it sits near the page bottom.",
+      "Preferred side. The menu flips to the other one when the options do not fit, and takes an internal scroll when neither side can hold them, so you no longer have to know where on the page the trigger will end up.",
   },
   {
     name: "align",
     type: '"start" | "end"',
     default: '"start"',
-    description: "Which edge the menu aligns to.",
+    description:
+      "Preferred edge. Clamped to the window, so a menu wider than the space beside its trigger slides inwards rather than off the screen.",
   },
   {
     name: "width",
     type: "string",
     default: '"w-56"',
-    description: "Tailwind width class for the menu.",
+    description:
+      "Tailwind width class for the menu. Use a fixed one — the menu is portalled to the body, so a percentage resolves against the window. Pass matchTrigger instead of w-full.",
+  },
+  {
+    name: "matchTrigger",
+    type: "boolean",
+    default: "false",
+    description:
+      "Measure the trigger and give the menu the same width, the way a form select does. What SelectMenu uses.",
   },
   {
     name: "triggerClassName",

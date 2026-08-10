@@ -337,6 +337,32 @@ function Editor({
   const isBlocked = blocked.length > 0;
 
   /**
+   * What one block's connection prerequisite is doing, or `null` when it has
+   * none.
+   *
+   * The canvas asks this twice — once for the warning badge and once for the
+   * "connected" chip — and they have to be the same question asked once, not
+   * two branches that happen to agree today. Two branches is how a block ends
+   * up wearing both, or neither, the first time somebody edits one of them.
+   *
+   * `providerNeededBy(block)` rather than `definition.provider`, for the reason
+   * repeated at the call site below and in `blocks.ts`: the flat field cannot
+   * answer for a block whose requirement depends on its own settings, and it is
+   * silently right for every block that does not — which is exactly how that
+   * mistake has twice reached main.
+   */
+  const connectionFor = React.useCallback(
+    (block: WorkflowBlock) => {
+      const provider = providerNeededBy(block);
+      if (!provider) return null;
+      const definition = blockFor(block.preset);
+      if (!definition) return null;
+      return { met: connected.has(provider), definition };
+    },
+    [connected],
+  );
+
+  /**
    * Everything standing between this workflow and a seat being given.
    *
    * Assembled here because it is the only place both halves are known: a step
@@ -965,10 +991,26 @@ function Editor({
                      moment one was not: a DocuSign contract with no connection
                      was refused by the button while wearing no badge on the
                      canvas — the exact "publishable-looking and refused" state
-                     the note above forbids. */
-                  const provider = providerNeededBy(block);
-                  return provider && !connected.has(provider)
-                    ? (blockFor(block.preset)?.blockedReason ?? null)
+                     the note above forbids.
+
+                     Both of those arguments now live in `connectionFor`, the
+                     single place that resolves a block's provider — see it
+                     above. */
+                  const connection = connectionFor(block);
+                  return connection && !connection.met
+                    ? connection.definition.blockedReason
+                    : null;
+                }}
+                /* The other half of the same answer, and the reason it is
+                   worth deriving both from one function: a block that needs no
+                   connection at all gets no chip. "Connected" on a step that
+                   connects to nothing is noise, and noise on a badge is how
+                   people learn to stop reading the badges — including the
+                   warning one beside it, which is the one that matters. */
+                noteFor={(block) => {
+                  const connection = connectionFor(block);
+                  return connection?.met
+                    ? connection.definition.connectedLabel
                     : null;
                 }}
                 reveal={revealing}
