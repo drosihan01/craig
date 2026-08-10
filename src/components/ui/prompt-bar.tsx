@@ -114,7 +114,7 @@ export function PromptBar({
 
     el.style.height = `${Math.max(
       floorRef.current,
-      Math.min(el.scrollHeight, size === "lg" ? 220 : 160),
+      Math.min(el.scrollHeight, size === "lg" ? 220 : 180),
     )}px`;
   }, [value, size, placeholder]);
 
@@ -175,9 +175,12 @@ export function PromptBar({
           )}
           <textarea
             ref={ref}
-            // Two lines at page level — a single-line box reads as a search
-            // field, and this is asking for a paragraph.
-            rows={lg ? 2 : 1}
+            // Two lines everywhere. A single-line box reads as a search field,
+            // and both of these are asking for a sentence at least — the narrow
+            // one beside the canvas was on one line only because the column is
+            // 300px, which is a reason for it to be *narrow*, not short. The
+            // two sizes still differ in how far they grow.
+            rows={2}
             value={value}
             autoFocus={autoFocus}
             onChange={(e) => setValue(e.target.value)}
