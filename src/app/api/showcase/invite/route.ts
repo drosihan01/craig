@@ -18,6 +18,7 @@ import {
 } from "@/lib/craig/joiners";
 import { createJoinerToken } from "@/lib/craig/joiner-session";
 import { rateLimit } from "@/lib/craig/rate-limit";
+import { readableDate } from "@/lib/workflow/library";
 import { findTemplate, SENDER } from "@/lib/email";
 import { renderEmail } from "@/lib/email/html";
 import { fromHeader, sendEmail } from "@/lib/email/send";
@@ -304,34 +305,6 @@ function oneAddress(value: unknown): string | null {
   if (!/^[^@]+@[^@]+\.[^@]{2,}$/.test(address)) return null;
 
   return address;
-}
-
-/**
- * `2026-08-24` as "Monday 24 August".
- *
- * Built from the parts rather than passed to `new Date(string)`, which reads a
- * bare date as UTC midnight and then formats it in the server's timezone —
- * anywhere west of Greenwich, that is yesterday. A start date that is one day
- * out in the invitation is the kind of error nobody notices until somebody
- * turns up on the wrong morning.
- */
-function readableDate(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-  if (!parts) return null;
-
-  const date = new Date(
-    Number(parts[1]),
-    Number(parts[2]) - 1,
-    Number(parts[3]),
-  );
-  if (Number.isNaN(date.getTime())) return null;
-
-  return new Intl.DateTimeFormat("en-AU", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).format(date);
 }
 
 /**
