@@ -335,10 +335,20 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
           placeholder={`Ask me anything, ${firstName}`}
           busy={streaming}
           onStop={() => abortRef.current?.abort()}
-          /* No attachments. There is nowhere to put a file in this product
-             yet, and a button that accepts one and drops it is worse than no
-             button. */
+          /* Both off for the same reason, and it is the reason Home gives:
+             neither is wired. There is no speech to text behind the
+             microphone, and nothing on the joiner's chat route accepts a file
+             — a control that takes something and drops it is worse than no
+             control. The microphone shipped on because `dictation` defaults
+             to true and nothing here said otherwise, which is exactly how the
+             model picker got here. */
+          dictation={false}
           attachments={false}
+          /* The same slot Home uses to say what Craig can see. It sits under
+             the composer rather than over the conversation, so it is readable
+             at the moment somebody is deciding what to type and does not
+             scroll away with the greeting. */
+          footnote="Craig knows your plan and whatever your company has shared with new starters."
           /* Off, and the component's own doc is the argument: the route
              behind this bar is fixed to one model, so a picker here is a
              control the server ignores — "the one control in this system that
