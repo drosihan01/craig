@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { CraigMark, PromptBar } from "@/components/ui";
+import {
+  AgentPhase,
+  CraigMark,
+  MessageBody,
+  PersonTurn,
+  PromptBar,
+} from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { JOINER_CHAT_ENDPOINT, type ChatEvent } from "@/lib/craig/contract";
 
@@ -227,7 +233,7 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
           the tail targets the nearest scrolling ancestor, which is this. */}
       <div
         className={cn(
-          "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto",
+          "scrollbar-thin flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-8",
           /* Centred while there is nothing to read. A room this tall with three
              chips pinned to the top of it and a composer at the bottom reads as
              a page that failed to load its content; the same three chips in the
@@ -238,31 +244,42 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
       >
         {!empty && (
           <>
+            {/* Clearance under the header as an *element*, not padding. Padding
+                on the scroller cannot be scrolled into, so the first line never
+                reaches the top of the box and a long transcript feels stuck an
+                inch below the rule. A spacer is content: it holds the first
+                line clear on arrival and then scrolls away like anything else.
+                The admin's conversation makes this argument at length. */}
+            <div aria-hidden className="h-10 shrink-0" />
+
             {turns.map((turn, i) =>
-            turn.role === "user" ? (
-              <p
-                key={i}
-                className="self-end rounded-2xl rounded-br-sm bg-surface-raised px-3.5 py-2 text-sm text-text"
-              >
-                {turn.content}
-              </p>
-            ) : (
-              <div key={i} className="flex gap-2.5">
-                <CraigMark className="mt-0.5 size-5 shrink-0 text-accent" />
-                <p
-                  className={cn(
-                    "min-w-0 flex-1 whitespace-pre-wrap text-sm leading-relaxed text-text-muted",
-                    /* The cursor only while this is the turn being written. */
-                    streaming &&
-                      i === turns.length - 1 &&
-                      "after:ml-0.5 after:inline-block after:h-4 after:w-px after:animate-pulse after:bg-text-subtle after:align-text-bottom after:content-['']",
+              turn.role === "user" ? (
+                <PersonTurn key={i}>{turn.content}</PersonTurn>
+              ) : (
+                <div key={i} className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <CraigMark className="size-5 shrink-0 text-accent" />
+                    {/* An empty turn with no words yet is a mark on its own,
+                        which reads as Craig having said nothing. "Thinking" is
+                        the least he is doing. */}
+                    <AgentPhase
+                      label={
+                        streaming && i === turns.length - 1 && !turn.content
+                          ? "Thinking"
+                          : null
+                      }
+                    />
+                  </div>
+
+                  {turn.content.trim() !== "" && (
+                    <MessageBody
+                      content={turn.content}
+                      streaming={streaming && i === turns.length - 1}
+                    />
                   )}
-                >
-                  {turn.content}
-                </p>
-              </div>
-            ),
-          )}
+                </div>
+              ),
+            )}
             <div ref={endRef} />
           </>
         )}
@@ -300,30 +317,37 @@ export function JoinerCraig({ firstName }: { firstName: string }) {
         )}
       </div>
 
-      {/* Outside the scrolling region, directly above the composer: a failure
-          you have to scroll back up to find is a failure the person never
-          sees. */}
-      {error && (
-        <p role="status" className="text-sm text-text-muted">
-          {error}
-        </p>
-      )}
+      {/* The same footer block the admin's conversation uses: a shrink-0
+          column holding whatever has to stay above the composer, with the
+          bottom clearance on it rather than on the scroller. Outside the
+          scrolling region on purpose — a failure you have to scroll back up to
+          find is a failure the person never sees. */}
+      <div className="flex shrink-0 flex-col gap-3 pb-6">
+        {error && (
+          <p role="status" className="text-sm text-text-muted">
+            {error}
+          </p>
+        )}
 
-      <PromptBar
-        onSubmit={(text) => void send(text)}
-        placeholder={`Ask me anything, ${firstName}`}
-        busy={streaming}
-        onStop={() => abortRef.current?.abort()}
-        /* No attachments. There is nowhere to put a file in this product yet,
-           and a button that accepts one and drops it is worse than no button. */
-        attachments={false}
-        /* Off, and the component's own doc is the argument: the route behind
-           this bar is fixed to one model, so a picker here is a control the
-           server ignores — "the one control in this system that must never
-           ship". It shipped anyway, because the default is on and nothing
-           here said otherwise; a screenshot caught what the diff could not. */
-        modelPicker={false}
-      />
+        <PromptBar
+          autoFocus
+          onSubmit={(text) => void send(text)}
+          placeholder={`Ask me anything, ${firstName}`}
+          busy={streaming}
+          onStop={() => abortRef.current?.abort()}
+          /* No attachments. There is nowhere to put a file in this product
+             yet, and a button that accepts one and drops it is worse than no
+             button. */
+          attachments={false}
+          /* Off, and the component's own doc is the argument: the route
+             behind this bar is fixed to one model, so a picker here is a
+             control the server ignores — "the one control in this system that
+             must never ship". It shipped anyway, because the default is on and
+             nothing here said otherwise; a screenshot caught what the diff
+             could not. */
+          modelPicker={false}
+        />
+      </div>
     </section>
   );
 }
