@@ -7,6 +7,7 @@ import {
   ArrowDownward,
   ArrowUpward,
   Bolt,
+  Check,
   ContentCopy,
   Delete,
   Description,
@@ -266,6 +267,7 @@ export function WorkflowBuilder({
   onDuplicate,
   reveal,
   warningFor,
+  noteFor,
   className,
 }: {
   blocks: WorkflowBlock[];
@@ -306,6 +308,25 @@ export function WorkflowBuilder({
    * screen that knows about connections is the one that should say so.
    */
   warningFor?: (block: WorkflowBlock) => string | null;
+  /**
+   * The good news about a block, from the same outside knowledge as
+   * `warningFor` and drawn in the same slot.
+   *
+   * The pair exists because the canvas could only ever report faults. A step
+   * waiting on a connection nobody has made wore a warning; a step whose
+   * connection is live wore nothing at all — the same nothing as a step that
+   * reaches outside the product entirely and the same nothing as a plain
+   * "fill this in yourself" task. Somebody assembling a workflow is asking
+   * "which of these will Craig actually do", and three unlike answers drawn
+   * identically is not an answer.
+   *
+   * A second callback rather than a `tone` on the first, because the two are
+   * not alternatives: a block can be connected *and* still missing a required
+   * field, and both facts belong on the card. Kept as a plain string for the
+   * reason `warningFor` is one — this component must not learn what a
+   * connection is.
+   */
+  noteFor?: (block: WorkflowBlock) => string | null;
   className?: string;
 }) {
   /**
@@ -602,6 +623,7 @@ export function WorkflowBuilder({
               onDuplicate={isTrigger ? undefined : onDuplicate}
               onMove={isTrigger ? undefined : onMove}
               warning={warningFor?.(block) ?? undefined}
+              note={noteFor?.(block) ?? undefined}
               canMoveUp={i > 1}
               canMoveDown={!isLast && i > 0}
               dragging={draggingId === block.id}
@@ -813,6 +835,7 @@ function BlockCard({
   onDrop,
   arrival,
   warning: given,
+  note,
 }: {
   block: WorkflowBlock;
   index: number;
@@ -833,6 +856,8 @@ function BlockCard({
   arrival?: Arrival;
   /** Overrides the derived one — see `warningFor` above. */
   warning?: string;
+  /** See `noteFor` above. Sits beside the warning, never in place of it. */
+  note?: string;
 }) {
   const type = blockLabel(block);
   const Icon = type.icon;
@@ -994,11 +1019,31 @@ function BlockCard({
           <p className="truncate text-sm text-text-muted">{block.summary}</p>
         )}
 
-        {warning && (
-          <Badge tone="warning" size="sm" className="mt-1 w-fit">
-            <Warning />
-            {warning}
-          </Badge>
+        {/* One row for both, wrapping rather than truncating. A step can be
+            connected and still short of a required answer, and those are two
+            separate facts about it — "Slack connected" next to "2 to set up"
+            is the honest reading, where picking one to show would make the
+            card claim the other had been dealt with.
+
+            Never both a warning *and* a note, though: `note` is only given
+            when a connection is live and `warning` outranks `setupWarning`
+            only when it is not, so the two connection states cannot both be
+            true at once. The wrap is for note + setup warning. */}
+        {(warning || note) && (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {note && (
+              <Badge tone="success" size="sm">
+                <Check />
+                {note}
+              </Badge>
+            )}
+            {warning && (
+              <Badge tone="warning" size="sm">
+                <Warning />
+                {warning}
+              </Badge>
+            )}
+          </div>
         )}
       </div>
 

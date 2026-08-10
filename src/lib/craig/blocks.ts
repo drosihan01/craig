@@ -142,6 +142,27 @@ export interface BlockDefinition {
    * next step; "provider google-workspace is not connected" is a log line.
    */
   blockedReason: string;
+  /**
+   * What the canvas chip says once that connection *is* made — the positive
+   * twin of `blockedReason`, and here beside it for exactly that reason.
+   *
+   * The canvas has always been able to say a block cannot run and never able to
+   * say it can, so a connected Google step and a step Craig has no way of
+   * touching drew identically: silence. Silence is the wrong default for the
+   * one screen somebody builds a workflow on, because the question they have
+   * while building is "is this step actually wired up", and an absent badge is
+   * an answer to a different question.
+   *
+   * Written per block for the same reason `blockedReason` is, and it is the
+   * reason this is a field rather than the word "Connected" hardcoded at the
+   * call site: `sign-contract` is a block whose provider is not in its own
+   * name. Its chip has to say DocuSign, because the card above it says
+   * "Sign contract" and a bare "Connected" on it would be a claim about
+   * nothing in particular. Generating these from the provider id would also
+   * work today and would be wrong the first time a provider's product name
+   * stops matching its slug.
+   */
+  connectedLabel: string;
 }
 
 export const BLOCKS: Record<string, BlockDefinition> = {
@@ -150,6 +171,7 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     provider: "google-workspace",
     automation: AUTOMATION_BY_PRESET[GOOGLE_WORKSPACE_PRESET] ?? null,
     blockedReason: "Connect Google Workspace before publishing this.",
+    connectedLabel: "Google Workspace connected",
   },
   /**
    * The second row, and the reason this registry exists. `automation: null` is
@@ -174,6 +196,7 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     provider: "slack",
     automation: null,
     blockedReason: "Connect Slack before publishing this.",
+    connectedLabel: "Slack connected",
   },
 
   /**
@@ -195,6 +218,7 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     provider: "linear",
     automation: null,
     blockedReason: "Connect Linear before publishing this.",
+    connectedLabel: "Linear connected",
   },
 
   /**
@@ -235,6 +259,7 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     provider: "github",
     automation: null,
     blockedReason: "Connect GitHub before publishing this.",
+    connectedLabel: "GitHub connected",
   },
 
   /**
@@ -295,6 +320,7 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     automation: null,
     blockedReason:
       "This contract is set to be signed with DocuSign — connect DocuSign before publishing, or change the signing method.",
+    connectedLabel: "DocuSign connected",
   },
 };
 
