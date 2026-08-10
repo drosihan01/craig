@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-import { WELCOME_PATH } from "@/lib/craig/contract";
 import { requireUser } from "@/lib/craig/current-user";
 import { listDocuments } from "@/lib/craig/documents";
 import { subscriptionFor } from "@/lib/craig/accounts";
@@ -48,22 +46,20 @@ export default async function Home() {
     listDocuments(user.email),
   ]);
 
-  /* Genuinely nothing, which is not the same as no workflows.
+  /* No redirect, and that is the fix rather than a better condition.
      
-     This used to send anybody with an empty workflow list to `/welcome`, and
-     that is wrong for the account that *had* workflows and deleted them:
-     Home vanished and they were handed the new-account interview instead,
-     with people on their list and documents in their Resources. Deleting your
-     last workflow is a normal Tuesday, not a reason to be treated as a
-     stranger.
+     This screen used to send an account with no workflows to `/welcome`. The
+     first attempt at fixing it asked a smarter question — does this account
+     have *anything*, workflows or people or documents — which was still the
+     wrong shape, because it kept overriding an explicit navigation. Somebody
+     who clicks Home has said what they want. Answering with a different screen
+     is the app arguing with them, and it is worst exactly when they are trying
+     to get back to familiar ground after deleting something.
      
-     So the test is whether this account has ever done anything at all. A
-     joiner or a document is proof it has, and either one is enough — the
-     welcome screen exists for somebody with an empty account, and an empty
-     account is empty of everything. */
-  const brandNew =
-    workflows.length === 0 && joiners.length === 0 && documents.length === 0;
-  if (brandNew) redirect(WELCOME_PATH);
+     Home already reads correctly with nothing on it — "Nothing needs you right
+     now" — and Craig sits on it ready to be told about the company, with a
+     door to `/welcome` beside him. So an empty account gets a real screen and
+     an offer, instead of a redirect and no way back. */
 
   const entitlement = seatEntitlement(subscription, joiners.length);
   const outstanding = await outstandingFor(user.email, {
