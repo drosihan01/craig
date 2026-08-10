@@ -684,8 +684,18 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
       },
       account(
         SLACK_PRESET,
-        "Slack",
-        "Workspace invite and the channels they should land in on day one.",
+        "Slack channels",
+        /* Not "workspace invite", which is what this said and what Slack will
+           not let anybody do. `admin.users.invite` is Enterprise Grid only, so
+           on every ordinary workspace the invitation stays with a human admin
+           and what Craig can actually do is the part after they arrive: put
+           them in the channels nobody thinks to mention.
+
+           Renamed rather than left hopeful. A block that promises an invite it
+           cannot send is a promise the product breaks on somebody's first
+           morning, and the admin who picked it would have no reason to send
+           the invite themselves — they would think it was handled. */
+        "The channels they should land in, once they have accepted their Slack invite.",
         Apps,
         [
           {
@@ -700,6 +710,11 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             label: "Channels to add them to",
             kind: "multiselect",
             hint: "The ones nobody thinks to mention",
+            /* The whole block, now that the invite is a human's job. Craig
+               joins the channel and adds them to it — which needs the bot to
+               be in the channel first, hence `channels:join` in the scopes.
+               Private channels are deliberately out of scope: a bot that can
+               add somebody to a private channel is a bot that can read it. */
             options: [
               { id: "general", label: "#general" },
               { id: "eng", label: "#engineering" },
@@ -709,16 +724,13 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             ],
             required: true,
           },
-          {
-            id: "type",
-            label: "Account type",
-            kind: "select",
-            options: [
-              { id: "member", label: "Member" },
-              { id: "guest", label: "Single-channel guest" },
-            ],
-            required: true,
-          },
+          /* "Account type" — Member or Single-channel guest — used to sit
+             here and has gone with the invite. It is chosen when somebody is
+             invited, and Slack does not let this block invite anybody: asking
+             an admin to pick it would be collecting an answer Craig has
+             nowhere to send, on the one field where being wrong means somebody
+             lands in the workspace with the wrong access. The human sending
+             the invite chooses it, in Slack, where the choice is real. */
         ],
       ),
       /**
