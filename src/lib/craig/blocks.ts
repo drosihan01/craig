@@ -1,5 +1,6 @@
 import { AUTOMATION_BY_PRESET, type StepAutomation } from "@/lib/craig/contract";
 import {
+  GITHUB_PRESET,
   GOOGLE_WORKSPACE_PRESET,
   LINEAR_PRESET,
   SLACK_PRESET,
@@ -44,13 +45,18 @@ import {
 /**
  * A provider in the `connections` table. Each member matches a store's own
  * constant — `GOOGLE_PROVIDER` in `accounts.ts`, `SLACK_PROVIDER` in
- * `src/lib/slack/store.ts`, `LINEAR_PROVIDER` in `src/lib/linear/store.ts`.
- * The table's `provider` column is an open string, so this union is the one
- * place the set is actually closed: a row stored under a spelling this type
- * does not name is a row nothing will ever read, and a name here that no store
- * recognises makes the publish gate demand a connection nobody can record.
+ * `src/lib/slack/store.ts`, `LINEAR_PROVIDER` in `src/lib/linear/store.ts`,
+ * `GITHUB_PROVIDER` in `src/lib/github/store.ts`. The table's `provider`
+ * column is an open string, so this union is the one place the set is actually
+ * closed: a row stored under a spelling this type does not name is a row
+ * nothing will ever read, and a name here that no store recognises makes the
+ * publish gate demand a connection nobody can record.
  */
-export type ConnectionProvider = "google-workspace" | "slack" | "linear";
+export type ConnectionProvider =
+  | "google-workspace"
+  | "slack"
+  | "linear"
+  | "github";
 
 /**
  * The only thing this module needs to know about a step.
@@ -143,6 +149,46 @@ export const BLOCKS: Record<string, BlockDefinition> = {
     provider: "linear",
     automation: null,
     blockedReason: "Connect Linear before publishing this.",
+  },
+
+  /**
+   * The fourth row, and the first one where `automation: null` is genuinely
+   * only about us.
+   *
+   * Slack's row records a limit of Slack's: `admin.users.invite` is Enterprise
+   * Grid only, so on a normal workspace the invite itself is never
+   * automatable and never will be. Linear's records an unproven inference.
+   * GitHub's records neither — `POST /orgs/{org}/invitations` takes an
+   * `email`, a `role` and `team_ids` on any ordinary paid organisation, and it
+   * is documented to work with a GitHub App installation or user token holding
+   * "Members" write. The whole of what this block promises is one request.
+   *
+   * So the null here is a fact about this repository rather than about GitHub:
+   * there is no runner, and until there is, a joiner's GitHub step behaves
+   * exactly like an unwired task — somebody ticks it off — and nothing
+   * anywhere may claim otherwise. The temptation with a block whose API
+   * genuinely works is to let the copy drift towards the capability; the
+   * publish gate and this comment are what stop that.
+   *
+   * What the row does change today is the gate: a workflow with a GitHub block
+   * now waits for a GitHub connection. That is honest the moment a runner
+   * exists and merely early until then, where the alternative — adding the
+   * provider only when the runner lands — would let a workflow publish against
+   * a connection nobody has made, and the person who finds out is a new
+   * starter with a step that quietly does nothing.
+   *
+   * Two things the eventual runner has to handle that no other block here
+   * does, recorded where it will be read: an invitation is *pending* until the
+   * person accepts it, so "invited" and "in the organisation" are different
+   * states and the step cannot settle on the response to the POST; and the
+   * teams an admin typed are names, while the API wants numeric `team_ids`, so
+   * a lookup against the live organisation stands between the two.
+   */
+  [GITHUB_PRESET]: {
+    preset: GITHUB_PRESET,
+    provider: "github",
+    automation: null,
+    blockedReason: "Connect GitHub before publishing this.",
   },
 };
 

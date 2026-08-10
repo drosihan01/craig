@@ -3,6 +3,7 @@ import type { ConnectionProvider } from "@/lib/craig/blocks";
 import { requireUser } from "@/lib/craig/current-user";
 import { listJoiners } from "@/lib/craig/joiners";
 import { seatEntitlement } from "@/lib/craig/seats";
+import { githubViewFor } from "@/lib/github/store";
 import { linearConnectionViewFor } from "@/lib/linear/store";
 import { slackViewFor } from "@/lib/slack/store";
 import { WorkflowEditor } from "./workflow-editor";
@@ -75,13 +76,18 @@ export default async function ShowcaseWorkflowPage(
      — the argument is in `src/lib/slack/store.ts` — so they are asked for
      separately and in parallel, since none of them depends on the others.
 
-     `needsReconnect` counts as absent for all three, for the reason the Google
-     comment above gives: the question this answers is "would the step work",
-     and a grant the provider has revoked would not. Each block's own panel
-     draws the distinction, where there is room to say what happened. */
-  const [slack, linear] = await Promise.all([
+     `needsReconnect` counts as absent for all of them, for the reason the
+     Google comment above gives: the question this answers is "would the step
+     work", and a grant the provider has revoked would not. Each block's own
+     panel draws the distinction, where there is room to say what happened.
+
+     GitHub is the third entry in this `Promise.all` and cost exactly one line
+     of it, which is the shape working: a provider is a store to read and a
+     ternary to push, not a change to how this page is put together. */
+  const [slack, linear, github] = await Promise.all([
     slackViewFor(user.email),
     linearConnectionViewFor(user.email),
+    githubViewFor(user.email),
   ]);
 
   const connectedProviders: ConnectionProvider[] = [
@@ -90,6 +96,7 @@ export default async function ShowcaseWorkflowPage(
       : []),
     ...(slack && !slack.needsReconnect ? (["slack"] as const) : []),
     ...(linear && !linear.needsReconnect ? (["linear"] as const) : []),
+    ...(github && !github.needsReconnect ? (["github"] as const) : []),
   ];
 
   /**
