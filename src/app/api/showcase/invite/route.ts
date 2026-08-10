@@ -390,6 +390,7 @@ function blocksFrom(value: unknown) {
     kind: string;
     preset?: string;
     due?: number;
+    config?: Record<string, string>;
   }[] = [];
 
   for (const entry of value.slice(0, MAX_BLOCKS)) {
@@ -417,10 +418,24 @@ function blocksFrom(value: unknown) {
         ? rawDue
         : undefined;
 
+    /* An allowlist of one, not the block's whole config.
+       
+       Everything else a block holds is either the admin's own notes or a value
+       only the editor renders, and none of it is read by a run — copying it all
+       onto the joiner would put settings nobody consults into a record about a
+       person. `require-mfa` is here because it changes what "done" means, which
+       is the only kind of setting a step needs to carry. */
+    const rawConfig =
+      raw.config && typeof raw.config === "object"
+        ? (raw.config as Record<string, unknown>)
+        : undefined;
+    const requireMfa = oneLine(rawConfig?.["require-mfa"], MAX_ID);
+
     blocks.push({
       id,
       title,
       due,
+      config: requireMfa ? { "require-mfa": requireMfa } : undefined,
       kind: oneLine(raw.kind, MAX_ID),
       preset:
         Object.hasOwn(JOINER_FIELD_BY_PRESET, preset) ||

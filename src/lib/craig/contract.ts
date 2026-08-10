@@ -558,6 +558,18 @@ export interface JoinerStep {
   /** Only on `actor: "craig"` steps. Which job it is Craig goes and does. */
   automation?: StepAutomation;
   /**
+   * Whether this step waits for a second factor as well as for acceptance.
+   *
+   * Copied onto the step when somebody is invited rather than read live from
+   * the workflow, so editing the workflow afterwards cannot reopen a step that
+   * already completed under the old rule. A run is judged by what was asked of
+   * it at the time.
+   *
+   * Only meaningful on the Google Workspace automation today. Absent means
+   * false, which is what every step on disk before this meant.
+   */
+  requireMfa?: boolean;
+  /**
    * Only on `actor: "craig"` steps. How far that job has got.
    *
    * Optional because it is optional on disk: the store predates this and holds

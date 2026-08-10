@@ -563,7 +563,35 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
         kind: "task",
         icon: Google,
         title: "Google Workspace",
-        setup: [],
+        setup: [
+          {
+            /* The one thing worth asking about this block, and the reason it
+               is a toggle rather than always-on: an account with no second
+               factor is a company inbox behind one password, which is what
+               actually gets phished in somebody's first fortnight — before
+               they know how the company writes an email or who the finance
+               director is. Not every company enforces it, so the workflow
+               says whether this one does.
+
+               Costs nothing to check: `isEnrolledIn2Sv` rides on the same
+               user resource the step already reads to see whether they
+               accepted, so this is one more condition on a poll that was
+               happening anyway. */
+            id: "require-mfa",
+            label: "Wait for 2-step verification",
+            /* A select rather than a toggle, because there is no toggle in
+               `FieldKind` and two named answers read better here than a
+               switch would anyway: this is a decision about what "done" means
+               for the step, and "Yes / No" spelled out is harder to set by
+               accident than a control you can brush past. */
+            kind: "select",
+            options: [
+              { id: "no", label: "No — signing in is enough" },
+              { id: "yes", label: "Yes — wait for a second factor" },
+            ],
+            hint: "Signing in is enough by default.",
+          },
+        ],
       },
       account(
         SLACK_PRESET,

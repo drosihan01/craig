@@ -77,6 +77,10 @@ function toStep(row: StepRow): JoinerStep {
     actor: (row.actor as StepActor | null) ?? undefined,
     field: (row.field as JoinerField | null) ?? undefined,
     automation: (row.automation as StepAutomation | null) ?? undefined,
+    /* Absent rather than `false` when off, matching every other optional on
+       this shape — so a step that never asked for MFA serialises the same way
+       it did before the column existed. */
+    requireMfa: row.require_mfa || undefined,
     run: (row.run as StepRun | null) ?? undefined,
     due: row.due ?? undefined,
     value: row.value ?? undefined,
@@ -162,6 +166,8 @@ export function stepsFromBlocks(
     kind: string;
     preset?: string;
     due?: number;
+    /** The block's answers, filtered to what the invite route allows through. */
+    config?: Record<string, string>;
   }[],
 ): JoinerStep[] {
   return blocks
@@ -185,12 +191,21 @@ export function stepsFromBlocks(
             ? "craig"
             : undefined;
 
+      /* Read here rather than in the runner, and frozen onto the step, so a
+         workflow edited afterwards cannot reopen a step that already completed
+         under the old rule — a run is judged by what was asked of it at the
+         time. Only meaningful on an automated step; a joiner step has no
+         second factor to wait for. */
+      const requireMfa =
+        automation && b.config?.["require-mfa"] === "yes" ? true : undefined;
+
       return {
         id: b.id,
         title: b.title,
         actor,
         field,
         automation,
+        requireMfa,
         run: automation ? ({ state: "waiting" } satisfies StepRun) : undefined,
         due: b.due,
       };
@@ -254,6 +269,7 @@ export async function createJoiner(
         actor: s.actor ?? null,
         field: s.field ?? null,
         automation: s.automation ?? null,
+        require_mfa: s.requireMfa ?? false,
         due: s.due ?? null,
         value: s.value ?? null,
         completed_at: s.completedAt ?? null,

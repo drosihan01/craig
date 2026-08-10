@@ -1,7 +1,11 @@
 import "server-only";
 
 import { accessTokenFor } from "@/lib/google/auth";
-import { createUser, getUser, hasAcceptedSeat } from "@/lib/google/directory";
+import {
+  createUser,
+  getUser,
+  hasCompletedSeat,
+} from "@/lib/google/directory";
 import {
   isWaitingOnSetup,
   needsReconnect,
@@ -636,7 +640,7 @@ export type ReconcileOutcome =
  *
  * Two questions, and they are asked of the same call:
  *
- * **Have they accepted?** `hasAcceptedSeat`, which reads `agreedToTerms` and
+ * **Have they finished?** `hasCompletedSeat`, which reads `agreedToTerms` and
  * nothing else. Emphatically not `lastLoginTime`: Google returns the Unix epoch
  * rather than an absent field for an account nobody has signed into, so the
  * obvious truthiness check reports every seat as accepted the instant it is
@@ -698,7 +702,7 @@ async function pollSeat(
   const found = await getUser(connection, seatEmail);
 
   if (found.ok) {
-    if (hasAcceptedSeat(found.user)) {
+    if (hasCompletedSeat(found.user, { requireMfa: step.requireMfa })) {
       /* The moment the whole step existed for. `updateRun` sets the step's
          `completedAt` alongside this, which is what every count on both screens
          reads. */
@@ -713,7 +717,7 @@ async function pollSeat(
     }
 
     /* Suspended and archived accounts land here too, and they should:
-       `hasAcceptedSeat` vetoes both regardless of the terms, because an account
+       `hasCompletedSeat` vetoes both regardless of the terms, because an account
        nobody can sign into is not a seat somebody has taken. It reads as still
        waiting, which is true, rather than as an error. */
     await updateRun(joiner.id, step.id, {
@@ -839,7 +843,9 @@ async function resolveInterrupted(
 
   if (found.ok) {
     await updateRun(joiner.id, step.id, {
-      state: hasAcceptedSeat(found.user) ? "done" : "awaiting",
+      state: hasCompletedSeat(found.user, { requireMfa: step.requireMfa })
+        ? "done"
+        : "awaiting",
       seatEmail: found.user.primaryEmail,
       seatCreatedAt: found.user.creationTime ?? now(),
       /* Assumed lost rather than assumed sent, and the asymmetry is on purpose.
