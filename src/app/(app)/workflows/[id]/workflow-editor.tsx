@@ -186,7 +186,6 @@ export function WorkflowEditor({
    * the way in, which is a change to how the editor addresses a workflow it
    * hasn't got yet, so this closes the hole from the side that can.
    */
-  const [discarding, setDiscarding] = React.useState(false);
 
   function remove() {
     if (!workflow) return;
@@ -213,7 +212,6 @@ export function WorkflowEditor({
         entitlement={entitlement}
         connectedProviders={connectedProviders}
         onDelete={() => setConfirming(true)}
-        onDiscard={() => setDiscarding(true)}
       />
       <ConfirmDelete
         open={confirming}
@@ -221,73 +219,7 @@ export function WorkflowEditor({
         onCancel={() => setConfirming(false)}
         onConfirm={remove}
       />
-      <ConfirmDiscard
-        open={discarding}
-        onCancel={() => setDiscarding(false)}
-        onConfirm={remove}
-      />
     </>
-  );
-}
-
-/**
- * Backing out of a blank workflow, which is not the same decision as deleting
- * one and must not wear the same clothes.
- *
- * `ConfirmDelete` below is red, says "this can't be undone", and spends two
- * sentences on what goes with the workflow — because there, something does.
- * Here the honest content is the opposite: nothing has been built, nothing has
- * run, and the only thing being thrown away is a row that exists because
- * pressing "Start blank" wrote one before asking. Dressing that as a
- * destructive act would teach somebody to hesitate over a decision with no
- * consequences, which is how a warning stops being read.
- *
- * It offers to keep it anyway. An empty workflow is a legitimate thing to want
- * — a canvas you'll come back to this afternoon — and this only fires because
- * back was pressed, not because the product has decided the workflow is a
- * mistake.
- */
-function ConfirmDiscard({
-  open,
-  onCancel,
-  onConfirm,
-}: {
-  open: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <Dialog
-      open={open}
-      /* Escape and the backdrop mean keep working, which is the half of this
-         that leaves everything as it was. */
-      onClose={onCancel}
-      size="md"
-      title="Nothing has been added to this workflow"
-      description="Leaving now throws it away."
-      footer={
-        <>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            Keep working
-          </Button>
-          <Button size="sm" onClick={onConfirm}>
-            Discard it
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3 px-5 py-5">
-        <p className="text-base leading-relaxed text-text-muted">
-          It has the trigger every workflow starts with and no steps after it,
-          so there is nothing here to come back to — and nothing has run against
-          anyone.
-        </p>
-        <p className="text-sm leading-relaxed text-text-subtle">
-          Keep it and it stays in Workflows as an empty draft, ready for
-          whenever you want it.
-        </p>
-      </div>
-    </Dialog>
   );
 }
 
@@ -367,7 +299,6 @@ function Editor({
   entitlement,
   connectedProviders,
   onDelete,
-  onDiscard,
 }: {
   workflow: ShowcaseWorkflow;
   user: Session;
@@ -378,8 +309,6 @@ function Editor({
   /** Whether a Google Workspace step could run for this account. */
   connectedProviders: ConnectionProvider[];
   onDelete: () => void;
-  /** Back was pressed on a workflow with nothing in it. See `ConfirmDiscard`. */
-  onDiscard: () => void;
 }) {
   const blocks = workflow.blocks;
 
@@ -613,24 +542,13 @@ function Editor({
   const steps = stepCount(blocks);
   const unconfigured = unconfiguredCount(blocks);
 
-  /**
-   * Whether this screen was opened on a workflow with nothing in it.
-   *
-   * Captured at mount, like `revealCount` above and for the same reason: it is
-   * a fact about the visit rather than about the workflow, and reading it live
-   * would let the answer change under somebody as they worked.
-   *
-   * Both halves matter, and each rules out a case the other lets through.
-   * Without the live check, adding a step and then pressing back would still
-   * offer to throw away a workflow that now has work in it. Without the
-   * captured one, arriving at a full workflow, clearing it out by hand and
-   * leaving would be met with a dialog about a decision you had already made
-   * one block at a time.
-   */
-  const [arrivedEmpty] = React.useState(
-    () => stepCount(workflow.blocks) === 0 && !workflow.published,
-  );
-  const discardable = arrivedEmpty && steps === 0 && !workflow.published;
+  /* No discard prompt any more. It existed because "Start blank" made a
+     workflow the instant somebody pressed a button — possibly by accident — so
+     leaving an empty one had to offer to take it back. Creation now costs a
+     name and a deliberate press, and a dialog asking whether you meant the
+     thing you just typed a name for is a dialog that reads as the product
+     doubting you. `pending`, `discardWorkflow` and `ConfirmDiscard` went with
+     it; all three were compensation for creating too early. */
 
   /**
    * The one reason Publish can be shut that isn't about the blocks.
@@ -727,14 +645,11 @@ function Editor({
          which is the whole of this screen's navigation at either width. */
       navRail={
         <NavRail>
-          {/* A link normally, a button while there's a question to ask. The
-              rail is one icon wide and shows no text, so there is nothing here
-              for a "you'll lose this" note to sit next to — the ask has to be
-              the dialog or nothing. */}
+          {/* Always a link now. It forked on `discardable` while leaving an
+              untouched blank workflow asked a question first; nothing asks any
+              more, so there is one way out. */}
           <NavRailItem
-            {...(discardable
-              ? { onClick: onDiscard }
-              : { href: "/workflows" })}
+            href="/workflows"
             label="Workflows"
             icon={<ArrowBack />}
           />
@@ -752,7 +667,6 @@ function Editor({
           unconfigured={unconfigured}
           onSelect={select}
           onDelete={onDelete}
-          onDiscard={discardable ? onDiscard : undefined}
         />
       }
       actions={

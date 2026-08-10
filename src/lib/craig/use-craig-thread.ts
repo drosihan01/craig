@@ -70,7 +70,23 @@ export function useCraigThread(
         workflowId,
         from: parentThreadId ? { threadId: parentThreadId } : undefined,
       });
-      if (!live || !result) return;
+      if (!live) return;
+
+      /* No thread came back, so this workflow has none — show nothing rather
+         than whatever was on screen before.
+         
+         This is the bug that put one workflow's conversation inside another.
+         A workflow lives in the browser first and is pushed to the server on a
+         delay, so opening a freshly created one asks for a thread against a row
+         the server does not have yet; the request comes back empty, and the
+         old code returned early and left the previous workflow's transcript
+         sitting there — attributed, silently, to a workflow whose canvas was
+         still blank. Clearing is the honest answer to "there is no thread
+         here", and the next edit syncs the workflow and gives it one. */
+      if (!result) {
+        clearThread();
+        return;
+      }
 
       /* `openThread` returns the *server's* answer, which for these two kinds
          may be a thread that already existed rather than the id just minted. */

@@ -39,9 +39,16 @@ export default async function ShowcaseLayout({
 }) {
   const user = await currentUser();
 
-  /* Only asked when there is no admin session. Both cookies can exist at once
-     — somebody testing their own onboarding — and in that case this is the
-     admin's product, so the admin's list wins. */
+  /* Only asked when there is no admin session, and that preference is now
+     only about screens *outside* `/me`. Both cookies can exist at once —
+     somebody testing their own onboarding — and on an admin screen the admin's
+     list is the right one.
+
+     `/me` used to inherit that and was wrong for it: an admin holding a joiner
+     link opened their own onboarding and saw seats and billing. `me/layout.tsx`
+     now provides its own scope, which wins because it is nested. The rule is
+     that the *route* decides whose list this is, not whichever cookie the
+     browser happens to be carrying. */
   const joiner = user ? null : await currentJoiner();
 
   const notifications = user

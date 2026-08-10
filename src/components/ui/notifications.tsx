@@ -14,6 +14,7 @@ import {
 import { Avatar } from "./avatar";
 import { List, ListItem } from "./list";
 import { cn } from "@/lib/cn";
+import { useNotificationOpenRequests } from "@/components/craig/notification-scope";
 
 /**
  * Notifications persist; toasts don't. Anything the user has to act on later —
@@ -255,6 +256,20 @@ export function NotificationBell({
   className?: string;
 }) {
   const [open, setOpen] = React.useState(false);
+
+  /* Somewhere else asked for this to open — Home's "2 more". A counter rather
+     than a boolean, so asking twice works; see `notification-scope.tsx`.
+
+     Compared in state rather than a ref: a ref read during render is exactly
+     what React's rules forbid, and adjusting state during render is the
+     documented way to react to a changed input without an effect — which would
+     render the shut panel once before opening it. */
+  const requests = useNotificationOpenRequests();
+  const [seenRequests, setSeenRequests] = React.useState(requests);
+  if (seenRequests !== requests) {
+    setSeenRequests(requests);
+    if (!open) setOpen(true);
+  }
   const [rect, setRect] = React.useState<DOMRect | null>(null);
   const rootRef = React.useRef<HTMLDivElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
