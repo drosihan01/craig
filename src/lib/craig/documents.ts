@@ -1,5 +1,15 @@
 import "server-only";
 
+/* Static rather than dynamic. Both parsers were behind `await import(...)` to
+   keep them out of the bundle unless a file needed them — which read as
+   prudent and cost an afternoon: inside the server bundle the dynamic
+   specifiers did not resolve at runtime, the import threw, the `catch` below
+   turned it into `null`, and every PDF and .docx indexed nothing while
+   reporting success. This module is `server-only` and both packages are
+   dependency-free, so there was nothing to win. */
+import { extractText as pdfText } from "unpdf";
+import { ZipReader, Uint8ArrayReader, TextWriter } from "@zip.js/zip.js";
+
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Tables } from "@/lib/supabase/types";
 import type { Joiner } from "@/lib/craig/contract";
@@ -143,7 +153,7 @@ export async function uploadDocument(
   const accountId = await accountIdFor(accountEmail);
   if (!accountId) throw new Error("No account to upload against.");
 
-  const extracted = extractText(file.contentType, file.bytes);
+  const extracted = await extractText(file.contentType, file.bytes);
 
   const id = crypto.randomUUID();
   const storagePath = `${accountId}/${id}`;
@@ -252,15 +262,7 @@ export async function deleteDocument(
 }
 
 /**
- * The words in a file, when they are already words.
- *
- * Honest about its limits rather than pretending to be a parser. Plain text and
- * markdown *are* their own text, so extracting them is a decode; a PDF is a
- * layout format and a .docx is a zip archive of XML, and neither yields anything
- * useful without a real dependency. Returning `null` for those is what lets the
- * rest of the system tell "nothing in it" from "nothing extracted yet" — the
- * search vector still carries the **filename**, so a PDF called "Parking
- * policy" is findable even while its body is opaque.
+ * The words in a file.
  *
  * Capped, because the column is searched rather than displayed and a 25 MB text
  * file would put 25 MB through `to_tsvector` on every write. Two hundred
@@ -268,18 +270,185 @@ export async function deleteDocument(
  */
 const MAX_EXTRACTED_CHARS = 200_000;
 
-function extractText(contentType: string, bytes: ArrayBuffer): string | null {
-  if (contentType !== "text/plain" && contentType !== "text/markdown")
-    return null;
+/**
+ * Get the text out of an upload, or say honestly that there isn't any.
+ *
+ * **PDFs used to come back `null`, and that was the single largest hole in
+ * "ask Craig about the handbook".** Every company policy anybody actually
+ * uploads is a PDF; the search vector carried only the *filename*, so a
+ * handbook called "Handbook.pdf" answered questions about the word "handbook"
+ * and nothing else. Craig then said he couldn't find anything, which is
+ * indistinguishable — from the outside — from the document not being shared.
+ *
+ * `unpdf` does the parsing. Chosen over `pdf-parse`, which pulls in
+ * `@napi-rs/canvas`, a native binary this would then be shipping into a
+ * serverless function to extract text it never renders. `unpdf` has **zero
+ * dependencies** and is built for exactly this runtime.
+ *
+ * Async now, where the old one was synchronous, and that is the only reason
+ * this signature changed. Parsing a PDF is real work and pretending otherwise
+ * would mean either blocking the request or lying about it.
+ */
+async function extractText(
+  contentType: string,
+  bytes: ArrayBuffer,
+): Promise<string | null> {
+  if (contentType === "text/plain" || contentType === "text/markdown") {
+    try {
+      /* `fatal` so that a file mislabelled as text fails here rather than
+         producing a column full of replacement characters that match nothing
+         and look, in the database, exactly like a successful extraction. */
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      return text.slice(0, MAX_EXTRACTED_CHARS).trim() || null;
+    } catch {
+      return null;
+    }
+  }
 
+  if (contentType === "application/pdf") return extractPdf(bytes);
+  if (contentType === DOCX_TYPE) return extractDocx(bytes);
+
+  /* Still honest about the rest, and the notable one is **legacy `.doc`**.
+     A `.docx` is a zip of XML and yields to a zip reader; a `.doc` is a binary
+     OLE compound file from the 1990s, and reading it means either a large
+     dependency or a converter this runtime cannot host. It is accepted for
+     *upload* — somebody's contract template really is a `.doc` sometimes, and
+     refusing the file would be worse than not indexing it — but its words stay
+     opaque, and the filename is what carries it into search. */
+  return null;
+}
+
+const DOCX_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/**
+ * The text of a `.docx`.
+ *
+ * A `.docx` is a zip archive, and the words live in one entry inside it:
+ * `word/document.xml`. So this opens the archive, reads that one file, and
+ * strips the tags — no rendering, no styles, no images, because the consumer
+ * is a Postgres search vector rather than a screen.
+ *
+ * `@zip.js/zip.js` over `mammoth`, which is the obvious choice and the wrong
+ * one here. Mammoth converts a document to *HTML*, which is a much larger job
+ * than this needs, and it arrives with ten transitive dependencies including
+ * `bluebird` — a promise library predating native promises — all of it bundled
+ * into a serverless function whose only question is "what words are in here".
+ * `zip.js` has **zero dependencies**.
+ *
+ * The tag-stripping is deliberately crude and that is correct for the purpose.
+ * `</w:p>` becoming a newline keeps paragraphs apart so that two unrelated
+ * sentences do not fuse into one phrase that matches neither; beyond that,
+ * formatting carries no meaning a search index can use.
+ */
+async function extractDocx(bytes: ArrayBuffer): Promise<string | null> {
   try {
-    /* `fatal` so that a file mislabelled as text fails here rather than
-       producing a column full of replacement characters that match nothing and
-       look, in the database, exactly like a successful extraction. */
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    /* Copied for the same reason the PDF path copies — see `extractPdf`. A
+       reader that takes ownership of this buffer would leave the upload below
+       storing an empty file, and nothing would say so. */
+    const reader = new ZipReader(new Uint8ArrayReader(new Uint8Array(bytes.slice(0))));
+    const entries = await reader.getEntries();
+    /* `Entry` is a union of a file and a directory, and only the file half
+       carries `getData`. Narrowed on `directory` because that is the
+       discriminant the library actually declares — testing for the method
+       instead does not narrow a union, which is what the first attempt here
+       got wrong. */
+    const doc = entries.find(
+      (e) => !e.directory && e.filename === "word/document.xml",
+    );
+
+    if (!doc || doc.directory) {
+      await reader.close();
+      return null;
+    }
+
+    const xml = await doc.getData(new TextWriter());
+    await reader.close();
+
+    const text = xml
+      /* Paragraph and line breaks become real breaks before anything else is
+         thrown away, because after the tags are gone there is nothing left to
+         tell one paragraph from the next. */
+      .replace(/<\/w:p>/g, "\n")
+      .replace(/<w:br\s*\/>/g, "\n")
+      .replace(/<[^>]+>/g, "")
+      /* Word writes these, and a search index should see the characters a
+         reader sees rather than the entities the format stores them as. */
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n");
+
+    return text.slice(0, MAX_EXTRACTED_CHARS).trim() || null;
+  } catch (cause) {
+    console.error("[documents] couldn't read that .docx:", cause);
+    return null;
+  }
+}
+
+/**
+ * A PDF's text, when it has any.
+ *
+ * Two failure modes, deliberately collapsed to the same `null`, because the
+ * rest of the system already treats "nothing extracted" correctly — the
+ * document is still stored, still listed, still findable by name.
+ *
+ * The first is a **scan**. A photographed handbook is pictures of words, and
+ * there is no text layer to find. That is not an error and must not be
+ * recorded as one; it needs OCR, which is a different and much larger decision
+ * than adding a parser.
+ *
+ * The second is a PDF this cannot read at all — encrypted, truncated, or
+ * malformed. Caught rather than thrown, because the alternative is that a
+ * corrupt file makes the whole upload fail. Somebody who uploads a broken PDF
+ * should get a stored document they can see is wrong, not an error page that
+ * loses their file and tells them nothing about which one it was.
+ */
+async function extractPdf(bytes: ArrayBuffer): Promise<string | null> {
+  try {
+    /* A **copy**, and this is not defensive tidiness — it is the difference
+       between storing somebody's handbook and storing nothing.
+       
+       pdf.js takes ownership of the buffer it is handed and *detaches* it.
+       After the call the original `ArrayBuffer` is still a live object with a
+       `byteLength` of 0, so nothing throws, nothing warns, and every read of
+       it afterwards quietly sees an empty file. In this function's only caller
+       those reads are the upload to storage and the `size_bytes` column —
+       which means extracting the text destroyed the document it extracted it
+       from, and did it without a single error anywhere.
+       
+       Caught by uploading a real PDF and finding a 0-byte object behind a row
+       that had 96 characters of correctly parsed text next to it. A unit test
+       of the parser would have passed. */
+    const { text, totalPages } = await pdfText(
+      new Uint8Array(bytes.slice(0)),
+      { mergePages: true },
+    );
     const trimmed = text.slice(0, MAX_EXTRACTED_CHARS).trim();
-    return trimmed || null;
-  } catch {
+
+    if (!trimmed) {
+      /* Parsed fine and found no words. Said out loud, because this is the
+         one outcome that is invisible everywhere else: the upload succeeds,
+         the document lists, and Craig simply never finds anything in it. The
+         page count is here to separate the two causes — pages with no text
+         layer is a scan and needs OCR; **zero pages is a parser that did not
+         really run**, which is what a bundler resolving the wrong PDF.js
+         build looks like from the outside. */
+      console.warn(
+        `[documents] no text in that PDF (${totalPages} page(s)) — a scan, or nothing parsed`,
+      );
+      return null;
+    }
+
+    return trimmed;
+  } catch (cause) {
+    /* Logged, not raised. The upload succeeds either way, so without this line
+       a handbook that silently indexes nothing looks exactly like a handbook
+       with nothing in it. */
+    console.error("[documents] couldn't read that PDF:", cause);
     return null;
   }
 }
