@@ -15,6 +15,8 @@ import { ZipReader, Uint8ArrayReader, TextWriter } from "@zip.js/zip.js";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Tables } from "@/lib/supabase/types";
 import type { Joiner } from "@/lib/craig/contract";
+import { writeSynopsis } from "@/lib/craig/synopsis";
+import { bestDocumentMatch } from "@/lib/craig/document-match";
 
 /**
  * Documents, and the single place that decides who may read one.
@@ -147,6 +149,13 @@ export async function uploadDocument(
 
   const extracted = await extractText(file.contentType, file.bytes);
 
+  /* Written here rather than lazily, because this is the one moment the text
+     is already in hand and nobody is waiting on an answer. It returns null
+     rather than throwing on failure — a document that stored but could not be
+     described is still searchable by name and text, and `backfillSynopses`
+     will come back for it. */
+  const synopsis = await writeSynopsis({ name: file.name, extractedText: extracted });
+
   const id = crypto.randomUUID();
   const storagePath = `${accountId}/${id}`;
 
@@ -171,6 +180,7 @@ export async function uploadDocument(
       content_type: file.contentType,
       size_bytes: file.bytes.byteLength,
       extracted_text: extracted,
+      synopsis,
     })
     .select("*")
     .single();
@@ -600,4 +610,60 @@ export async function searchResourcesForJoiner(
     name: row.name,
     snippet: row.snippet.replace(/\s+/g, " ").trim(),
   }));
+}
+
+/* --- Reading one, as the account's own admin ------------------------------ */
+
+/**
+ * How much of a document comes back in one read.
+ *
+ * A handbook runs to tens of thousands of characters and handing all of it
+ * over on every question is the mistake `read_notebook` exists to avoid. The
+ * cap is generous enough that most documents arrive whole, and the result says
+ * so when one does not — a silent truncation is how Craig comes to answer
+ * confidently from a policy whose second half he never saw.
+ */
+const READ_CHARS = 8_000;
+
+export interface DocumentRead {
+  name: string;
+  text: string;
+  truncated: boolean;
+}
+
+/**
+ * Read one of this account's own documents, by name.
+ *
+ * **Takes a name rather than an id, and that is not the joiner rule being
+ * broken.** The rule — a joiner tool may take a question and never an
+ * identifier — exists because a joiner may read some documents and not others,
+ * so an id in a tool call is an authorisation decision made by a model. An
+ * admin may read every document their account owns, so there is no decision
+ * here to get wrong: the account scope in the query below is the whole of it,
+ * and a name matching nothing returns nothing.
+ */
+export async function readDocumentForAccount(
+  accountEmail: string,
+  wanted: string,
+): Promise<DocumentRead | null> {
+  const accountId = await accountIdFor(accountEmail);
+  if (!accountId) return null;
+
+  const { data, error } = await db()
+    .from("documents")
+    .select("name, extracted_text")
+    .eq("account_id", accountId)
+    .not("extracted_text", "is", null);
+
+  if (error) throw new Error(`Reading documents failed: ${error.message}`);
+
+  const match = bestDocumentMatch(data ?? [], wanted);
+  if (!match?.extracted_text) return null;
+
+  const text = match.extracted_text.trim();
+  return {
+    name: match.name,
+    text: text.slice(0, READ_CHARS),
+    truncated: text.length > READ_CHARS,
+  };
 }
