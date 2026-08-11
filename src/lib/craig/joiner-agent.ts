@@ -5,6 +5,7 @@ import { z } from "zod";
 import { CHAT_MODEL, CHAT_TEMPERATURE } from "@/lib/craig/craig-prompt";
 import { progressOf } from "@/lib/craig/joiners";
 import { searchResourcesForJoiner } from "@/lib/craig/documents";
+import { resourceSnippets } from "@/lib/craig/retrieval";
 import type { Joiner } from "@/lib/craig/contract";
 
 /**
@@ -123,9 +124,13 @@ const searchResources = tool<typeof searchResourcesParams, JoinerContext>({
     if (hits.length === 0)
       return "Nothing in what they've shared mentions that.";
 
-    return hits
-      .map((hit) => `From "${hit.name}": ${hit.snippet}`)
-      .join("\n\n");
+    /* Through `retrieval.ts`, which is where this tool's caveat came from —
+       having had none at all until then. It returned bare fragments of an
+       employer's handbook to a new starter with nothing attached, which is the
+       highest-stakes result in the product: a snippet is two sentences lifted
+       out of a policy with the sentence that qualifies it left behind, and the
+       person receiving it is the one least able to notice. */
+    return resourceSnippets(hits);
   },
 });
 
