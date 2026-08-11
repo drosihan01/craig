@@ -32,6 +32,7 @@ import type {
   WorkflowEdit,
 } from "@/lib/craig/contract";
 import type { DocumentCard } from "@/lib/craig/synopsis";
+import { documentBody, notebookSection } from "@/lib/craig/retrieval";
 
 /**
  * Craig, with hands.
@@ -565,25 +566,17 @@ const readNotebook = tool<typeof readNotebookParams, Notebook>({
       return `Nothing under "${section}". Say you don't have it written down, and record it with note_gap so somebody can fill it in.`;
     }
 
-    /* The caveat rides on the tool result, not the system prompt.
-       
+    /* The caveat rides on the tool result, not the system prompt — and it is
+       built in `retrieval.ts` rather than written here, so that the rule is one
+       place with a test behind it instead of a habit each tool has to keep.
+
        This is the fix for a real failure: asked about *parental* leave against
        a notebook that only documents *annual* leave, Craig read the nearest
        heading and reported four weeks as the parental policy — twice, and the
        second time after the system prompt had been told in bold not to. The
        instruction was two thousand tokens behind him by the time he answered;
-       this sentence is the last thing he reads before he does.
-       
-       It names the heading back to him because that is the comparison that
-       matters: he chose this section from a list, and choosing the nearest one
-       is not the same as finding the answer. */
-    return [
-      `From the notebook, under "${section}":`,
-      "",
-      found,
-      "",
-      `— That section is titled "${section}". If it does not answer what they asked, do not settle for it: look at the heading list again and read a better one before you conclude anything — a notebook with sixty headings usually has a closer match than the first one you picked. Only when nothing covers it, say the notebook has "${section}" but not what they asked, and call note_gap. Never move a figure from one kind of leave, notice or payment to another.`,
-    ].join("\n");
+       that sentence is the last thing he reads before he does. */
+    return notebookSection(section, found);
   },
 });
 
@@ -619,15 +612,7 @@ const readDocument = tool<typeof readDocumentParams, Notebook>({
       return `Nothing uploaded under "${document}". Say it isn't in what they've uploaded, and call note_gap so somebody can add it.`;
     }
 
-    return [
-      `From "${found.name}":`,
-      "",
-      found.text,
-      "",
-      found.truncated
-        ? `— That is the beginning of "${found.name}" and it is longer than this. If what they asked about is not here, say so rather than concluding it is not in the document.`
-        : `— That is the whole of "${found.name}". If it does not answer what they asked, check the document list for a better one before you conclude anything. Only when nothing covers it, say what this document does cover but not what they asked, and call note_gap.`,
-    ].join("\n");
+    return documentBody(found.name, found.text, found.truncated);
   },
 });
 

@@ -129,18 +129,24 @@ pieces of it are already installed and unused.
 | --- | --- | --- |
 | Synopsis router | `tool()` + zod, scope via `RunContext` | Native |
 | Notebook read | `tool()` — already built | No change |
-| Caveat travelling with retrieved text | `defineToolOutputGuardrail` | Upgrade |
+| Caveat travelling with retrieved text | ~~`defineToolOutputGuardrail`~~ — see below | **Wrong** |
 | Conversation history | custom `Session` over Supabase | Replaces trim |
 | Compaction | `OpenAIResponsesCompactionSession` | Reference impl |
 | Document retrieval | `fileSearchTool` + vector stores | **Decline** |
 | Unbounded tools from the block creator | `toolSearchTool` | Later |
 | TFN pasted into open chat | `defineToolInputGuardrail` | Pairs with retention |
 
-The guardrail row is the quiet win. The rule that fixed grounding — *a
-constraint on how to use retrieved text belongs in the tool result, not the
-preamble* — is currently a string each tool remembers to append by hand. A
-tool-output guardrail is the structural version, applied once across the
-notebook, the synopsis and `search_resources`.
+**The guardrail row was wrong, and checking it is what found the real bug.**
+`ToolGuardrailBehavior` offers exactly three outcomes — `allow`,
+`rejectContent` (which *replaces* the output with a message) and
+`throwException`. None of them is *append*. A guardrail cannot add a sentence
+to a tool result; the only way to use one here would be to throw the retrieved
+text away and return a sentence about it instead.
+
+The rule is real, so enforcement moved to where it can actually live: one
+module (`retrieval.ts`) holding every builder that wraps retrieved text, each
+taking a `caveat`, and a test that sweeps the module's own exports so a builder
+added later without one fails in CI. See the last section.
 
 On Sessions: implement the interface over the existing Supabase threads. Do
 **not** reach for `OpenAIConversationsSession` — it stores history on OpenAI's
@@ -235,8 +241,8 @@ ever learned, and there is no size at which carrying it every turn stays cheap.
    `messages`, so what was missing was the server reading it. See below.
 3. **The synopsis layer — SHIPPED**, with the admin document tool alongside it.
    See below.
-4. **The tool-output guardrail**, folding the #85 rule into one place across all
-   three retrieval tools.
+4. **The #85 rule made structural — SHIPPED**, though not as a guardrail. See
+   the last section.
 
 Retention and destruction for sealed answers stays ahead of all of it. That is a
 legal obligation with no code behind it; this is a quality improvement to
@@ -317,3 +323,30 @@ embeddings and without a second copy of anyone's data.
 when it truncates. Section-level retrieval *within* a document — the `sectionOf`
 treatment — is the obvious next refinement and was not needed to close the gap
 this step was about.
+
+## What shipped for step 4
+
+`retrieval.ts` holds every builder that wraps retrieved text — `notebookSection`,
+`documentBody`, `resourceSnippets` — each taking a caveat, each putting it last.
+`retrieval.test.ts` sweeps the module's exports, so a builder added later
+without one fails in CI rather than in somebody's onboarding.
+
+**It found a live hole.** `search_resources` had no caveat at all: it handed a
+new starter bare fragments of their employer's handbook with nothing attached.
+That is the highest-stakes result in the product — a snippet is two sentences
+lifted out of a policy with the qualifying sentence left behind, and it arrives
+looking exactly like an answer. It has one now.
+
+**Not a guardrail.** The plan said `defineToolOutputGuardrail` and the plan was
+wrong; a guardrail can allow, replace or throw, and none of those is append.
+Enforcement lives in the module boundary and the test instead, which is a
+weaker mechanism on paper and the only one that actually does the job.
+
+A caveat names the *specific* wrong move available from that text. A generic
+"this may be incomplete" is ignorable in a way a named mistake is not.
+
+**Still open at this layer:** `read_document` returns up to 8,000 characters and
+now says clearly that it could not see the rest — honest, but it still cannot
+answer from the back half of a long handbook. A windowed read (`ts_headline`
+over one document, the way `search_shared_documents` already does across many)
+is the fix.
