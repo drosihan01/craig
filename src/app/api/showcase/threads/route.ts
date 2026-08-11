@@ -192,24 +192,27 @@ export async function POST(request: Request) {
      here rather than stored and crashed on later. Dropping one is the right
      size of failure: the browser still holds it and the next sync retries. */
   const clean = [];
-  for (const [i, item] of turns.entries()) {
+  for (const item of turns) {
     if (!item || typeof item !== "object") continue;
     const m = item as {
       id?: unknown;
       role?: unknown;
       content?: unknown;
-      seq?: unknown;
       sources?: unknown;
     };
     if (!isUuid(m.id)) continue;
     if (m.role !== "user" && m.role !== "assistant") continue;
     if (typeof m.content !== "string") continue;
 
+    /* A position is not read off the request. The browser used to send one and
+       it was wrong for any conversation long enough to be trimmed; the column
+       now defaults from a sequence, so arrival order is the order. What that
+       relies on is this array staying in the order it was sent, which it
+       does — the rows are inserted as a batch, in order. */
     clean.push({
       id: m.id,
       role: m.role,
       content: m.content.slice(0, MAX_CONTENT),
-      seq: typeof m.seq === "number" && Number.isFinite(m.seq) ? m.seq : i,
       sources: Array.isArray(m.sources) ? m.sources : undefined,
     });
   }

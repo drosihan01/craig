@@ -224,22 +224,24 @@ function flush() {
   const { threadId, messages, notes } = pending;
   pending = null;
 
-  /* Paired with its index before filtering, because `seq` is the turn's
-     position in the *whole* transcript — looked up afterwards, an unsettled
-     turn earlier in the list would shift every position after it. */
+  /* No position travels with a turn any more — the database assigns it. The
+     browser cannot number a transcript it is allowed to forget: this list is
+     trimmed to the newest `MAX_MESSAGES`, so once a conversation passes that
+     length every index shifts down by one on every turn, and the new turn is
+     numbered over a turn already stored. `serialise` deliberately ignores
+     position, so nothing re-syncs to correct it. Left alone, a long enough
+     conversation reads back in an order nobody said it in. */
   const saveNotes = notes.length > 0;
-  const save = messages
-    .map((m, seq) => ({ m, seq }))
-    .filter(
-      ({ m }) =>
-        /* Settled only. A turn still being written into changes every frame,
-           and pushing it would be a request per token for a row about to be
-           replaced. It lands when the stream finishes, which is the first point
-           at which what is stored is what was actually said. */
-        !m.streaming &&
-        m.content.trim() !== "" &&
-        pushed.get(m.id) !== serialise(m),
-    );
+  const save = messages.filter(
+    (m) =>
+      /* Settled only. A turn still being written into changes every frame,
+         and pushing it would be a request per token for a row about to be
+         replaced. It lands when the stream finishes, which is the first point
+         at which what is stored is what was actually said. */
+      !m.streaming &&
+      m.content.trim() !== "" &&
+      pushed.get(m.id) !== serialise(m),
+  );
   if (save.length === 0 && !saveNotes) return;
 
   /* The first thing anybody typed, which is what they came to ask. Titled from
@@ -250,14 +252,13 @@ function flush() {
   /* Recorded as sent before the request resolves. A failed push is retried by
      the next turn rather than by a queue — this is a cache of a document the
      browser still holds, not an outbox of events that would be lost. */
-  for (const { m } of save) pushed.set(m.id, serialise(m));
+  for (const m of save) pushed.set(m.id, serialise(m));
 
   void send(threadId, {
-    messages: save.map(({ m, seq }) => ({
+    messages: save.map((m) => ({
       id: m.id,
       role: m.role,
       content: m.content,
-      seq,
       sources: m.sources,
     })),
     notes,

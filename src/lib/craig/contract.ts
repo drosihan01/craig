@@ -246,6 +246,21 @@ export interface ChatRequest {
    * `home` on the notebook in `craig-agent.ts`.
    */
   home?: boolean;
+  /**
+   * Which conversation this turn belongs to.
+   *
+   * The one thing on this request that is *not* here because the route is
+   * stateless — it is here because the client is. `messages` above is trimmed
+   * to the newest `MAX_MESSAGES`, so on a long conversation the browser is no
+   * longer holding the whole thing, and what falls off the front is the
+   * earliest turns: the size of the company, who does payroll, the policy
+   * nobody wrote down. Given the id, the server reads the rest from `messages`
+   * and hands Craig a summary of it.
+   *
+   * Absent on the first turn of a new conversation, where the thread is being
+   * opened in parallel with the request and there is nothing to recover.
+   */
+  threadId?: string;
 }
 
 /**

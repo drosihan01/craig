@@ -284,6 +284,18 @@ export function useCraigChat(
                 : undefined,
               simpleDraft: store.simpleDraft,
               home,
+              /* Which conversation this turn belongs to, so the server can go
+                 and read the part of it this browser has already forgotten.
+                 `messages` above is trimmed to the newest `MAX_MESSAGES`, so
+                 past that length it is no longer the whole story — and the
+                 first thing somebody said about their company is exactly the
+                 kind of thing that falls off the front.
+
+                 Absent on the very first turn of a new conversation, because
+                 the thread is being opened in parallel with this request. That
+                 is harmless: a conversation with one turn in it has nothing
+                 behind the trim to recover. */
+              threadId: store.threadId ?? undefined,
             }),
           });
 
