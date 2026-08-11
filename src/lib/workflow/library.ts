@@ -122,6 +122,19 @@ export interface SetupField {
   from?: "people";
   /** The block counts as unconfigured until this has a value. */
   required?: boolean;
+  /**
+   * What it means to have ticked nothing — shown only when nothing is ticked.
+   *
+   * A multiselect that is optional and empty looks exactly like one nobody has
+   * opened yet, and on these two blocks those are very different things: an
+   * empty payroll extras list is a decision not to collect a tax file number,
+   * and it is currently indistinguishable from not having seen the question.
+   *
+   * So the empty state says what the new starter will actually be asked. Named
+   * for the consequence rather than the state, which is the same rule the
+   * documents screen follows with "New starters can read this".
+   */
+  emptyNote?: string;
 }
 
 export interface BlockPreset {
@@ -447,6 +460,8 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             label: "Also ask for",
             kind: "multiselect",
             hint: "Only tick what you actually need to hold",
+            emptyNote:
+              "Nothing ticked: they will be asked for their bank account and tax-free threshold only — no tax file number, no super fund.",
             options: [
               { id: SUPER_FUND_EXTRA, label: "Super fund details" },
               {
@@ -599,6 +614,8 @@ export const BLOCK_LIBRARY: BlockCategory[] = [
             label: "Also ask for",
             kind: "multiselect",
             hint: "Only tick what you actually need to hold",
+            emptyNote:
+              "Nothing ticked: they will not be asked for an emergency contact.",
             options: [
               { id: EMERGENCY_CONTACT_EXTRA, label: "Emergency contact" },
             ],

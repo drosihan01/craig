@@ -132,6 +132,19 @@ function SetupControl({
           selected={selected}
           onChange={onChange}
         />
+        {/* Only while nothing is ticked, and only where the field says what
+            that means. An optional multiselect left empty looks identical to
+            one nobody has opened, and on the payroll block those are very
+            different things: empty is a decision not to collect a tax file
+            number, and it is worth being able to tell that apart from not
+            having seen the question. Reads as fact rather than warning,
+            because choosing not to collect a regulated identifier is the
+            recommended answer and must not look like a mistake. */}
+        {selected.length === 0 && f.emptyNote && (
+          <p className="mt-1.5 text-xs leading-relaxed text-text-subtle">
+            {f.emptyNote}
+          </p>
+        )}
       </Field>
     );
   }
