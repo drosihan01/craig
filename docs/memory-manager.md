@@ -345,8 +345,20 @@ weaker mechanism on paper and the only one that actually does the job.
 A caveat names the *specific* wrong move available from that text. A generic
 "this may be incomplete" is ignorable in a way a named mistake is not.
 
-**Still open at this layer:** `read_document` returns up to 8,000 characters and
-now says clearly that it could not see the rest — honest, but it still cannot
-answer from the back half of a long handbook. A windowed read (`ts_headline`
-over one document, the way `search_shared_documents` already does across many)
-is the fix.
+**Windowed reads followed.** `read_document` takes an optional `about`, and a
+long document comes back as the passages matching it rather than its opening.
+`read_document_window` is the sibling of `search_shared_documents` — same
+OR-the-lexemes and same quoted `ts_headline` options, one document instead of
+many, and **no visibility filter, deliberately**: an admin may read everything
+their account owns, so the only scope that belongs in the body is the account.
+
+Measured on the 29,000-character employment agreement already uploaded: the
+word "termination" first appears at character 8,387, past the cap, so every
+question about notice periods was unanswerable. The head read returns 8,000
+characters and never mentions resigning; the windowed read returns 2,452 and
+lands on clause 4.2. Smaller and more relevant, which is the shape this whole
+layer keeps having.
+
+A window gets its own caveat, because it makes a third mistake available that
+neither other one does: its middle has been removed, so two passages that read
+as consecutive may be pages apart with a qualifying condition in the gap.

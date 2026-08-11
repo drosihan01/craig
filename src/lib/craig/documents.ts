@@ -629,6 +629,9 @@ export interface DocumentRead {
   name: string;
   text: string;
   truncated: boolean;
+  /** True when `text` is the matching parts of the document rather than a run
+      of it from the beginning. */
+  windowed: boolean;
 }
 
 /**
@@ -645,13 +648,14 @@ export interface DocumentRead {
 export async function readDocumentForAccount(
   accountEmail: string,
   wanted: string,
+  about?: string,
 ): Promise<DocumentRead | null> {
   const accountId = await accountIdFor(accountEmail);
   if (!accountId) return null;
 
   const { data, error } = await db()
     .from("documents")
-    .select("name, extracted_text")
+    .select("id, name, extracted_text")
     .eq("account_id", accountId)
     .not("extracted_text", "is", null);
 
@@ -661,9 +665,43 @@ export async function readDocumentForAccount(
   if (!match?.extracted_text) return null;
 
   const text = match.extracted_text.trim();
+
+  /* Short enough to hand over whole, so hand it over whole. Fragments of a
+     two-page policy are worse than the policy: they cost the same and lose the
+     order the clauses were written in. */
+  if (text.length <= READ_CHARS) {
+    return { name: match.name, text, truncated: false, windowed: false };
+  }
+
+  /* Long, and somebody said what they were after. Reading from the top would
+     be reading the wrong part: a 29,000-character employment agreement does
+     not mention termination until well past the cap, so every question about
+     notice was unanswerable while this only ever returned the opening. */
+  if (about?.trim()) {
+    const { data: windows } = await db().rpc("read_document_window", {
+      p_account: accountId,
+      p_document: match.id,
+      p_query: about.trim(),
+    });
+
+    const window = windows?.[0]?.window_text?.trim();
+    if (window) {
+      return {
+        name: match.name,
+        text: window.slice(0, READ_CHARS),
+        truncated: true,
+        windowed: true,
+      };
+    }
+    /* No match inside it. Falls through to the opening, which at least lets
+       him say what the document is about rather than nothing at all — and the
+       caveat tells him he is looking at the front of it. */
+  }
+
   return {
     name: match.name,
     text: text.slice(0, READ_CHARS),
-    truncated: text.length > READ_CHARS,
+    truncated: true,
+    windowed: false,
   };
 }

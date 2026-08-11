@@ -93,8 +93,26 @@ export function documentBody(
     from: `"${name}"`,
     body,
     caveat: truncated
-      ? `That is the beginning of "${name}" and it is longer than this. If what they asked about is not here, say you could not find it in the part you read — do not conclude the document does not cover it.`
+      ? `That is the beginning of "${name}" and it is longer than this. If what they asked about is not here, say you could not find it in the part you read — do not conclude the document does not cover it. Reading it again with \`about\` set to what they asked will find the right part.`
       : `That is the whole of "${name}". If it does not answer what they asked, check the document list for a better one before you conclude anything. Only when nothing covers it, say what this document does cover but not what they asked, and call note_gap.`,
+  });
+}
+
+/**
+ * The parts of one long document that matched what somebody asked about.
+ *
+ * A third wrong move, distinct from both of the above. These fragments came
+ * out of the middle of a document in the order the document has them, with
+ * everything between them removed — so two clauses that read as consecutive
+ * may be pages apart, and a condition attached to one may sit in the gap. That
+ * is a mistake neither the whole-document nor the first-eight-thousand caveat
+ * warns about, because neither of them removes anything from the middle.
+ */
+export function documentWindow(name: string, body: string): string {
+  return retrieved({
+    from: `the parts of "${name}" that mention it`,
+    body,
+    caveat: `Those are the matching passages of "${name}", not the whole document, and the text between them has been cut out — so two passages that read as consecutive may be pages apart, and a condition qualifying one may be sitting in the gap. Answer only what a passage actually says, say which document it came from, and if it reads like part of a longer clause say so instead of presenting it as the complete rule.`,
   });
 }
 

@@ -795,6 +795,18 @@ export type Database = {
           scope: string
         }[]
       }
+      read_document_window: {
+        Args: {
+          p_account: string
+          p_document: string
+          p_limit?: number
+          p_query: string
+        }
+        Returns: {
+          name: string
+          window_text: string
+        }[]
+      }
       search_shared_documents: {
         Args: { p_account: string; p_limit?: number; p_query: string }
         Returns: {

@@ -3,6 +3,7 @@ import * as retrieval from "./retrieval";
 import {
   CAVEAT_MARK,
   documentBody,
+  documentWindow,
   notebookSection,
   resourceSnippets,
   retrieved,
@@ -85,6 +86,21 @@ describe("documentBody", () => {
   });
 });
 
+describe("documentWindow", () => {
+  it("warns that the middle has been cut out", () => {
+    /* The wrong move neither other document caveat covers: passages that read
+       as consecutive may be pages apart, with the qualifying condition in the
+       gap that was removed. */
+    expect(documentWindow("Handbook", BODY)).toMatch(
+      /text between them has been cut out/i,
+    );
+  });
+
+  it("does not claim to be the whole document", () => {
+    expect(documentWindow("Handbook", BODY)).not.toMatch(/the whole of/);
+  });
+});
+
 describe("resourceSnippets", () => {
   const HITS = [
     { name: "Handbook", snippet: "Twenty days plus public holidays." },
@@ -121,6 +137,7 @@ describe("every builder, swept", () => {
   it("finds the builders, so this sweep is not vacuously passing", () => {
     expect(builders.map(([name]) => name).sort()).toEqual([
       "documentBody",
+      "documentWindow",
       "notebookSection",
       "resourceSnippets",
     ]);
@@ -132,6 +149,8 @@ describe("every builder, swept", () => {
         return notebookSection("A heading", BODY);
       case "documentBody":
         return documentBody("A document", BODY, false);
+      case "documentWindow":
+        return documentWindow("A document", BODY);
       case "resourceSnippets":
         return resourceSnippets([{ name: "A document", snippet: BODY }]);
       default:
