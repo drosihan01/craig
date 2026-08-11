@@ -647,6 +647,8 @@ export type Database = {
           last_message_at: string
           parent_message_id: string | null
           parent_thread_id: string | null
+          summary: string | null
+          summary_through_seq: number | null
           title: string | null
           workflow_id: string | null
         }
@@ -659,6 +661,8 @@ export type Database = {
           last_message_at?: string
           parent_message_id?: string | null
           parent_thread_id?: string | null
+          summary?: string | null
+          summary_through_seq?: number | null
           title?: string | null
           workflow_id?: string | null
         }
@@ -671,6 +675,8 @@ export type Database = {
           last_message_at?: string
           parent_message_id?: string | null
           parent_thread_id?: string | null
+          summary?: string | null
+          summary_through_seq?: number | null
           title?: string | null
           workflow_id?: string | null
         }

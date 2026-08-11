@@ -2,9 +2,9 @@ import {
   MaxTurnsExceededError,
   ModelBehaviorError,
   ModelRefusalError,
+  Runner,
   ToolCallError,
   UserError,
-  run,
   type AgentInputItem,
 } from "@openai/agents";
 import { currentUser } from "@/lib/craig/current-user";
@@ -22,6 +22,7 @@ import {
   rateLimit,
 } from "@/lib/craig/rate-limit";
 import { notebookFor } from "@/lib/craig/notebook";
+import { historyFor } from "@/lib/craig/history";
 import { headingsOf } from "@/lib/craig/notebook-text";
 import { attachmentNote } from "@/lib/craig/craig-prompt";
 import { STREAM_HEADERS, errorStream, line } from "@/lib/craig/chat-stream";
@@ -95,12 +96,13 @@ function parse(body: unknown):
       workflow?: OpenWorkflow;
       simpleDraft: boolean;
       home: boolean;
+      threadId?: string;
     }
   | { ok: false; reason: string } {
   if (typeof body !== "object" || body === null)
     return { ok: false, reason: "Expected an object." };
 
-  const { messages, attachments, known, workflow, simpleDraft, home } =
+  const { messages, attachments, known, workflow, simpleDraft, home, threadId } =
     body as ChatRequest;
 
   if (!Array.isArray(messages) || messages.length === 0)
@@ -147,8 +149,15 @@ function parse(body: unknown):
     workflow: openWorkflow(workflow),
     simpleDraft: simpleDraft === true,
     home: home === true,
+    /* Shape-checked here and ownership-checked later, when it is used to read
+       a thread: every query it reaches is scoped by account as well, so a
+       well-formed id belonging to somebody else finds nothing. */
+    threadId: UUID.test(String(threadId ?? "")) ? threadId : undefined,
   };
 }
+
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const label = (value: unknown, limit: number) =>
   typeof value === "string"
@@ -419,7 +428,7 @@ export async function POST(request: Request) {
      means handing back an item the model previously produced, so it needs the
      output shape and a status. A bare `{ role, content }` pair type-checks for
      the user and is rejected for the assistant. */
-  const input: AgentInputItem[] = parsed.messages.map((turn, i) => {
+  const live: AgentInputItem[] = parsed.messages.map((turn, i) => {
     const content =
       i === parsed.messages.length - 1 && turn.role === "user"
         ? turn.content + attachmentNote(parsed.attachments)
@@ -432,6 +441,37 @@ export async function POST(request: Request) {
           status: "completed",
           content: [{ type: "output_text", text: content }],
         };
+  });
+
+  /* What the browser sent is the newest part of the conversation, not all of
+     it — it keeps the last `MAX_MESSAGES` and drops the rest, which on a long
+     discovery is the half where somebody described their company. The stored
+     transcript fills in front of it, and anything too old to show is replaced
+     by a summary rather than dropped. Returns `live` untouched if any of that
+     is unavailable. */
+  const input = await historyFor({
+    accountEmail: session.email,
+    threadId: parsed.threadId,
+    live,
+  });
+
+  /* Every turn resends the same system prompt, the same tool definitions and
+     the same notebook index before anything new — an identical prefix, re-read
+     from nothing on each request. Naming it routes these to a machine that
+     already holds them, which bills at the cached rate and arrives sooner.
+
+     Keyed per thread, because threads are what run in parallel and one key
+     across all of them spreads the traffic that is supposed to be pooling.
+     Falls back to the account on the first turn, before a thread exists.
+
+     A runner rather than a run option: this version of the SDK has no
+     `promptCacheKey`, and `providerData` is the documented way through to the
+     Responses API. Run-level settings merge over the agent's rather than
+     replacing them, so the temperature and token cap on `craig` survive. */
+  const runner = new Runner({
+    modelSettings: {
+      providerData: { prompt_cache_key: parsed.threadId ?? session.email },
+    },
   });
 
   /* The account's own notebook — its headings, not its contents. Read once
@@ -533,7 +573,7 @@ export async function POST(request: Request) {
       const cited = new Set<string>();
 
       try {
-        const result = await run(craig, input, {
+        const result = await runner.run(craig, input, {
           stream: true,
           context: notebook,
           maxTurns: MAX_TURNS,

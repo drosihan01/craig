@@ -432,10 +432,24 @@ export async function graduateThread(
  * Timestamps cannot do it — `beginTurn` writes the question and the empty answer
  * in the same millisecond.
  */
+/**
+ * Store a batch of settled turns.
+ *
+ * **No `seq` is written.** The column defaults from a sequence, so a row takes
+ * its position when it is first inserted and keeps it forever: absent from the
+ * payload, `seq` is neither in the insert column list nor in the conflict
+ * update, so re-storing an edited turn cannot move it. The browser used to
+ * supply the position and could not do it correctly — it numbers from a list
+ * it trims, so past `MAX_MESSAGES` every index shifts and a new turn is
+ * numbered over an older one.
+ *
+ * What this does rely on: the batch arriving in conversation order, since that
+ * is the order the sequence is drawn in.
+ */
 export async function saveMessages(
   accountEmail: string,
   threadId: string,
-  messages: { id: string; role: string; content: string; seq: number; sources?: unknown }[],
+  messages: { id: string; role: string; content: string; sources?: unknown }[],
 ): Promise<void> {
   if (messages.length === 0) return;
   const accountId = await accountIdFor(accountEmail);
@@ -459,7 +473,6 @@ export async function saveMessages(
         thread_id: threadId,
         role: m.role === "user" ? "user" : "assistant",
         content: m.content,
-        seq: m.seq,
         sources: (m.sources ?? null) as Json,
       })),
       { onConflict: "id" },
