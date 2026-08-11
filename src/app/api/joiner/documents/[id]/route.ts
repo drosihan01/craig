@@ -24,7 +24,7 @@ import { signedUrlForJoiner } from "@/lib/craig/documents";
 const noStore = { "Cache-Control": "no-store" };
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: RouteContext<"/api/joiner/documents/[id]">,
 ) {
   const joiner = await currentJoiner();
@@ -35,7 +35,11 @@ export async function GET(
     );
 
   const { id } = await params;
-  const document = await signedUrlForJoiner(joiner, id);
+  /* Same flag as the admin's route, and the same reasoning: identical
+     authorisation, one header's difference. What a joiner may read is still
+     decided entirely by `signedUrlForJoiner`. */
+  const download = new URL(request.url).searchParams.has("download");
+  const document = await signedUrlForJoiner(joiner, id, download);
 
   if (!document)
     return Response.json(

@@ -21,6 +21,7 @@ import {
   Delete,
   FilterList,
   MenuBook,
+  ArrowDownward,
   OpenInNew,
   UploadFile,
   Visibility,
@@ -209,6 +210,19 @@ function DocumentViewer({
             >
               <OpenInNew aria-hidden />
               Open
+            </a>
+            {/* Beside Open rather than instead of it, because they are
+                different intentions: Open hands the file to whatever reads it,
+                Download puts a copy on the disk. The `?download` is what does
+                the work — it sets `Content-Disposition: attachment` on the
+                object. An `<a download>` here would be ignored, because the
+                bytes come from Supabase's origin and not ours. */}
+            <a
+              href={`${href}?download`}
+              className={buttonVariants({ variant: "secondary", size: "sm" })}
+            >
+              <ArrowDownward aria-hidden />
+              Download
             </a>
             <Button variant="ghost" size="sm" onClick={onClose}>
               Close
