@@ -32,7 +32,11 @@ import type {
   WorkflowEdit,
 } from "@/lib/craig/contract";
 import type { DocumentCard } from "@/lib/craig/synopsis";
-import { documentBody, notebookSection } from "@/lib/craig/retrieval";
+import {
+  documentBody,
+  documentWindow,
+  notebookSection,
+} from "@/lib/craig/retrieval";
 
 /**
  * Craig, with hands.
@@ -533,6 +537,12 @@ const readDocumentParams = z.object({
     .describe(
       "The document to open, named as it appears in the document list you were given.",
     ),
+  about: z
+    .string()
+    .nullable()
+    .describe(
+      "What you are trying to find out, in the words they used — 'how much notice to resign', 'parental leave'. Long documents are returned around this rather than from the beginning, so give it whenever the question is specific. Null to read from the start.",
+    ),
 });
 
 /**
@@ -601,18 +611,27 @@ const readDocument = tool<typeof readDocumentParams, Notebook>({
   description:
     "Open one of this company's uploaded documents by name and read it. Use it whenever a question touches something in the document list you were given. The one-line description in that list says what a document covers — it is never the answer, so open the document rather than answering from it.",
   parameters: readDocumentParams,
-  execute: async ({ document }, context) => {
+  execute: async ({ document, about }, context) => {
     const notebook = notebookOf(context);
     if (!notebook.accountEmail) return "There's no account to read from.";
 
     const { readDocumentForAccount } = await import("./documents");
-    const found = await readDocumentForAccount(notebook.accountEmail, document);
+    const found = await readDocumentForAccount(
+      notebook.accountEmail,
+      document,
+      about ?? undefined,
+    );
 
     if (!found) {
       return `Nothing uploaded under "${document}". Say it isn't in what they've uploaded, and call note_gap so somebody can add it.`;
     }
 
-    return documentBody(found.name, found.text, found.truncated);
+    /* Three shapes, three different mistakes available, so three caveats. A
+       window has had its middle removed, which is a thing neither of the
+       others has done to the text. */
+    return found.windowed
+      ? documentWindow(found.name, found.text)
+      : documentBody(found.name, found.text, found.truncated);
   },
 });
 
