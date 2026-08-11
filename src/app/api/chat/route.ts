@@ -23,6 +23,7 @@ import {
 } from "@/lib/craig/rate-limit";
 import { notebookFor } from "@/lib/craig/notebook";
 import { historyFor } from "@/lib/craig/history";
+import { documentIndexFor } from "@/lib/craig/synopsis";
 import { headingsOf } from "@/lib/craig/notebook-text";
 import { attachmentNote } from "@/lib/craig/craig-prompt";
 import { STREAM_HEADERS, errorStream, line } from "@/lib/craig/chat-stream";
@@ -499,6 +500,11 @@ export async function POST(request: Request) {
      which string was which. */
   notebook.accountEmail = session.email;
   notebook.headings = headingsOf(notebookText);
+  /* The filing cabinet's index, alongside the notebook's. Small enough to sit
+     on the prompt — a routing card per document — so choosing whether to open
+     one costs no round trip. Read here beside the notebook so the list Craig
+     is shown and the documents he can open describe the same library. */
+  notebook.documents = await documentIndexFor(session.email);
 
   /* Cancelling stops the meter when somebody closes the tab or sends again.
      The timer is the third runaway mode: a connection that never closes holds

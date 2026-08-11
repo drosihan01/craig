@@ -228,6 +228,7 @@ export type Database = {
           search: unknown | null
           size_bytes: number
           storage_path: string
+          synopsis: string | null
           uploaded_at: string
           visibility: string
         }
@@ -239,6 +240,7 @@ export type Database = {
           name: string
           size_bytes: number
           storage_path: string
+          synopsis?: string | null
           uploaded_at?: string
           visibility?: string
         }
@@ -250,6 +252,7 @@ export type Database = {
           name?: string
           size_bytes?: number
           storage_path?: string
+          synopsis?: string | null
           uploaded_at?: string
           visibility?: string
         }

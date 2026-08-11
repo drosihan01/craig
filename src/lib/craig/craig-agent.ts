@@ -31,6 +31,7 @@ import type {
   OpenWorkflow,
   WorkflowEdit,
 } from "@/lib/craig/contract";
+import type { DocumentCard } from "@/lib/craig/synopsis";
 
 /**
  * Craig, with hands.
@@ -112,6 +113,19 @@ export interface Notebook {
    * and a heading that is missing is visible to him rather than silent.
    */
   headings?: string[];
+  /**
+   * The account's documents, each with a line saying what it can settle.
+   *
+   * Resident for the same reason the headings are: "is there a document about
+   * this?" decides whether he reads one, and a decision that costs a tool call
+   * is one he will skip. Roughly fifty tokens each, in a stable position, so
+   * the prompt cache carries them after the first turn of a thread.
+   *
+   * These are **routing cards, not summaries** — enough to choose a document,
+   * never enough to answer from. `read_document` says so again when he opens
+   * one, because that is the point at which it matters.
+   */
+  documents?: DocumentCard[];
   gaps: Gap[];
   facts: { key: string; value: string }[];
   workflow: Draft | null;
@@ -512,6 +526,14 @@ const readNotebookParams = z.object({
     ),
 });
 
+const readDocumentParams = z.object({
+  document: z
+    .string()
+    .describe(
+      "The document to open, named as it appears in the document list you were given.",
+    ),
+});
+
 /**
  * One section of the notebook, fetched when a question touches it.
  *
@@ -561,6 +583,50 @@ const readNotebook = tool<typeof readNotebookParams, Notebook>({
       found,
       "",
       `— That section is titled "${section}". If it does not answer what they asked, do not settle for it: look at the heading list again and read a better one before you conclude anything — a notebook with sixty headings usually has a closer match than the first one you picked. Only when nothing covers it, say the notebook has "${section}" but not what they asked, and call note_gap. Never move a figure from one kind of leave, notice or payment to another.`,
+    ].join("\n");
+  },
+});
+
+/**
+ * One of the account's own documents, opened by name.
+ *
+ * The counterpart of the document list on the prompt, exactly as
+ * `read_notebook` is the counterpart of the headings. Until this existed the
+ * admin's Craig had no way to read a document at all — ten tools and not one of
+ * them touched the filing cabinet, while the joiner's Craig could search it. So
+ * somebody could upload their handbook and then find that the assistant they
+ * uploaded it for was the one person who could not read it.
+ *
+ * The caveat rides on the result for the same reason it does on the notebook's,
+ * and against a failure this layer newly makes possible: the routing card on
+ * the prompt reads like an answer if nothing says otherwise, and a card
+ * answered from is a confident wrong answer with the real document one call
+ * away.
+ */
+const readDocument = tool<typeof readDocumentParams, Notebook>({
+  name: "read_document",
+  description:
+    "Open one of this company's uploaded documents by name and read it. Use it whenever a question touches something in the document list you were given. The one-line description in that list says what a document covers — it is never the answer, so open the document rather than answering from it.",
+  parameters: readDocumentParams,
+  execute: async ({ document }, context) => {
+    const notebook = notebookOf(context);
+    if (!notebook.accountEmail) return "There's no account to read from.";
+
+    const { readDocumentForAccount } = await import("./documents");
+    const found = await readDocumentForAccount(notebook.accountEmail, document);
+
+    if (!found) {
+      return `Nothing uploaded under "${document}". Say it isn't in what they've uploaded, and call note_gap so somebody can add it.`;
+    }
+
+    return [
+      `From "${found.name}":`,
+      "",
+      found.text,
+      "",
+      found.truncated
+        ? `— That is the beginning of "${found.name}" and it is longer than this. If what they asked about is not here, say so rather than concluding it is not in the document.`
+        : `— That is the whole of "${found.name}". If it does not answer what they asked, check the document list for a better one before you conclude anything. Only when nothing covers it, say what this document does cover but not what they asked, and call note_gap.`,
     ].join("\n");
   },
 });
@@ -1235,7 +1301,7 @@ Answer about their people and their account — who is waiting on what, what has
 **You cannot draft a workflow here, and must not try.** If what they are describing needs one that does not exist yet — a kind of hire they have no onboarding for — call \`offer_new_workflow\`. It puts a button on their screen that takes them to the builder. Say one line about why it would help; the button says the rest, so do not describe it, spell out what pressing it does, or ask them to confirm.`;
 
 function instructionsFor(context: RunContext<Notebook>): string {
-  const { facts, gaps, firstName, company, editing, simpleDraft, home, headings } =
+  const { facts, gaps, firstName, company, editing, simpleDraft, home, headings, documents } =
     context.context;
 
   /* What day it is.
@@ -1294,6 +1360,41 @@ function instructionsFor(context: RunContext<Notebook>): string {
           "Never record anything about a *person* here — what somebody earns, where they live, how their onboarding is going. The notebook is read by new starters. Facts about people live elsewhere and you already have tools for them.",
         ].join("\n");
 
+  /**
+   * The filing cabinet, one line per document.
+   *
+   * The notebook is what somebody wrote *for* Craig; this is what the company
+   * already had. Both are indexes on the prompt with a tool behind them, and
+   * the parallel is deliberate — the same two-step that keeps fifteen thousand
+   * words out of a question about expenses.
+   *
+   * The line against each document says what it can settle, and is written to
+   * be routed by rather than answered from. The instruction below says that
+   * once; `read_document` says it again on the way back, which is the copy
+   * that actually lands.
+   */
+  const filing =
+    !documents || documents.length === 0
+      ? ""
+      : [
+          "## Documents they have uploaded",
+          "",
+          "What this company already had written down. The line under each says what it covers — it is a description, **never the answer**. Call `read_document` with the name to read one.",
+          "",
+          documents
+            .map((d) =>
+              [
+                `- **${d.name}**${d.shared ? "" : " (not shared with new starters)"}`,
+                d.synopsis ? `  ${d.synopsis}` : "  No description available.",
+              ].join("\n"),
+            )
+            .join("\n"),
+          "",
+          "Open a document whenever a question touches what it covers, and say which one you got the answer from. If the descriptions suggest a document might cover it, open it rather than guessing from the description — being roughly right from a summary is the failure this list is most likely to cause.",
+          "",
+          "When nothing they have uploaded covers it, say so and call `note_gap`. A question their own documents cannot answer is exactly the kind of gap this product exists to find.",
+        ].join("\n");
+
   /* Each block appears once and only once. His notes are here and in `recall`,
      which is the same list read two ways rather than two lists; the workflow is
      here and nowhere else, because `sofar` carries notes and never steps. */
@@ -1321,6 +1422,10 @@ function instructionsFor(context: RunContext<Notebook>): string {
        conversation. Long-term memory before short-term: what the company has
        written down outranks what he inferred twenty minutes ago. */
     known,
+    /* After the notebook and before the conversation, which is the order of
+       durability: what somebody wrote for Craig, then what the company already
+       had, then what came up twenty minutes ago. */
+    filing,
     sofar,
     /* Only while there's still a workflow to draft. Once one is open the
        editing note is the thing that governs, and a second instruction about
@@ -1346,6 +1451,7 @@ export const craig = new Agent<Notebook>({
     noteGap,
     recordFact,
     readNotebook,
+    readDocument,
     recall,
     offerNewWorkflow,
     draftWorkflow,

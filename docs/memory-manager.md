@@ -10,7 +10,8 @@ and one hosted tool we are turning down on purpose.
 ## The short version
 
 **Build the synopsis layer. Don't build the knowledge table. Replace the
-40-turn trim with a summarising Session.** Decline hosted file search. Build
+40-turn trim with a summarising Session.** Steps 2 and 3 have since shipped —
+see the two "what shipped" sections at the end. Decline hosted file search. Build
 evals first, because none of this is measurable without them.
 
 Three of the five proposed layers are already shipped — the raw file, the
@@ -41,7 +42,7 @@ says *"Dress code"*.
 `documents.extracted_text` · generated tsvector + GIN ·
 `search_shared_documents(account, query, limit)`
 
-### L2 · Synopsis — BUILD THIS
+### L2 · Synopsis — SHIPPED
 
 One short natural-language card per document, written at upload. Its job is
 **routing, not answering** — it says what questions this document can settle, so
@@ -232,8 +233,8 @@ ever learned, and there is no size at which carrying it every turn stays cheap.
 2. **The summarising Session — SHIPPED.** Built as compaction over the stored
    transcript rather than as an SDK `Session`: the history is already in
    `messages`, so what was missing was the server reading it. See below.
-3. **The synopsis layer**, and with it a document tool for the admin agent — the
-   two are one piece of work.
+3. **The synopsis layer — SHIPPED**, with the admin document tool alongside it.
+   See below.
 4. **The tool-output guardrail**, folding the #85 rule into one place across all
    three retrieval tools.
 
@@ -289,3 +290,30 @@ All defensible at this scale. The one to revisit first is not embeddings — it 
 that hybrid lexical+semantic genuinely does beat either alone once a corpus is
 large. At zero-to-twenty documents it is not close to worth it, and the synopsis
 layer buys the runway.
+
+## What shipped for step 3
+
+`documents.synopsis`, written at upload from the extracted text by
+`synopsis.ts`, plus `backfillSynopses` for anything uploaded before it existed
+(run via `after()` off the documents list, so nobody waits on it).
+
+**The admin can read documents now.** `read_document` on `craig-agent.ts`, with
+the routing cards resident on the prompt beside the notebook headings — the same
+index-then-fetch shape, for the same reason. `document-match.ts` scores names
+the way `sectionOf` scores headings, because first-past-the-post lets
+"Handbook" shadow "Remote working handbook".
+
+**The joiner got it for free.** The synopsis is folded into the `search`
+generated column, so no new tool and no change to the access boundary — the
+scoping still lives in `search_shared_documents` with `visibility = 'shared'` in
+the function body.
+
+Verified on a real uploaded handbook: **"communicate", "inaccurate", "members"
+and "overview" are all in the card, none of them in the document, and the search
+vector matches all four.** That is the semantic win the design claimed, without
+embeddings and without a second copy of anyone's data.
+
+**Still open at this layer:** a read returns up to 8,000 characters and says so
+when it truncates. Section-level retrieval *within* a document — the `sectionOf`
+treatment — is the obvious next refinement and was not needed to close the gap
+this step was about.

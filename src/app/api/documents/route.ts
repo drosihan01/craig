@@ -1,9 +1,12 @@
+import { after } from "next/server";
+
 import { currentUser } from "@/lib/craig/current-user";
 import {
   listDocuments,
   uploadDocument,
   type StoredDocument,
 } from "@/lib/craig/documents";
+import { backfillSynopses } from "@/lib/craig/synopsis";
 
 /**
  * The employer's documents: what they have, and putting one there.
@@ -50,6 +53,23 @@ export async function GET() {
     );
 
   const documents = await listDocuments(session.email);
+
+  /* Catch up anything uploaded before routing cards existed, or whose card
+     failed to write at the time. After the response rather than before it:
+     this costs a model call per document and nobody looking at their own
+     filing cabinet should wait on work that is not about the page they asked
+     for. Bounded per visit, so a large library fills in over a few loads
+     instead of one long one. */
+  after(async () => {
+    try {
+      await backfillSynopses(session.email);
+    } catch {
+      /* Best-effort by construction. A document without a card is still
+         listed, still searchable and still readable — it is only routed to
+         less precisely, and the next visit tries again. */
+    }
+  });
+
   return Response.json({ documents }, { headers: noStore });
 }
 
