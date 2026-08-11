@@ -56,7 +56,12 @@ export async function GET(
   }
 
   const { id } = await params;
-  const found = await signedUrlForAccount(session.email, id);
+  /* `?download` asks for the file rather than a view of it. A query parameter
+     rather than a second route, because the authorisation is identical and the
+     only difference is one header on the object — two routes would be two
+     places to keep the account scope right. */
+  const download = new URL(request.url).searchParams.has("download");
+  const found = await signedUrlForAccount(session.email, id, download);
   if (!found) {
     return Response.json(
       { error: "No such document." },

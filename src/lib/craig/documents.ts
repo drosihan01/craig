@@ -488,6 +488,22 @@ export async function listDocumentsForJoiner(
 }
 
 /**
+ * Whether the signed link opens the file or saves it, and under what name.
+ *
+ * `download` sets `Content-Disposition: attachment` on the object, which is the
+ * only thing that reliably makes a browser save rather than render. The
+ * `download` attribute on an anchor cannot do it here: the file is served from
+ * Supabase's origin rather than ours, and that attribute is ignored
+ * cross-origin.
+ *
+ * The stored name goes with it. Without one the saved file takes its name from
+ * the storage path, which is a uuid — somebody downloads their handbook and
+ * finds `9f3a1c88-...` in their downloads folder with no extension on it.
+ */
+const signOptions = (name: string, download: boolean) =>
+  download ? { download: name } : undefined;
+
+/**
  * A link to one document this joiner may read, good for a minute.
  *
  * The same two filters as the listing, in one statement, because this is the
@@ -499,6 +515,7 @@ export async function listDocumentsForJoiner(
 export async function signedUrlForJoiner(
   joiner: Joiner,
   documentId: string,
+  download = false,
 ): Promise<{ name: string; url: string } | null> {
   const accountId = await accountIdFor(joiner.accountEmail);
   if (!accountId) return null;
@@ -516,7 +533,7 @@ export async function signedUrlForJoiner(
 
   const { data: signed, error: signError } = await db()
     .storage.from(BUCKET)
-    .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS);
+    .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS, signOptions(row.name, download));
 
   if (signError || !signed) return null;
   return { name: row.name, url: signed.signedUrl };
@@ -542,6 +559,7 @@ export async function signedUrlForJoiner(
 export async function signedUrlForAccount(
   accountEmail: string,
   documentId: string,
+  download = false,
 ): Promise<{ name: string; contentType: string; url: string } | null> {
   const accountId = await accountIdFor(accountEmail);
   if (!accountId) return null;
@@ -558,7 +576,7 @@ export async function signedUrlForAccount(
 
   const { data: signed, error: signError } = await db()
     .storage.from(BUCKET)
-    .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS);
+    .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS, signOptions(row.name, download));
 
   if (signError || !signed) return null;
   return { name: row.name, contentType: row.content_type, url: signed.signedUrl };

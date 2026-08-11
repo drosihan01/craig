@@ -19,7 +19,13 @@ import {
   Select,
   toISODate,
 } from "@/components/ui";
-import { Check, DoneAll, Lock, Schedule } from "@/components/ui/icons";
+import {
+  ArrowDownward,
+  Check,
+  DoneAll,
+  Lock,
+  Schedule,
+} from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { JoinerNav, JoinerNavRail } from "@/components/craig/joiner-nav";
 import { cn } from "@/lib/cn";
@@ -437,23 +443,38 @@ export function JoinerScreen({ view }: { view: JoinerView }) {
             <ul className="flex flex-col gap-2">
               {view.resources.map((resource) => (
                 <li key={resource.id}>
-                  {/* A plain link to a route that checks, then redirects to a
-                      URL good for a minute. Not an <a download>: the file may
-                      be a PDF somebody wants to read rather than keep, and the
-                      browser is better at deciding that than we are. */}
-                  <a
-                    href={`/api/joiner/documents/${resource.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-3 transition-colors hover:border-border-strong"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {resource.name}
-                    </span>
-                    <span className="shrink-0 text-2xs text-text-subtle">
-                      {resource.kind} · {resource.size}
-                    </span>
-                  </a>
+                  {/* The row opens it; the button beside it saves a copy.
+                      Two intentions rather than one guess — a new starter
+                      reading the handbook on screen and one keeping their
+                      contract want different things, and the browser cannot
+                      tell which from a single link.
+
+                      `?download` is what does it, by setting
+                      `Content-Disposition: attachment` on the object. An
+                      `<a download>` would be ignored here: the bytes are
+                      served from Supabase's origin, not ours. */}
+                  <div className="flex items-stretch gap-2">
+                    <a
+                      href={`/api/joiner/documents/${resource.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-3 transition-colors hover:border-border-strong"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {resource.name}
+                      </span>
+                      <span className="shrink-0 text-2xs text-text-subtle">
+                        {resource.kind} · {resource.size}
+                      </span>
+                    </a>
+                    <a
+                      href={`/api/joiner/documents/${resource.id}?download`}
+                      aria-label={`Download ${resource.name}`}
+                      className="flex shrink-0 items-center justify-center rounded-lg border border-border px-3 text-text-subtle transition-colors hover:border-border-strong hover:text-text"
+                    >
+                      <ArrowDownward aria-hidden className="size-4" />
+                    </a>
+                  </div>
                 </li>
               ))}
             </ul>
