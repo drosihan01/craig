@@ -5,26 +5,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AppShell,
+  Badge,
   Button,
   buttonVariants,
   Callout,
   Dialog,
+  DropdownMenu,
   EmptyState,
   FilterBar,
   SearchInput,
   SegmentedControl,
   Select,
   Separator,
-  Switch,
 } from "@/components/ui";
 import {
+  ArrowDownward,
   Delete,
   FilterList,
   MenuBook,
-  ArrowDownward,
+  MoreHoriz,
   OpenInNew,
   UploadFile,
   Visibility,
+  VisibilityOff,
 } from "@/components/ui/icons";
 import { NavStat } from "@/components/app-nav";
 import { ShowcaseNav, ShowcaseNavRail } from "@/components/craig/nav";
@@ -651,7 +654,7 @@ export function ResourcesScreen({
                 {visible.map((row) => (
                   <li
                     key={row.id}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border px-4 py-3"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border px-4 py-3"
                   >
                     <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-0.5">
                       <span className="truncate text-sm font-medium">
@@ -662,38 +665,82 @@ export function ResourcesScreen({
                       </span>
                     </div>
 
-                    <label className="flex shrink-0 items-center gap-2.5">
-                      <Switch
-                        checked={row.shared}
-                        disabled={busy === row.id}
-                        onChange={(event) =>
-                          void setShared(row.id, event.target.checked)
-                        }
-                      />
-                      {/* The consequence, not the state. */}
-                      <span className="text-sm text-text-muted">
+                    {/* The state stays on the row; the actions moved into the
+                        menu. Sharing is the one thing on this screen somebody
+                        needs to be able to read at a glance across the whole
+                        list — "which of these can a stranger read" is not a
+                        question worth opening four menus to answer, and the
+                        privacy posture of this module rests on it being
+                        obvious rather than discoverable. */}
+                    {row.shared && (
+                      <Badge tone="info" className="shrink-0">
                         New starters can read this
-                      </span>
-                    </label>
+                      </Badge>
+                    )}
 
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setViewing(row)}
-                      aria-label={`View ${row.name}`}
-                    >
-                      <Visibility aria-hidden />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy === row.id}
-                      onClick={() => void remove(row.id, row.name)}
-                      aria-label={`Delete ${row.name}`}
-                    >
-                      <Delete aria-hidden />
-                    </Button>
+                    <DropdownMenu
+                      label={`Actions for ${row.name}`}
+                      align="end"
+                      width="w-60"
+                      trigger={<MoreHoriz aria-hidden />}
+                      triggerClassName={buttonVariants({
+                        variant: "ghost",
+                        size: "sm",
+                      })}
+                      items={[
+                        {
+                          id: "view",
+                          label: "View",
+                          icon: <Visibility aria-hidden />,
+                          onSelect: () => setViewing(row),
+                        },
+                        {
+                          id: "download",
+                          label: "Download",
+                          icon: <ArrowDownward aria-hidden />,
+                          /* An anchor clicked rather than a navigation. This is
+                             a resource fetch, not a page change: the response
+                             carries `Content-Disposition: attachment`, so the
+                             browser saves it and stays where it is. Going
+                             through the router would ask Next to render a
+                             route that does not exist, and `window.open`
+                             leaves an empty tab behind in some browsers. */
+                          onSelect: () => {
+                            const link = document.createElement("a");
+                            link.href = `/api/documents/${encodeURIComponent(row.id)}?download`;
+                            link.rel = "noopener";
+                            link.click();
+                          },
+                        },
+                        {
+                          id: "share",
+                          separatorBefore: true,
+                          /* Named for what selecting it does, not for the
+                             state it leaves behind — the label is the only
+                             warning anybody gets before a document becomes
+                             readable by every new starter. */
+                          label: row.shared
+                            ? "Stop new starters reading this"
+                            : "Let new starters read this",
+                          icon: row.shared ? (
+                            <VisibilityOff aria-hidden />
+                          ) : (
+                            <Visibility aria-hidden />
+                          ),
+                          disabled: busy === row.id,
+                          onSelect: () => void setShared(row.id, !row.shared),
+                        },
+                        {
+                          id: "delete",
+                          separatorBefore: true,
+                          label: "Delete",
+                          icon: <Delete aria-hidden />,
+                          destructive: true,
+                          disabled: busy === row.id,
+                          onSelect: () => void remove(row.id, row.name),
+                        },
+                      ]}
+                    />
                   </li>
                 ))}
               </ul>
